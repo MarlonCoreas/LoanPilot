@@ -1,0 +1,7 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Reportar un problema de seguridad
+    url: https://github.com/MarlonCoreas/LoanPilot/security/advisories/new
+    about: >
+      No abras un issue público para vulnerabilidades. Consulta SECURITY.md
+      para el procedimiento de aviso privado.

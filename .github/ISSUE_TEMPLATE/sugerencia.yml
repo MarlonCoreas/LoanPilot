@@ -1,0 +1,31 @@
+name: Sugerencia o mejora
+description: Propón una función, un cambio de interfaz o una mejora de redacción
+title: "Sugerencia: "
+labels: ["sugerencia"]
+body:
+  - type: textarea
+    id: problema
+    attributes:
+      label: ¿Qué problema resolvería?
+      description: >
+        Describe la situación concreta antes que la solución. Saber a quién le
+        pasa y cuándo ayuda más que la función en sí.
+      placeholder: >
+        Cuando comparo dos ofertas de bancos distintos tengo que apuntar los
+        resultados aparte porque sólo puedo calcular una a la vez.
+    validations:
+      required: true
+  - type: textarea
+    id: propuesta
+    attributes:
+      label: ¿Qué propones?
+  - type: dropdown
+    id: perfil
+    attributes:
+      label: ¿Desde dónde lo dices? (opcional)
+      description: Ayuda a entender el contexto, no condiciona la respuesta.
+      options:
+        - Uso la calculadora para mis propias finanzas
+        - Trabajo en el sector financiero
+        - Soy desarrollador/a
+        - Otro

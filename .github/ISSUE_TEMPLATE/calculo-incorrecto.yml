@@ -1,0 +1,75 @@
+name: Un cálculo no coincide
+description: El resultado de LoanPilot difiere de tu contrato o estado de cuenta
+title: "Cálculo: "
+labels: ["cálculo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por reportarlo. Este es el tipo de aviso más útil que puede
+        recibir el proyecto.
+
+        **No incluyas datos personales.** No hacen falta tu nombre, el número
+        de cuenta o de préstamo, ni el nombre del banco. Con las cifras de
+        abajo se puede reproducir el caso. Recuerda que este reporte será
+        público.
+  - type: dropdown
+    id: modo
+    attributes:
+      label: ¿En qué parte de la calculadora?
+      options:
+        - Antes de contratar (cotizar un préstamo nuevo)
+        - Ya tengo un préstamo → Proyectar desde hoy
+        - Ya tengo un préstamo → Reconstruir mis abonos
+    validations:
+      required: true
+  - type: input
+    id: monto
+    attributes:
+      label: Monto
+      placeholder: "10000"
+    validations:
+      required: true
+  - type: input
+    id: tasa
+    attributes:
+      label: Tasa nominal anual (%)
+      placeholder: "11.5"
+    validations:
+      required: true
+  - type: input
+    id: plazo
+    attributes:
+      label: Plazo o fecha de la primera cuota
+      placeholder: "5 años, primera cuota 15/09/2026"
+    validations:
+      required: true
+  - type: input
+    id: esperado
+    attributes:
+      label: Cuota que aparece en tu contrato o estado de cuenta
+      placeholder: "$219.93"
+    validations:
+      required: true
+  - type: input
+    id: obtenido
+    attributes:
+      label: Cuota que muestra LoanPilot
+      placeholder: "$226.48"
+    validations:
+      required: true
+  - type: textarea
+    id: cargos
+    attributes:
+      label: Seguros y comisiones
+      description: >
+        Prima del seguro de deuda (por cada $1,000 o monto fijo), comisión de
+        apertura y otros cargos iniciales, si los conoces.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Cualquier otro detalle
+      description: >
+        Por ejemplo si la tasa cambió durante la vida del préstamo, si hubo
+        mora, o si el banco aplicó algún abono a cuotas futuras en vez de a
+        capital.
