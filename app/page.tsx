@@ -1,33 +1,25 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  addMonths, buildActiveSchedule, buildHistoricalSchedule, buildNewSchedule, isoAfterMonths,
+  monthlyIrr, n, parseDate, solveRate, today,
+  type ExtraPayment, type InsuranceMode, type RateChange, type Row,
+} from "./loan";
 
 type Lang = "es" | "en";
 type Mode = "new" | "active";
-type InsuranceMode = "balance" | "fixed" | "none";
 type ActiveView = "future" | "history";
-type ExtraPayment = { id: number; date: string; amount: string };
-
-type Row = {
-  number: number;
-  date: Date;
-  opening: number;
-  payment: number;
-  interest: number;
-  principal: number;
-  insurance: number;
-  extra: number;
-  closing: number;
-};
+type KnownInput = "rate" | "term";
 
 const copy = {
   es: {
     navHow: "Cómo funciona",
     navGuide: "Guía",
-    badge: "BASADA EN NORMATIVA SALVADOREÑA",
     title1: "Entiende tu préstamo.",
     title2: "Decide con claridad.",
     subtitle: "Calcula el costo real antes de firmar o descubre cuánto puedes ahorrar con abonos a capital.",
     free: "Gratis · Sin registro · Tus datos no salen de tu dispositivo",
     exportPdf: "Exportar PDF", exportExcel: "Exportar Excel", exportHint: "Descargar resultados",
+    demoLabel: "Estás viendo datos de ejemplo", demoReset: "Empezar de cero",
     newLoan: "Antes de contratar", newLoanSub: "Cotiza cuota y costo real",
     activeLoan: "Ya tengo un préstamo", activeLoanSub: "Proyecta abonos y ahorro",
     futureView: "Proyectar desde hoy", historyView: "Reconstruir mis abonos",
@@ -53,6 +45,15 @@ const copy = {
     activeDisclaimer: "El saldo de capital es más importante que restar lo pagado al monto original. Tómalo de tu último estado de cuenta. Esta proyección no incluye mora, recargos ni cambios futuros de tasa.",
     historyBasics: "Reconstruye el préstamo", historyBasicsHint: "Usa las condiciones originales del contrato",
     originalFirstDate: "Primera cuota original", scheduledPayment: "Cuota original (capital + interés)",
+    knownInput: "Qué dato conoces del contrato", knownRate: "La tasa", knownTerm: "El plazo", originalTerm: "Plazo original",
+    estimatedRate: "Tasa estimada", estimatedRateHint: "Despejada de tu monto, cuota y plazo. Reproduce tu contrato con nuestra convención de días, así que puede diferir por décimas de la tasa nominal impresa. Si la diferencia es grande, revisa la cuota.",
+    historyInsurance: "Seguro mensual incluido en la cuota", totalDebit: "Cuota total que te debitan", totalDebitHint: "Debe coincidir con lo que sale de tu cuenta cada mes. Si no cuadra, corrige la cuota o el seguro.",
+    insurancePaid: "Seguro pagado en el período", insurancePaidHint: "No amortiza capital ni es interés: los abonos no lo reducen.",
+    rateHistory: "Cambios de tasa", rateHistoryHint: "Si tu préstamo es a tasa variable, registra cada ajuste con su fecha de vigencia",
+    changeDate: "Vigente desde", newRate: "Tasa nueva", newPayment: "Cuota nueva", newPaymentHint: "opcional",
+    addChange: "Registrar cambio", noChanges: "Sin cambios de tasa: se usa la misma durante todo el préstamo.",
+    keepsPayment: "misma cuota", termLocked: "Con cambios de tasa registrados no se puede despejar el plazo: hay varias tasas y una sola ecuación. Ingresa la tasa inicial.",
+    badTerm: "Con esa cuota el préstamo no se cancela en el plazo indicado. Revisa monto, cuota o plazo.",
     extraHistory: "Historial de abonos", extraHistoryHint: "Registra cada abono que fue aplicado directamente a capital",
     addExtra: "Registrar abono", removeExtra: "Eliminar", noExtras: "Todavía no has registrado abonos.",
     historyResult: "Lo que ya te ahorraron", savedToDate: "Interés ahorrado hasta hoy", projectedSaving: "Ahorro total proyectado",
@@ -68,11 +69,12 @@ const copy = {
     report: "¿Algún cálculo no coincide con tu contrato? Cuéntanoslo",
   },
   en: {
-    navHow: "How it works", navGuide: "Guide", badge: "BASED ON SALVADORAN REGULATIONS",
+    navHow: "How it works", navGuide: "Guide",
     title1: "Understand your loan.", title2: "Decide with clarity.",
     subtitle: "Estimate the real cost before signing or see how much extra principal payments could save.",
     free: "Free · No signup · Your data stays on your device",
     exportPdf: "Export PDF", exportExcel: "Export Excel", exportHint: "Download results",
+    demoLabel: "You are viewing sample data", demoReset: "Start from scratch",
     newLoan: "Before you borrow", newLoanSub: "Estimate payment and true cost", activeLoan: "I already have a loan", activeLoanSub: "Project prepayments and savings",
     futureView: "Project from today", historyView: "Rebuild my prepayments",
     basics: "Basic details", optional: "Improve accuracy", optionalHint: "Optional",
@@ -97,6 +99,15 @@ const copy = {
     activeDisclaimer: "Your principal balance matters more than subtracting prior payments from the original amount. Find it on your latest statement. This projection excludes late fees, penalties, and future rate changes.",
     historyBasics: "Rebuild the loan", historyBasicsHint: "Use the original contract terms",
     originalFirstDate: "Original first payment", scheduledPayment: "Original payment (principal + interest)",
+    knownInput: "Which contract detail do you know", knownRate: "The rate", knownTerm: "The term", originalTerm: "Original term",
+    estimatedRate: "Estimated rate", estimatedRateHint: "Solved from your amount, payment and term. It reproduces your contract under our day-count convention, so it can differ by a fraction from the printed nominal rate. If the gap is large, check the payment.",
+    historyInsurance: "Monthly insurance included in the payment", totalDebit: "Total payment debited", totalDebitHint: "This should match what leaves your account each month. If it does not, correct the payment or the insurance.",
+    insurancePaid: "Insurance paid over the period", insurancePaidHint: "It repays no principal and is not interest: prepayments do not reduce it.",
+    rateHistory: "Rate changes", rateHistoryHint: "If your loan carries a variable rate, add every adjustment with the date it took effect",
+    changeDate: "Effective from", newRate: "New rate", newPayment: "New payment", newPaymentHint: "optional",
+    addChange: "Add change", noChanges: "No rate changes: the same rate applies for the whole loan.",
+    keepsPayment: "same payment", termLocked: "The term cannot be solved once rate changes are recorded: several rates, one equation. Enter the starting rate instead.",
+    badTerm: "The loan does not clear within that term at that payment. Check the amount, payment or term.",
     extraHistory: "Prepayment history", extraHistoryHint: "Add every payment that was applied directly to principal",
     addExtra: "Add prepayment", removeExtra: "Remove", noExtras: "You have not added any prepayments yet.",
     historyResult: "What they have saved you", savedToDate: "Interest saved to date", projectedSaving: "Projected total savings",
@@ -113,98 +124,72 @@ const copy = {
   },
 } as const;
 
-// Every date is anchored to 12:00 UTC so the schedule is identical on the
-// server and in the browser. Local-time arithmetic made server rendering and
-// hydration disagree whenever the two sat on different calendar days.
-function addMonths(date: Date, months: number) {
-  const result = new Date(date); const day = result.getUTCDate(); result.setUTCDate(1); result.setUTCMonth(result.getUTCMonth() + months);
-  const last = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate(); result.setUTCDate(Math.min(day, last)); return result;
-}
 const ISSUES_URL = "https://github.com/MarlonCoreas/LoanPilot/issues/new/choose";
 
-function today() { const now = new Date(); return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12)); }
-function parseDate(value: string) { return new Date(`${value}T12:00:00Z`); }
-function daysBetween(a: Date, b: Date) { return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86_400_000)); }
-function solvePayment(principal: number, annualRate: number, firstDate: Date, months: number) {
-  if (principal <= 0 || months <= 0) return 0; if (annualRate <= 0) return principal / months;
-  const start = today();
-  const outstanding = (payment: number) => { let balance = principal; let previous = start; for (let i = 0; i < months; i++) { const date = addMonths(firstDate, i); const interest = balance * (annualRate / 100) * (daysBetween(previous, date) / 365); balance = balance + interest - payment; previous = date; } return balance; };
-  // The upper bound has to actually clear the debt before bisecting. On a
-  // single-instalment loan `principal` alone never covers principal + interest.
-  let low = 0; let high = Math.max(principal, 1);
-  for (let i = 0; i < 60 && outstanding(high) > 0; i++) high *= 2;
-  for (let i = 0; i < 80; i++) { const mid = (low + high) / 2; if (outstanding(mid) > 0) low = mid; else high = mid; } return high;
+// Amount fields are stored raw ("10000.5") and only grouped for display, so every
+// calculation, export and URL keeps parsing plain numbers.
+const SIGNIFICANT = /[\d.]/;
+function groupThousands(raw: string) {
+  if (!raw) return "";
+  const dot = raw.indexOf(".");
+  const whole = dot === -1 ? raw : raw.slice(0, dot);
+  return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (dot === -1 ? "" : raw.slice(dot));
 }
-function buildNewSchedule(args: { principal: number; annualRate: number; firstDate: Date; months: number; insuranceMode: InsuranceMode; insuranceValue: number; }) {
-  const payment = solvePayment(args.principal, args.annualRate, args.firstDate, args.months); const rows: Row[] = []; let balance = args.principal; let previous = today();
-  for (let i = 0; i < args.months && balance > 0.005; i++) { const date = addMonths(args.firstDate, i); const opening = balance; const interest = opening * (args.annualRate / 100) * (daysBetween(previous, date) / 365); const due = Math.min(payment, opening + interest); const principalPaid = Math.max(0, due - interest); const insurance = args.insuranceMode === "balance" ? opening * (args.insuranceValue / 1000) : args.insuranceMode === "fixed" ? args.insuranceValue : 0; balance = Math.max(0, opening - principalPaid); rows.push({ number: i + 1, date, opening, payment: due, interest, principal: principalPaid, insurance, extra: 0, closing: balance }); previous = date; }
-  return { rows, payment };
+function sanitizeNumeric(value: string) {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const dot = cleaned.indexOf(".");
+  return dot === -1 ? cleaned : `${cleaned.slice(0, dot + 1)}${cleaned.slice(dot + 1).replace(/\./g, "")}`;
 }
-function buildActiveSchedule(args: { balance: number; annualRate: number; payment: number; nextDate: Date; insurance: number; oneTimeExtra?: number; extraDate?: Date; monthlyExtra?: number; }) {
-  const rows: Row[] = []; let balance = args.balance; let previous = today(); let extraApplied = false; let invalid = false;
-  for (let i = 0; i < 1200 && balance > 0.005; i++) { const date = addMonths(args.nextDate, i); const opening = balance; const interest = opening * (args.annualRate / 100) * (daysBetween(previous, date) / 365); if (args.payment <= interest && (args.monthlyExtra ?? 0) <= 0) { invalid = true; break; } const normalDue = Math.min(args.payment, opening + interest); const principalPaid = Math.max(0, normalDue - interest); let extra = Math.max(0, args.monthlyExtra ?? 0); if (!extraApplied && (args.oneTimeExtra ?? 0) > 0 && args.extraDate && date >= args.extraDate) { extra += args.oneTimeExtra ?? 0; extraApplied = true; } extra = Math.min(extra, Math.max(0, opening - principalPaid)); balance = Math.max(0, opening - principalPaid - extra); rows.push({ number: i + 1, date, opening, payment: normalDue + args.insurance + extra, interest, principal: principalPaid, insurance: args.insurance, extra, closing: balance }); previous = date; }
-  return { rows, invalid };
+function countSignificant(value: string) { let total = 0; for (const char of value) if (SIGNIFICANT.test(char)) total++; return total; }
+// Separators shift the text, so the caret is restored by digit position rather
+// than by character index — otherwise it jumps to the end on every keystroke.
+function caretAfterSignificant(display: string, count: number) {
+  if (count <= 0) return 0;
+  let seen = 0;
+  for (let i = 0; i < display.length; i++) if (SIGNIFICANT.test(display[i]) && ++seen === count) return i + 1;
+  return display.length;
 }
-function buildHistoricalSchedule(args: { principal: number; annualRate: number; payment: number; firstDate: Date; extras: ExtraPayment[]; }) {
-  const rows: Row[] = [];
-  const extras = args.extras
-    .map((item) => ({ ...item, parsedDate: parseDate(item.date), parsedAmount: n(item.amount) }))
-    .filter((item) => item.date && item.parsedAmount > 0 && !Number.isNaN(item.parsedDate.getTime()))
-    .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime());
-  let balance = args.principal;
-  let previous = addMonths(args.firstDate, -1);
-  let extraIndex = 0;
-  let invalid = false;
-  for (let i = 0; i < 1200 && balance > 0.005; i++) {
-    const date = addMonths(args.firstDate, i);
-    const opening = balance;
-    let cursor = previous;
-    let interest = 0;
-    let extra = 0;
-    while (extraIndex < extras.length && extras[extraIndex].parsedDate <= date) {
-      const item = extras[extraIndex];
-      if (item.parsedDate > cursor) {
-        interest += balance * (args.annualRate / 100) * (daysBetween(cursor, item.parsedDate) / 365);
-        cursor = item.parsedDate;
-      }
-      const applied = Math.min(balance, item.parsedAmount);
-      balance = Math.max(0, balance - applied);
-      extra += applied;
-      extraIndex++;
-    }
-    if (balance <= 0.005) {
-      rows.push({ number: i + 1, date: cursor, opening, payment: extra, interest, principal: 0, insurance: 0, extra, closing: 0 });
-      break;
-    }
-    interest += balance * (args.annualRate / 100) * (daysBetween(cursor, date) / 365);
-    if (args.payment <= interest) { invalid = true; break; }
-    const normalDue = Math.min(args.payment, balance + interest);
-    const principalPaid = Math.max(0, normalDue - interest);
-    balance = Math.max(0, balance - principalPaid);
-    rows.push({ number: i + 1, date, opening, payment: normalDue + extra, interest, principal: principalPaid, insurance: 0, extra, closing: balance });
-    previous = date;
-  }
-  return { rows, invalid };
+const useCaretEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function NumericField({ label, value, suffix, onChange, onTouch }: { label: string; value: string; suffix?: string; onChange: (value: string) => void; onTouch: () => void }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const caret = useRef<number | null>(null);
+  useCaretEffect(() => {
+    if (caret.current === null || !ref.current) return;
+    ref.current.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  });
+  return <label className="field"><span>{label}</span><div className="input-wrap">{suffix === "$" && <b className="prefix">$</b>}
+    <input ref={ref} type="text" inputMode="decimal" autoComplete="off" value={groupThousands(value)}
+      onFocus={(event) => event.target.select()}
+      onChange={(event) => {
+        const typed = event.target.value;
+        const significant = countSignificant(typed.slice(0, event.target.selectionStart ?? typed.length));
+        const raw = sanitizeNumeric(typed);
+        caret.current = caretAfterSignificant(groupThousands(raw), significant);
+        onTouch();
+        onChange(raw);
+      }} />
+    {suffix && suffix !== "$" && <b className="suffix">{suffix}</b>}</div></label>;
 }
-function monthlyIrr(net: number, payments: number[]) {
-  if (net <= 0 || payments.length === 0) return 0; const npv = (r: number) => payments.reduce((sum, p, i) => sum + p / Math.pow(1 + r, i + 1), -net); let low = 0; let high = 1; if (npv(0) < 0) return 0; for (let i = 0; i < 100; i++) { const mid = (low + high) / 2; if (npv(mid) > 0) low = mid; else high = mid; } return (Math.pow(1 + high, 12) - 1) * 100;
-}
-const n = (value: string) => Math.max(0, Number(value) || 0);
-const isoAfterMonths = (months: number) => addMonths(today(), months).toISOString().slice(0, 10);
 
 export default function Home() {
-  const [lang, setLang] = useState<Lang>("es"); const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [lang, setLang] = useState<Lang>("es"); const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false); const [demo, setDemo] = useState(true);
   const [amount, setAmount] = useState("10000"); const [rate, setRate] = useState("11.5"); const [years, setYears] = useState("5"); const [firstDate, setFirstDate] = useState(isoAfterMonths(1));
   const [insuranceMode, setInsuranceMode] = useState<InsuranceMode>("balance"); const [insuranceValue, setInsuranceValue] = useState("0.65"); const [commission, setCommission] = useState("1.5"); const [otherFees, setOtherFees] = useState("75"); const [feeMode, setFeeMode] = useState<"deducted" | "financed">("deducted");
   const [activeBalance, setActiveBalance] = useState("7450"); const [activeRate, setActiveRate] = useState("11.5"); const [activePayment, setActivePayment] = useState("220"); const [nextDate, setNextDate] = useState(isoAfterMonths(1)); const [activeInsurance, setActiveInsurance] = useState("4.50"); const [originalAmount, setOriginalAmount] = useState("10000"); const [paidToDate, setPaidToDate] = useState("3600"); const [oneExtra, setOneExtra] = useState("1000"); const [extraDate, setExtraDate] = useState(isoAfterMonths(3)); const [monthlyExtra, setMonthlyExtra] = useState("35");
   const [historyFirstDate, setHistoryFirstDate] = useState(isoAfterMonths(-23));
+  const [historyKnown, setHistoryKnown] = useState<KnownInput>("term");
+  const [historyMonths, setHistoryMonths] = useState("60");
   const [historyExtraDate, setHistoryExtraDate] = useState(isoAfterMonths(-18));
   const [historyExtraAmount, setHistoryExtraAmount] = useState("200");
-  const [historyExtras, setHistoryExtras] = useState<ExtraPayment[]>([
-    { id: 1, date: isoAfterMonths(-18), amount: "200" },
-    { id: 2, date: isoAfterMonths(-11), amount: "300" },
-    { id: 3, date: isoAfterMonths(-4), amount: "1000" },
-  ]);
+  const [historyRateChanges, setHistoryRateChanges] = useState<RateChange[]>([]);
+  const [changeDate, setChangeDate] = useState(isoAfterMonths(-12));
+  const [changeRate, setChangeRate] = useState("");
+  const [changePayment, setChangePayment] = useState("");
+  // The ledger starts empty on purpose: invented prepayments would show savings
+  // that are not yours, and the baseline loan is the honest starting picture.
+  const [historyExtras, setHistoryExtras] = useState<ExtraPayment[]>([]);
   const t = copy[lang];
   const money = useMemo(() => new Intl.NumberFormat(lang === "es" ? "es-SV" : "en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }), [lang]);
   const dateFmt = useMemo(() => new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-US", { month: "short", year: "numeric", timeZone: "UTC" }), [lang]);
@@ -222,7 +207,19 @@ export default function Home() {
     return { baseline, scenario, interestBefore, interestAfter, monthsSaved: Math.max(0, baseline.rows.length - scenario.rows.length), interestSaved: Math.max(0, interestBefore - interestAfter) };
   }, [activeBalance, activeInsurance, activePayment, activeRate, extraDate, monthlyExtra, nextDate, oneExtra]);
   const history = useMemo(() => {
-    const common = { principal: n(originalAmount), annualRate: n(activeRate), payment: n(activePayment), firstDate: parseDate(historyFirstDate) };
+    // The payment is principal + interest only. A fixed insurance premium rides
+    // along in the debit but amortises nothing, so folding it in here would be
+    // reclassified as interest dollar for dollar and inflate the solved rate.
+    const parsedFirst = parseDate(historyFirstDate);
+    const term = Math.max(0, Math.round(n(historyMonths)));
+    // Solving for the rate needs a single unknown. Once the loan carries rate
+    // changes there are several, so the term can no longer be the missing piece.
+    const termLocked = historyRateChanges.length > 0;
+    const known = termLocked ? "rate" : historyKnown;
+    const solved = known === "term" ? solveRate(n(originalAmount), n(activePayment), parsedFirst, term) : n(activeRate);
+    const rateUnsolved = Number.isNaN(solved);
+    const annualRate = rateUnsolved ? 0 : solved;
+    const common = { principal: n(originalAmount), annualRate, payment: n(activePayment), firstDate: parsedFirst, insurance: n(activeInsurance), rateChanges: historyRateChanges };
     const baseline = buildHistoricalSchedule({ ...common, extras: [] });
     const scenario = buildHistoricalSchedule({ ...common, extras: historyExtras });
     const cutoff = today();
@@ -235,19 +232,40 @@ export default function Home() {
     const balanceTodayWithout = pastBaseline.at(-1)?.closing ?? n(originalAmount);
     const balanceTodayWith = pastScenario.at(-1)?.closing ?? n(originalAmount);
     return {
-      baseline, scenario,
+      baseline, scenario, annualRate, rateUnsolved, termLocked, known,
       savedToDate: Math.max(0, interestToDateWithout - interestToDateWith),
       projectedSaving: Math.max(0, totalInterestWithout - totalInterestWith),
       balanceTodayWithout, balanceTodayWith,
       balanceReduction: Math.max(0, balanceTodayWithout - balanceTodayWith),
       monthsSaved: Math.max(0, baseline.rows.length - scenario.rows.length),
       extrasTotal: historyExtras.reduce((sum, item) => sum + n(item.amount), 0),
+      insuranceTotal: scenario.rows.reduce((sum, row) => sum + row.insurance, 0),
     };
-  }, [activePayment, activeRate, historyExtras, historyFirstDate, originalAmount]);
+  }, [activeInsurance, activePayment, activeRate, historyExtras, historyFirstDate, historyKnown, historyMonths, historyRateChanges, originalAmount]);
+  const touch = () => setDemo(false);
+  // Dates keep their defaults: an empty date is not sample data the user could
+  // mistake for their own, and parsing "" would poison every schedule with NaN.
+  const clearSample = () => {
+    setDemo(false);
+    setAmount(""); setRate(""); setYears(""); setFirstDate(isoAfterMonths(1));
+    setInsuranceValue(""); setCommission(""); setOtherFees("");
+    setActiveBalance(""); setActiveRate(""); setActivePayment(""); setNextDate(isoAfterMonths(1)); setActiveInsurance("");
+    setOriginalAmount(""); setPaidToDate(""); setOneExtra(""); setExtraDate(isoAfterMonths(3)); setMonthlyExtra("");
+    setHistoryFirstDate(isoAfterMonths(-23)); setHistoryExtraDate(isoAfterMonths(-18)); setHistoryExtraAmount(""); setHistoryMonths("");
+    setHistoryExtras([]);
+    setHistoryRateChanges([]); setChangeRate(""); setChangePayment(""); setChangeDate(isoAfterMonths(-12));
+  };
   const addHistoryExtra = () => {
     if (!historyExtraDate || n(historyExtraAmount) <= 0) return;
+    setDemo(false);
     setHistoryExtras((items) => [...items, { id: Date.now(), date: historyExtraDate, amount: historyExtraAmount }].sort((a, b) => a.date.localeCompare(b.date)));
     setHistoryExtraAmount("");
+  };
+  const addRateChange = () => {
+    if (!changeDate || (n(changeRate) <= 0 && n(changePayment) <= 0)) return;
+    setDemo(false);
+    setHistoryRateChanges((items) => [...items, { id: Date.now(), date: changeDate, rate: changeRate, payment: changePayment }].sort((a, b) => a.date.localeCompare(b.date)));
+    setChangeRate(""); setChangePayment("");
   };
   const exportData = () => {
     const scheduleHead = [t.paymentNo, t.date, t.payment, t.interest, t.principal, lang === "es" ? "Abono extra" : "Extra principal", t.charges, t.balance];
@@ -262,7 +280,7 @@ export default function Home() {
     if (activeView === "history") return {
       name: lang === "es" ? "historial-abonos" : "prepayment-history",
       title: t.historyResult,
-      summary: [[t.originalAmount, money.format(n(originalAmount))], [t.rate, `${n(activeRate).toFixed(2)}%`], [t.scheduledPayment, money.format(n(activePayment))], [t.originalFirstDate, historyFirstDate], [t.extrasTotal, money.format(history.extrasTotal)], [t.savedToDate, money.format(history.savedToDate)], [t.projectedSaving, money.format(history.projectedSaving)], [t.monthsSaved, `${history.monthsSaved}`], [t.balanceWithout, money.format(history.balanceTodayWithout)], [t.balanceWith, money.format(history.balanceTodayWith)]],
+      summary: [[t.originalAmount, money.format(n(originalAmount))], [historyKnown === "term" ? t.estimatedRate : t.rate, `${history.annualRate.toFixed(2)}%`], [t.scheduledPayment, money.format(n(activePayment))], [t.historyInsurance, money.format(n(activeInsurance))], [t.totalDebit, money.format(n(activePayment) + n(activeInsurance))], [t.originalTerm, `${history.baseline.rows.length} ${t.months}`], [t.originalFirstDate, historyFirstDate], [t.extrasTotal, money.format(history.extrasTotal)], [t.savedToDate, money.format(history.savedToDate)], [t.projectedSaving, money.format(history.projectedSaving)], [t.monthsSaved, `${history.monthsSaved}`], [t.balanceWithout, money.format(history.balanceTodayWithout)], [t.balanceWith, money.format(history.balanceTodayWith)], [t.insurancePaid, money.format(history.insuranceTotal)]],
       schedule: [scheduleHead, ...scheduleRows(history.scenario.rows)],
       extras: [[t.date, t.oneExtra], ...historyExtras.map((item) => [item.date, Number(n(item.amount).toFixed(2))])],
     };
@@ -295,15 +313,18 @@ export default function Home() {
     autoTable(doc, { startY: scheduleStart + 8, head: [data.schedule[0].map(String)], body: data.schedule.slice(1).map((row) => row.map(String)), theme: "striped", headStyles: { fillColor: [16, 42, 42] }, styles: { fontSize: 6.4, cellPadding: 1.4 }, margin: { left: 8, right: 8 }, didDrawPage: (hook) => { doc.setTextColor(120); doc.setFontSize(7); doc.text(`${lang === "es" ? "Generado" : "Generated"}: ${new Date().toLocaleDateString(lang === "es" ? "es-SV" : "en-US")} · LoanPilot`, 14, hook.doc.internal.pageSize.height - 7); } });
     doc.save(`loanpilot-${data.name}-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
-  const input = (label: string, value: string, setter: (v: string) => void, suffix?: string, type = "number") => <label className="field"><span>{label}</span><div className="input-wrap">{suffix === "$" && <b className="prefix">$</b>}<input type={type} value={value} onChange={(e) => setter(e.target.value)} min="0" step="any" />{suffix && suffix !== "$" && <b className="suffix">{suffix}</b>}</div></label>;
-  const dateInput = (label: string, value: string, setter: (v: string) => void) => <label className="field"><span>{label}</span><div className="input-wrap date-wrap"><input type="date" value={value} onChange={(e) => setter(e.target.value)} /></div></label>;
+  const input = (label: string, value: string, setter: (v: string) => void, suffix?: string) => <NumericField label={label} value={value} suffix={suffix} onChange={setter} onTouch={touch} />;
+  const dateInput = (label: string, value: string, setter: (v: string) => void) => <label className="field"><span>{label}</span><div className="input-wrap date-wrap"><input type="date" value={value} onChange={(e) => { touch(); setter(e.target.value); }} /></div></label>;
 
   return <main>
     <header className="topbar"><a className="brand" href="#top" aria-label="LoanPilot home"><span>LP</span> LoanPilot</a><nav><a href="#calculator">{t.navHow}</a><a href="#guide">{t.navGuide}</a></nav><div className="language" aria-label="Language"><button className={lang === "es" ? "active" : ""} onClick={() => setLang("es")}>ES</button><button className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button></div></header>
-    <section className="hero" id="top"><div className="flag-badge"><i /><span>{t.badge}</span></div><h1>{t.title1}<br /><em>{t.title2}</em></h1><p>{t.subtitle}</p><div className="trust-line"><span>✓</span>{t.free}</div></section>
+    <section className="hero" id="top"><h1>{t.title1}<br /><em>{t.title2}</em></h1><p>{t.subtitle}</p><div className="trust-line"><span>✓</span>{t.free}</div></section>
     <section className="calculator-shell" id="calculator">
       <div className="mode-switch" role="tablist"><button className={mode === "new" ? "selected" : ""} onClick={() => setMode("new")} role="tab" aria-selected={mode === "new"}><span className="mode-icon">◎</span><span><b>{t.newLoan}</b><small>{t.newLoanSub}</small></span></button><button className={mode === "active" ? "selected" : ""} onClick={() => setMode("active")} role="tab" aria-selected={mode === "active"}><span className="mode-icon">↗</span><span><b>{t.activeLoan}</b><small>{t.activeLoanSub}</small></span></button></div>
-      <div className="export-actions"><span>{t.exportHint}</span><button onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button><button onClick={exportExcel}><i>XLS</i>{t.exportExcel}</button></div>
+      <div className="shell-toolbar">
+        {demo && <div className="demo-flag"><i />{t.demoLabel}<button onClick={clearSample}>{t.demoReset}</button></div>}
+        <div className="export-actions"><span>{t.exportHint}</span><button onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button><button onClick={exportExcel}><i>XLS</i>{t.exportExcel}</button></div>
+      </div>
       {mode === "new" ? <div className="calculator-grid">
         <div className="form-panel"><div className="section-title"><span>01</span><div><h2>{t.basics}</h2><p>{lang === "es" ? "Lo mínimo para una buena estimación" : "The minimum for a useful estimate"}</p></div></div><div className="field-grid">{input(t.amount, amount, setAmount, "$")}{input(t.rate, rate, setRate, "%")}{input(t.term, years, setYears, t.years)}{dateInput(t.firstDate, firstDate, setFirstDate)}</div>
           <button className="details-toggle" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen}><span><b>02</b><span><strong>{t.optional}</strong><small>{lang === "es" ? "Seguros, comisiones y cargos" : "Insurance, fees and charges"}</small></span></span><i>{detailsOpen ? "−" : "+"}</i></button>
@@ -339,7 +360,18 @@ export default function Home() {
         </div> : <div className="calculator-grid active-grid history-grid">
           <div className="form-panel">
             <div className="section-title"><span>01</span><div><h2>{t.historyBasics}</h2><p>{t.historyBasicsHint}</p></div></div>
-            <div className="field-grid">{input(t.originalAmount, originalAmount, setOriginalAmount, "$")}{input(t.rate, activeRate, setActiveRate, "%")}{input(t.scheduledPayment, activePayment, setActivePayment, "$")}{dateInput(t.originalFirstDate, historyFirstDate, setHistoryFirstDate)}{input(t.currentBalance, activeBalance, setActiveBalance, "$")}</div>
+            <div className="field-grid">
+              {input(t.originalAmount, originalAmount, setOriginalAmount, "$")}
+              {input(t.scheduledPayment, activePayment, setActivePayment, "$")}
+              {input(t.historyInsurance, activeInsurance, setActiveInsurance, "$")}
+              {dateInput(t.originalFirstDate, historyFirstDate, setHistoryFirstDate)}
+              <div className="derived-note"><span>{t.totalDebit}</span><b>{money.format(n(activePayment) + n(activeInsurance))}</b><small>{t.totalDebitHint}</small></div>
+              <label className="field full"><span>{t.knownInput}</span><div className="segmented two">{(["rate", "term"] as KnownInput[]).map((item) => <button key={item} className={history.known === item ? "active" : ""} disabled={history.termLocked && item === "term"} onClick={() => { touch(); setHistoryKnown(item); }}>{item === "rate" ? t.knownRate : t.knownTerm}</button>)}</div></label>
+              {history.known === "rate" ? input(t.rate, activeRate, setActiveRate, "%") : input(t.originalTerm, historyMonths, setHistoryMonths, t.months)}
+              {history.termLocked && <div className="derived-note locked"><span>{t.knownTerm}</span><b>{history.baseline.rows.length} {t.months}</b><small>{t.termLocked}</small></div>}
+              {input(t.currentBalance, activeBalance, setActiveBalance, "$")}
+              {history.known === "term" && <div className="derived-note"><span>{t.estimatedRate}</span><b>{history.rateUnsolved ? "—" : `${history.annualRate.toFixed(2)}%`}</b><small>{t.estimatedRateHint}</small></div>}
+            </div>
             <div className="section-title second"><span>02</span><div><h2>{t.extraHistory}</h2><p>{t.extraHistoryHint}</p></div></div>
             <div className="extra-entry">
               {dateInput(t.extraDate, historyExtraDate, setHistoryExtraDate)}
@@ -347,17 +379,28 @@ export default function Home() {
               <button className="add-extra" onClick={addHistoryExtra}>+ {t.addExtra}</button>
             </div>
             <div className="extra-ledger">
-              {historyExtras.length === 0 ? <p>{t.noExtras}</p> : historyExtras.map((item, index) => <div className="extra-row" key={item.id}><span className="extra-number">{String(index + 1).padStart(2, "0")}</span><time>{new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(parseDate(item.date))}</time><b>{money.format(n(item.amount))}</b><button onClick={() => setHistoryExtras((items) => items.filter((extra) => extra.id !== item.id))} aria-label={`${t.removeExtra} ${money.format(n(item.amount))}`}>×</button></div>)}
+              {historyExtras.length === 0 ? <p>{t.noExtras}</p> : historyExtras.map((item, index) => <div className="extra-row" key={item.id}><span className="extra-number">{String(index + 1).padStart(2, "0")}</span><time>{new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(parseDate(item.date))}</time><b>{money.format(n(item.amount))}</b><button onClick={() => { touch(); setHistoryExtras((items) => items.filter((extra) => extra.id !== item.id)); }} aria-label={`${t.removeExtra} ${money.format(n(item.amount))}`}>×</button></div>)}
+            </div>
+            <div className="section-title second"><span>03</span><div><h2>{t.rateHistory}</h2><p>{t.rateHistoryHint}</p></div></div>
+            <div className="extra-entry rate-entry">
+              {dateInput(t.changeDate, changeDate, setChangeDate)}
+              {input(t.newRate, changeRate, setChangeRate, "%")}
+              {input(`${t.newPayment} (${t.newPaymentHint})`, changePayment, setChangePayment, "$")}
+              <button className="add-extra" onClick={addRateChange}>+ {t.addChange}</button>
+            </div>
+            <div className="extra-ledger">
+              {historyRateChanges.length === 0 ? <p>{t.noChanges}</p> : historyRateChanges.map((item, index) => <div className="extra-row" key={item.id}><span className="extra-number">{String(index + 1).padStart(2, "0")}</span><time>{new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-US", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }).format(parseDate(item.date))}</time><b>{item.rate.trim() === "" ? "—" : `${n(item.rate).toFixed(2)}%`}<small>{item.payment.trim() === "" ? t.keepsPayment : money.format(n(item.payment))}</small></b><button onClick={() => { touch(); setHistoryRateChanges((items) => items.filter((change) => change.id !== item.id)); }} aria-label={`${t.removeExtra} ${item.date}`}>×</button></div>)}
             </div>
           </div>
           <div className="results-panel active-results history-results">
             <div className="results-kicker">{t.historyResult}</div>
-            {(history.baseline.invalid || history.scenario.invalid) ? <div className="warning">! {t.badPayment}</div> : <>
+            {history.rateUnsolved ? <div className="warning">! {t.badTerm}</div> : (history.baseline.invalid || history.scenario.invalid) ? <div className="warning">! {t.badPayment}</div> : <>
               <div className="savings-hero history-saving"><span>{t.projectedSaving}</span><strong>{money.format(history.projectedSaving)}</strong><p><b>{history.monthsSaved}</b> {t.monthsSaved.toLowerCase()}</p></div>
               <div className="today-saving"><span>{t.savedToDate}</span><b>{money.format(history.savedToDate)}</b><small>{lang === "es" ? "ya no se generaron gracias a tus abonos anteriores" : "already avoided because of your past prepayments"}</small></div>
               <div className="payoff-compare"><div><span>{t.payoffBefore}</span><b>{history.baseline.rows.length ? dateFmt.format(history.baseline.rows.at(-1)!.date) : "—"}</b><small>{history.baseline.rows.length} {t.months}</small></div><span className="arrow">→</span><div className="better"><span>{t.payoffAfter}</span><b>{history.scenario.rows.length ? dateFmt.format(history.scenario.rows.at(-1)!.date) : "—"}</b><small>{history.scenario.rows.length} {t.months}</small></div></div>
               <div className="balance-compare"><div><span>{t.balanceWithout}</span><b>{money.format(history.balanceTodayWithout)}</b></div><span>− {money.format(history.balanceReduction)}</span><div><span>{t.balanceWith}</span><b>{money.format(history.balanceTodayWith)}</b></div></div>
               <div className="metric-grid two"><div><span>{t.extrasTotal}</span><b>{money.format(history.extrasTotal)}</b></div><div className="highlight"><span>{t.balanceReduction}</span><b>{money.format(history.balanceReduction)}</b></div></div>
+              {n(activeInsurance) > 0 && <div className="statement-check"><span>{t.insurancePaid}<small>{t.insurancePaidHint}</small></span><b>{money.format(history.insuranceTotal)}</b></div>}
               {n(activeBalance) > 0 && <div className="statement-check"><span>{lang === "es" ? "Comparado con tu estado de cuenta" : "Compared with your statement"}</span><b>{money.format(Math.abs(history.balanceTodayWith - n(activeBalance)))} {lang === "es" ? "de diferencia" : "difference"}</b></div>}
             </>}
             <div className="info-box"><span>i</span><p>{t.historyDisclaimer}</p></div>

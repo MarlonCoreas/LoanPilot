@@ -26,7 +26,7 @@ test("prerenders the page instead of shipping an empty root", async () => {
   // The headline, the trust line and the guide all have to survive into the
   // HTML: they are what a crawler or a link preview reads without running JS.
   assert.match(html, /Entiende tu préstamo/);
-  assert.match(html, /BASADA EN NORMATIVA SALVADOREÑA/);
+  assert.match(html, /Calcula el costo real antes de firmar/);
   assert.match(html, /Tus datos no salen de tu dispositivo/);
   assert.match(html, /Los datos que realmente importan/);
   // The estimate itself, not just the marketing copy, has to be in the markup.
