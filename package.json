@@ -1,7 +1,7 @@
 {
   "name": "loanpilot",
   "version": "0.1.0",
-  "description": "Calculadora bilingüe de préstamos y abonos a capital basada en normativa salvadoreña.",
+  "description": "Herramientas bilingües de préstamos, liquidaciones laborales y retenciones salariales para El Salvador.",
   "license": "MIT",
   "homepage": "https://loanpilot.marloncoreas.com",
   "repository": {

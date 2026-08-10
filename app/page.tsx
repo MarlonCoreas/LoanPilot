@@ -4,8 +4,10 @@ import {
   monthlyIrr, n, parseDate, solveRate, today,
   type ExtraPayment, type InsuranceMode, type RateChange, type Row,
 } from "./loan";
+import SiteFooter from "./SiteFooter";
+import SiteHeader, { getInitialLanguage, type Lang } from "./SiteHeader";
+import UtilityHero from "./UtilityHero";
 
-type Lang = "es" | "en";
 type Mode = "new" | "active";
 type ActiveView = "future" | "history";
 type KnownInput = "rate" | "term";
@@ -65,8 +67,7 @@ const copy = {
     guide2: "Tasa efectiva", guide2Text: "Convierte pagos, comisiones y cargos obligatorios en un costo anual comparable.",
     guide3: "Seguro sobre saldo", guide3Text: "Suele bajar a medida que amortizas; una prima fija se mantiene igual.",
     guide4: "Abono a capital", guide4Text: "Reduce el saldo que genera intereses. Confirma que el banco lo aplique a capital y no a cuotas futuras.",
-    footer: "Una herramienta independiente de", educational: "Estimaciones educativas, no asesoría financiera ni una oferta de crédito.", months: "meses", remaining: "pendientes",
-    report: "¿Algún cálculo no coincide con tu contrato? Cuéntanoslo",
+    months: "meses", remaining: "pendientes",
   },
   en: {
     navHow: "How it works", navGuide: "Guide",
@@ -119,12 +120,10 @@ const copy = {
     guide2: "Effective rate", guide2Text: "Turns payments, fees, and required charges into a comparable annual cost.",
     guide3: "Balance-based insurance", guide3Text: "Usually falls as principal is repaid; a fixed premium does not.",
     guide4: "Principal prepayment", guide4Text: "Lowers the balance that earns interest. Confirm the lender applies it to principal, not future installments.",
-    footer: "An independent tool by", educational: "Educational estimates, not financial advice or a credit offer.", months: "months", remaining: "remaining",
-    report: "Does a calculation not match your contract? Tell us",
+    months: "months", remaining: "remaining",
   },
 } as const;
 
-const ISSUES_URL = "https://github.com/MarlonCoreas/LoanPilot/issues/new/choose";
 
 // Amount fields are stored raw ("10000.5") and only grouped for display, so every
 // calculation, export and URL keeps parsing plain numbers.
@@ -174,7 +173,7 @@ function NumericField({ label, value, suffix, onChange, onTouch }: { label: stri
 }
 
 export default function Home() {
-  const [lang, setLang] = useState<Lang>("es"); const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false); const [demo, setDemo] = useState(true);
+  const [lang, setLang] = useState<Lang>(getInitialLanguage); const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false); const [demo, setDemo] = useState(true);
   const [amount, setAmount] = useState("10000"); const [rate, setRate] = useState("11.5"); const [years, setYears] = useState("5"); const [firstDate, setFirstDate] = useState(isoAfterMonths(1));
   const [insuranceMode, setInsuranceMode] = useState<InsuranceMode>("balance"); const [insuranceValue, setInsuranceValue] = useState("0.65"); const [commission, setCommission] = useState("1.5"); const [otherFees, setOtherFees] = useState("75"); const [feeMode, setFeeMode] = useState<"deducted" | "financed">("deducted");
   const [activeBalance, setActiveBalance] = useState("7450"); const [activeRate, setActiveRate] = useState("11.5"); const [activePayment, setActivePayment] = useState("220"); const [nextDate, setNextDate] = useState(isoAfterMonths(1)); const [activeInsurance, setActiveInsurance] = useState("4.50"); const [originalAmount, setOriginalAmount] = useState("10000"); const [paidToDate, setPaidToDate] = useState("3600"); const [oneExtra, setOneExtra] = useState("1000"); const [extraDate, setExtraDate] = useState(isoAfterMonths(3)); const [monthlyExtra, setMonthlyExtra] = useState("35");
@@ -317,8 +316,8 @@ export default function Home() {
   const dateInput = (label: string, value: string, setter: (v: string) => void) => <label className="field"><span>{label}</span><div className="input-wrap date-wrap"><input type="date" value={value} onChange={(e) => { touch(); setter(e.target.value); }} /></div></label>;
 
   return <main>
-    <header className="topbar"><a className="brand" href="#top" aria-label="LoanPilot home"><span>LP</span> LoanPilot</a><nav><a href="#calculator">{t.navHow}</a><a href="#guide">{t.navGuide}</a></nav><div className="language" aria-label="Language"><button className={lang === "es" ? "active" : ""} onClick={() => setLang("es")}>ES</button><button className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button></div></header>
-    <section className="hero" id="top"><h1>{t.title1}<br /><em>{t.title2}</em></h1><p>{t.subtitle}</p><div className="trust-line"><span>✓</span>{t.free}</div></section>
+    <SiteHeader lang={lang} setLang={setLang} active="loans" />
+    <UtilityHero title={<>{t.title1}<br /><em>{t.title2}</em></>} lead={t.subtitle} trust={t.free} />
     <section className="calculator-shell" id="calculator">
       <div className="mode-switch" role="tablist"><button className={mode === "new" ? "selected" : ""} onClick={() => setMode("new")} role="tab" aria-selected={mode === "new"}><span className="mode-icon">◎</span><span><b>{t.newLoan}</b><small>{t.newLoanSub}</small></span></button><button className={mode === "active" ? "selected" : ""} onClick={() => setMode("active")} role="tab" aria-selected={mode === "active"}><span className="mode-icon">↗</span><span><b>{t.activeLoan}</b><small>{t.activeLoanSub}</small></span></button></div>
       <div className="shell-toolbar">
@@ -411,6 +410,6 @@ export default function Home() {
     </section>
     <section className="accuracy"><div className="accuracy-icon">✓</div><div><h2>{t.accuracy}</h2><p>{t.accuracyText}</p><a href="https://ssf.gob.sv/servicios/tasas-de-interes-comisiones-y-recargos/" target="_blank" rel="noreferrer">{t.official} ↗</a></div></section>
     <section className="guide" id="guide"><div className="guide-head"><p>LOANPILOT 101</p><h2>{t.guideTitle}</h2><span>{t.guideLead}</span></div><div className="guide-grid">{[[t.guide1, t.guide1Text, "%"], [t.guide2, t.guide2Text, "∿"], [t.guide3, t.guide3Text, "◇"], [t.guide4, t.guide4Text, "↓"]].map(([title, text, icon], i) => <article key={title}><span>0{i + 1}</span><i>{icon}</i><h3>{title}</h3><p>{text}</p></article>)}</div></section>
-    <footer><div className="brand footer-brand"><span>LP</span> LoanPilot</div><p>{t.footer} <a href="https://marloncoreas.com">marloncoreas.com</a><br />{t.educational}<a className="report-link" href={ISSUES_URL} target="_blank" rel="noreferrer">{t.report} ↗</a></p></footer>
+    <SiteFooter lang={lang} />
   </main>;
 }

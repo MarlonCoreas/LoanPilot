@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import Home from "../app/page";
+import App from "../app/App";
 import "../app/globals.css";
 
 const root = document.getElementById("root");
@@ -16,6 +16,6 @@ root.replaceChildren();
 
 createRoot(root).render(
   <StrictMode>
-    <Home />
+    <App pathname={window.location.pathname} />
   </StrictMode>,
 );

@@ -1,10 +1,18 @@
 # LoanPilot
 
-Calculadora gratuita y bilingüe de préstamos basada en normativa salvadoreña.
-Permite estimar el costo real antes de contratar, proyectar abonos futuros y
-reconstruir el ahorro producido por abonos históricos.
+Calculadora gratuita y bilingüe de préstamos, liquidaciones laborales y
+retenciones salariales basada en normativa salvadoreña. Permite estimar el
+costo real de un crédito, proyectar abonos y revisar escenarios de empleo y
+planilla con reglas y fuentes oficiales visibles.
 
 Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
+
+## Páginas
+
+- `/`: portada y directorio de herramientas.
+- `/prestamos/`: préstamos, amortización y abonos a capital.
+- `/finiquito/`: finiquito, indemnización y renuncia voluntaria.
+- `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención.
 
 ## Funciones
 
@@ -14,6 +22,12 @@ Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
 - Historial de abonos con fecha y monto.
 - Comparación de intereses, saldo, fecha de finalización y meses ahorrados.
 - Exportación a PDF y formato compatible con Microsoft Excel.
+- Estimación de finiquito e indemnización por despido injustificado o renuncia
+  voluntaria, incluyendo vacaciones, aguinaldo y salario pendiente.
+- Estimación de AFP, ISSS e Impuesto sobre la Renta para pagos mensuales,
+  quincenales y semanales.
+- Tablas oficiales de retención y recálculo de junio y diciembre, con enlaces a
+  las normas vigentes.
 - Interfaz responsive en español e inglés.
 - Todos los cálculos se ejecutan localmente en el navegador.
 
