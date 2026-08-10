@@ -14,6 +14,12 @@ Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
 - `/finiquito/`: finiquito, indemnización y renuncia voluntaria.
 - `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención.
 
+Cada página existe en inglés bajo `/en/`: `/en/`, `/en/loans/`, `/en/settlement/`
+y `/en/withholding/`. El idioma lo determina la URL, no una preferencia
+guardada, así que cada traducción es indexable y se puede compartir. La tabla de
+rutas, sus metadatos y el `sitemap.xml` salen todos de `app/routes.ts`; el
+sitemap se genera en el build y por eso no vive en `public/`.
+
 ## Funciones
 
 - Cuota, intereses, seguros, comisiones y costo efectivo anual estimado.
@@ -64,6 +70,20 @@ La dirección local se mostrará en la terminal.
 npm test         # compila y valida el resultado del build
 npm run typecheck
 ```
+
+## Actualizar una regla laboral o fiscal
+
+Las cifras normativas viven en `app/statutory.ts`, cada una con el artículo o
+decreto que la respalda escrito al lado. Al cambiar cualquiera:
+
+1. Leer el texto oficial, no una nota de prensa ni un resumen. Los enlaces del
+   pie y del panel de fuentes apuntan al documento correspondiente.
+2. Actualizar la constante y la cita que la acompaña.
+3. Ajustar la prueba `statutory figures still match the official texts...`, que
+   existe justamente para que un cambio accidental falle en vez de publicarse.
+4. Mover `RULES_REVIEWED` a la fecha de la revisión. La insignia del sitio
+   muestra ese valor, así que una fecha desactualizada afirma algo que no se
+   comprobó.
 
 ## Publicación
 

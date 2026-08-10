@@ -1,37 +1,36 @@
-export type Lang = "es" | "en";
-export type SiteSection = "home" | "loans" | "settlement" | "withholding";
-
-export function getInitialLanguage(): Lang {
-  if (typeof window === "undefined") return "es";
-  try { return window.localStorage.getItem("loanpilot-language") === "en" ? "en" : "es"; }
-  catch { return "es"; }
-}
+import { LANGS, PAGE_LABELS, ROUTES, type Lang, type Page } from "./routes";
 
 const labels = {
-  es: { loans: "Préstamos", settlement: "Finiquito", withholding: "Retenciones", home: "LoanPilot — inicio" },
-  en: { loans: "Loans", settlement: "Settlement", withholding: "Withholding", home: "LoanPilot — home" },
+  es: { tools: "Herramientas", language: "Idioma", home: "LoanPilot — inicio" },
+  en: { tools: "Tools", language: "Language", home: "LoanPilot — home" },
 } as const;
 
-export default function SiteHeader({ lang, setLang, active }: {
-  lang: Lang;
-  setLang: (lang: Lang) => void;
-  active: SiteSection;
-}) {
+const NAV: Page[] = ["loans", "settlement", "withholding"];
+
+export default function SiteHeader({ lang, page }: { lang: Lang; page: Page }) {
   const t = labels[lang];
-  const chooseLanguage = (next: Lang) => {
-    try { window.localStorage.setItem("loanpilot-language", next); } catch { /* Storage can be disabled. */ }
-    setLang(next);
-  };
   return <header className="topbar site-topbar">
-    <a className="brand" href="/" aria-label={t.home}><span>LP</span> LoanPilot</a>
-    <nav aria-label={lang === "es" ? "Herramientas" : "Tools"}>
-      <a className={active === "loans" ? "active" : ""} href="/prestamos/">{t.loans}</a>
-      <a className={active === "settlement" ? "active" : ""} href="/finiquito/">{t.settlement}</a>
-      <a className={active === "withholding" ? "active" : ""} href="/retenciones/">{t.withholding}</a>
+    <a className="brand" href={ROUTES[lang].home} aria-label={t.home}><span>LP</span> LoanPilot</a>
+    <nav aria-label={t.tools}>
+      {NAV.map((item) => <a
+        key={item}
+        className={page === item ? "active" : ""}
+        href={ROUTES[lang][item]}
+        aria-current={page === item ? "page" : undefined}
+      >{PAGE_LABELS[lang][item]}</a>)}
     </nav>
-    <div className="language" aria-label={lang === "es" ? "Idioma" : "Language"}>
-      <button className={lang === "es" ? "active" : ""} onClick={() => chooseLanguage("es")}>ES</button>
-      <button className={lang === "en" ? "active" : ""} onClick={() => chooseLanguage("en")}>EN</button>
+    {/* Anchors, not buttons: switching language is a navigation to the other
+        translation, which is what makes it reachable and indexable. */}
+    <div className="language" aria-label={t.language}>
+      {LANGS.map((item) => <a
+        key={item}
+        className={lang === item ? "active" : ""}
+        href={ROUTES[item][page]}
+        // Spread, not the camelCase prop: React serialises `hrefLang` verbatim.
+        // Browsers fold attribute case, but crawlers and greps are literal.
+        {...{ hreflang: item }}
+        aria-current={lang === item ? "true" : undefined}
+      >{item.toUpperCase()}</a>)}
     </div>
   </header>;
 }

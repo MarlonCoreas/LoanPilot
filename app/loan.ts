@@ -26,7 +26,18 @@ export function addMonths(date: Date, months: number) {
   const result = new Date(date); const day = result.getUTCDate(); result.setUTCDate(1); result.setUTCMonth(result.getUTCMonth() + months);
   const last = new Date(Date.UTC(result.getUTCFullYear(), result.getUTCMonth() + 1, 0)).getUTCDate(); result.setUTCDate(Math.min(day, last)); return result;
 }
-export function today() { const now = new Date(); return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 12)); }
+// The calendar day is resolved in El Salvador time, where the audience is, and
+// only then anchored at 12:00 UTC. Reading it off the runtime clock instead put
+// anyone east of the country — including a UTC build server after 18:00 local —
+// a day ahead, so the defaults offered a date the user had not reached yet.
+const SV_CALENDAR = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/El_Salvador", year: "numeric", month: "2-digit", day: "2-digit",
+});
+export function todayIso() {
+  const parts = new Map(SV_CALENDAR.formatToParts(new Date()).map((part) => [part.type, part.value]));
+  return `${parts.get("year")}-${parts.get("month")}-${parts.get("day")}`;
+}
+export function today() { return parseDate(todayIso()); }
 export function parseDate(value: string) { return new Date(`${value}T12:00:00Z`); }
 export function daysBetween(a: Date, b: Date) { return Math.max(1, Math.round((b.getTime() - a.getTime()) / 86_400_000)); }
 // Segmented accrual has to allow a zero-day span. An event landing exactly on an

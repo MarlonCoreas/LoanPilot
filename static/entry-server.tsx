@@ -8,3 +8,9 @@ import App from "../app/App";
 export function render(pathname = "/") {
   return renderToStaticMarkup(<App pathname={pathname} />);
 }
+
+// Re-exported so the prerender script reads the route table from the same
+// module the application routes with, instead of keeping a second copy.
+export {
+  alternates, absoluteUrl, LANGS, OG_LOCALE, PAGES, PAGE_META, ROUTES, SITE_ORIGIN,
+} from "../app/routes";
