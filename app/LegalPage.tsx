@@ -1,19 +1,31 @@
-import { useEffect, useState } from "react";
 import SiteFooter from "./SiteFooter";
-import SiteHeader, { getInitialLanguage, type Lang } from "./SiteHeader";
+import SiteHeader from "./SiteHeader";
+import type { Lang } from "./routes";
+import { RULES_REVIEWED } from "./statutory";
 import StatutoryTools from "./StatutoryTools";
 import UtilityHero from "./UtilityHero";
+
+// The badge used to read "Actualizada a 2026" as a hardcoded string, so it kept
+// making the claim no matter how old the figures were. It now renders the date
+// the constants were last checked, which lives beside those constants.
+function reviewedOn(lang: Lang) {
+  const [year, month, day] = RULES_REVIEWED.split("-").map(Number);
+  const formatted = new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+  return lang === "es"
+    ? `Normativa de El Salvador · Fuentes verificadas el ${formatted}`
+    : `El Salvador rules · Sources verified on ${formatted}`;
+}
 
 const heroCopy = {
   es: {
     settlement: { title: "Calcula lo que corresponde al terminar tu empleo.", lead: "Estima indemnización o prestación, vacaciones, aguinaldo y salarios pendientes con reglas verificables." },
     withholding: { title: "Entiende cada descuento de tu salario.", lead: "Estima AFP, ISSS y renta y consulta la tabla oficial aplicada a tu frecuencia de pago." },
-    trust: "Normativa de El Salvador · Actualizada a 2026",
   },
   en: {
     settlement: { title: "Estimate what is due when employment ends.", lead: "Estimate severance or resignation benefit, vacation, year-end bonus and unpaid salary with auditable rules." },
     withholding: { title: "Understand every deduction from your pay.", lead: "Estimate pension, ISSS and income tax and inspect the official table for your pay frequency." },
-    trust: "El Salvador rules · Updated through 2026",
   },
 } as const;
 
@@ -78,14 +90,12 @@ function LegalGuide({ lang, page }: { lang: Lang; page: "settlement" | "withhold
   </section>;
 }
 
-export default function LegalPage({ page }: { page: "settlement" | "withholding" }) {
-  const [lang, setLang] = useState<Lang>(getInitialLanguage);
-  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
+export default function LegalPage({ lang, page }: { lang: Lang; page: "settlement" | "withholding" }) {
   const hero = heroCopy[lang];
   return <main className="legal-page">
-    <SiteHeader lang={lang} setLang={setLang} active={page} />
-    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={hero.trust} />
-    <StatutoryTools lang={lang} fixedTool={page} />
+    <SiteHeader lang={lang} page={page} />
+    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={reviewedOn(lang)} />
+    <StatutoryTools lang={lang} tool={page} />
     <LegalGuide lang={lang} page={page} />
     <SiteFooter lang={lang} />
   </main>;

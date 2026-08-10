@@ -4,8 +4,9 @@ import {
   monthlyIrr, n, parseDate, solveRate, today,
   type ExtraPayment, type InsuranceMode, type RateChange, type Row,
 } from "./loan";
+import type { Lang } from "./routes";
 import SiteFooter from "./SiteFooter";
-import SiteHeader, { getInitialLanguage, type Lang } from "./SiteHeader";
+import SiteHeader from "./SiteHeader";
 import UtilityHero from "./UtilityHero";
 
 type Mode = "new" | "active";
@@ -14,8 +15,6 @@ type KnownInput = "rate" | "term";
 
 const copy = {
   es: {
-    navHow: "Cómo funciona",
-    navGuide: "Guía",
     title1: "Entiende tu préstamo.",
     title2: "Decide con claridad.",
     subtitle: "Calcula el costo real antes de firmar o descubre cuánto puedes ahorrar con abonos a capital.",
@@ -70,7 +69,6 @@ const copy = {
     months: "meses", remaining: "pendientes",
   },
   en: {
-    navHow: "How it works", navGuide: "Guide",
     title1: "Understand your loan.", title2: "Decide with clarity.",
     subtitle: "Estimate the real cost before signing or see how much extra principal payments could save.",
     free: "Free · No signup · Your data stays on your device",
@@ -124,7 +122,6 @@ const copy = {
   },
 } as const;
 
-
 // Amount fields are stored raw ("10000.5") and only grouped for display, so every
 // calculation, export and URL keeps parsing plain numbers.
 const SIGNIFICANT = /[\d.]/;
@@ -172,8 +169,8 @@ function NumericField({ label, value, suffix, onChange, onTouch }: { label: stri
     {suffix && suffix !== "$" && <b className="suffix">{suffix}</b>}</div></label>;
 }
 
-export default function Home() {
-  const [lang, setLang] = useState<Lang>(getInitialLanguage); const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false); const [demo, setDemo] = useState(true);
+export default function Home({ lang }: { lang: Lang }) {
+  const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false); const [demo, setDemo] = useState(true);
   const [amount, setAmount] = useState("10000"); const [rate, setRate] = useState("11.5"); const [years, setYears] = useState("5"); const [firstDate, setFirstDate] = useState(isoAfterMonths(1));
   const [insuranceMode, setInsuranceMode] = useState<InsuranceMode>("balance"); const [insuranceValue, setInsuranceValue] = useState("0.65"); const [commission, setCommission] = useState("1.5"); const [otherFees, setOtherFees] = useState("75"); const [feeMode, setFeeMode] = useState<"deducted" | "financed">("deducted");
   const [activeBalance, setActiveBalance] = useState("7450"); const [activeRate, setActiveRate] = useState("11.5"); const [activePayment, setActivePayment] = useState("220"); const [nextDate, setNextDate] = useState(isoAfterMonths(1)); const [activeInsurance, setActiveInsurance] = useState("4.50"); const [originalAmount, setOriginalAmount] = useState("10000"); const [paidToDate, setPaidToDate] = useState("3600"); const [oneExtra, setOneExtra] = useState("1000"); const [extraDate, setExtraDate] = useState(isoAfterMonths(3)); const [monthlyExtra, setMonthlyExtra] = useState("35");
@@ -192,7 +189,6 @@ export default function Home() {
   const t = copy[lang];
   const money = useMemo(() => new Intl.NumberFormat(lang === "es" ? "es-SV" : "en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }), [lang]);
   const dateFmt = useMemo(() => new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-US", { month: "short", year: "numeric", timeZone: "UTC" }), [lang]);
-  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
   const quote = useMemo(() => {
     const fees = n(amount) * (n(commission) / 100) + n(otherFees); const principal = feeMode === "financed" ? n(amount) + fees : n(amount); const net = feeMode === "deducted" ? Math.max(0, n(amount) - fees) : n(amount);
     const result = buildNewSchedule({ principal, annualRate: n(rate), firstDate: parseDate(firstDate), months: Math.max(1, Math.round(n(years) * 12)), insuranceMode, insuranceValue: n(insuranceValue) });
@@ -316,10 +312,10 @@ export default function Home() {
   const dateInput = (label: string, value: string, setter: (v: string) => void) => <label className="field"><span>{label}</span><div className="input-wrap date-wrap"><input type="date" value={value} onChange={(e) => { touch(); setter(e.target.value); }} /></div></label>;
 
   return <main>
-    <SiteHeader lang={lang} setLang={setLang} active="loans" />
+    <SiteHeader lang={lang} page="loans" />
     <UtilityHero title={<>{t.title1}<br /><em>{t.title2}</em></>} lead={t.subtitle} trust={t.free} />
     <section className="calculator-shell" id="calculator">
-      <div className="mode-switch" role="tablist"><button className={mode === "new" ? "selected" : ""} onClick={() => setMode("new")} role="tab" aria-selected={mode === "new"}><span className="mode-icon">◎</span><span><b>{t.newLoan}</b><small>{t.newLoanSub}</small></span></button><button className={mode === "active" ? "selected" : ""} onClick={() => setMode("active")} role="tab" aria-selected={mode === "active"}><span className="mode-icon">↗</span><span><b>{t.activeLoan}</b><small>{t.activeLoanSub}</small></span></button></div>
+      <div className="mode-switch" role="group" aria-label={lang === "es" ? "Tipo de cálculo" : "Calculation type"}><button type="button" className={mode === "new" ? "selected" : ""} onClick={() => setMode("new")} aria-pressed={mode === "new"}><span className="mode-icon">◎</span><span><b>{t.newLoan}</b><small>{t.newLoanSub}</small></span></button><button type="button" className={mode === "active" ? "selected" : ""} onClick={() => setMode("active")} aria-pressed={mode === "active"}><span className="mode-icon">↗</span><span><b>{t.activeLoan}</b><small>{t.activeLoanSub}</small></span></button></div>
       <div className="shell-toolbar">
         {demo && <div className="demo-flag"><i />{t.demoLabel}<button onClick={clearSample}>{t.demoReset}</button></div>}
         <div className="export-actions"><span>{t.exportHint}</span><button onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button><button onClick={exportExcel}><i>XLS</i>{t.exportExcel}</button></div>
@@ -327,15 +323,15 @@ export default function Home() {
       {mode === "new" ? <div className="calculator-grid">
         <div className="form-panel"><div className="section-title"><span>01</span><div><h2>{t.basics}</h2><p>{lang === "es" ? "Lo mínimo para una buena estimación" : "The minimum for a useful estimate"}</p></div></div><div className="field-grid">{input(t.amount, amount, setAmount, "$")}{input(t.rate, rate, setRate, "%")}{input(t.term, years, setYears, t.years)}{dateInput(t.firstDate, firstDate, setFirstDate)}</div>
           <button className="details-toggle" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen}><span><b>02</b><span><strong>{t.optional}</strong><small>{lang === "es" ? "Seguros, comisiones y cargos" : "Insurance, fees and charges"}</small></span></span><i>{detailsOpen ? "−" : "+"}</i></button>
-          {detailsOpen && <div className="details-body"><label className="field full"><span>{t.insurance}</span><div className="segmented">{(["balance", "fixed", "none"] as InsuranceMode[]).map((item) => <button key={item} className={insuranceMode === item ? "active" : ""} onClick={() => setInsuranceMode(item)}>{item === "balance" ? t.insBalance : item === "fixed" ? t.insFixed : t.insNone}</button>)}</div></label><div className="field-grid">{insuranceMode !== "none" && input(insuranceMode === "balance" ? t.perThousand : t.fixedMonthly, insuranceValue, setInsuranceValue, "$")}{input(t.commission, commission, setCommission, "%")}{input(t.otherFees, otherFees, setOtherFees, "$")}<label className="field"><span>{t.feeMode}</span><select value={feeMode} onChange={(e) => setFeeMode(e.target.value as "deducted" | "financed")}><option value="deducted">{t.deducted}</option><option value="financed">{t.financed}</option></select></label></div></div>}
+          {detailsOpen && <div className="details-body"><fieldset className="field full"><legend>{t.insurance}</legend><div className="segmented">{(["balance", "fixed", "none"] as InsuranceMode[]).map((item) => <button type="button" key={item} aria-pressed={insuranceMode === item} className={insuranceMode === item ? "active" : ""} onClick={() => setInsuranceMode(item)}>{item === "balance" ? t.insBalance : item === "fixed" ? t.insFixed : t.insNone}</button>)}</div></fieldset><div className="field-grid">{insuranceMode !== "none" && input(insuranceMode === "balance" ? t.perThousand : t.fixedMonthly, insuranceValue, setInsuranceValue, "$")}{input(t.commission, commission, setCommission, "%")}{input(t.otherFees, otherFees, setOtherFees, "$")}<label className="field"><span>{t.feeMode}</span><select value={feeMode} onChange={(e) => setFeeMode(e.target.value as "deducted" | "financed")}><option value="deducted">{t.deducted}</option><option value="financed">{t.financed}</option></select></label></div></div>}
         </div>
         <div className="results-panel"><div className="results-kicker">{t.results}</div><div className="hero-result"><span>{t.firstTotal}</span><strong>{money.format((quote.rows[0]?.payment ?? 0) + (quote.rows[0]?.insurance ?? 0))}</strong><small>{money.format(quote.payment)} {lang === "es" ? "de préstamo + seguro variable" : "loan payment + variable insurance"}</small></div><div className="metric-grid"><div><span>{t.totalInterest}</span><b>{money.format(quote.totalInterest)}</b></div><div><span>{t.totalInsurance}</span><b>{money.format(quote.totalInsurance)}</b></div><div><span>{t.totalCost}</span><b>{money.format(quote.totalPayments)}</b></div><div className="highlight"><span>{t.effective}</span><b>{quote.effective.toFixed(2)}%</b></div><div><span>{t.cashReceived}</span><b>{money.format(quote.net)}</b></div><div><span>{t.totalFees}</span><b>{money.format(quote.fees)}</b></div></div>
           <div className="year-chart"><div className="chart-head"><b>{t.yearly}</b><span><i className="dot interest" />{t.interest}<i className="dot insurance" />{t.charges}</span></div>{Object.entries(quote.yearly).map(([year, item]) => { const max = Math.max(...Object.values(quote.yearly).map((v) => v.interest + v.insurance), 1); return <div className="bar-row" key={year}><span>{year}</span><div className="bar-track"><i className="bar-int" style={{ width: `${(item.interest / max) * 100}%` }} /><i className="bar-ins" style={{ width: `${(item.insurance / max) * 100}%` }} /></div><b>{money.format(item.interest + item.insurance)}</b></div>; })}</div><button className="schedule-button" onClick={() => setScheduleOpen(!scheduleOpen)}>{scheduleOpen ? t.hideSchedule : t.schedule}<span>→</span></button>
         </div>
       </div> : <>
-        <div className="active-view-switch" role="tablist">
-          <button className={activeView === "future" ? "active" : ""} onClick={() => setActiveView("future")} role="tab" aria-selected={activeView === "future"}>↗ {t.futureView}</button>
-          <button className={activeView === "history" ? "active" : ""} onClick={() => setActiveView("history")} role="tab" aria-selected={activeView === "history"}>↶ {t.historyView}</button>
+        <div className="active-view-switch" role="group" aria-label={lang === "es" ? "Vista del préstamo" : "Loan view"}>
+          <button type="button" className={activeView === "future" ? "active" : ""} onClick={() => setActiveView("future")} aria-pressed={activeView === "future"}>↗ {t.futureView}</button>
+          <button type="button" className={activeView === "history" ? "active" : ""} onClick={() => setActiveView("history")} aria-pressed={activeView === "history"}>↶ {t.historyView}</button>
         </div>
         {activeView === "future" ? <div className="calculator-grid active-grid">
           <div className="form-panel">
@@ -365,7 +361,7 @@ export default function Home() {
               {input(t.historyInsurance, activeInsurance, setActiveInsurance, "$")}
               {dateInput(t.originalFirstDate, historyFirstDate, setHistoryFirstDate)}
               <div className="derived-note"><span>{t.totalDebit}</span><b>{money.format(n(activePayment) + n(activeInsurance))}</b><small>{t.totalDebitHint}</small></div>
-              <label className="field full"><span>{t.knownInput}</span><div className="segmented two">{(["rate", "term"] as KnownInput[]).map((item) => <button key={item} className={history.known === item ? "active" : ""} disabled={history.termLocked && item === "term"} onClick={() => { touch(); setHistoryKnown(item); }}>{item === "rate" ? t.knownRate : t.knownTerm}</button>)}</div></label>
+              <fieldset className="field full"><legend>{t.knownInput}</legend><div className="segmented two">{(["rate", "term"] as KnownInput[]).map((item) => <button type="button" aria-pressed={history.known === item} key={item} className={history.known === item ? "active" : ""} disabled={history.termLocked && item === "term"} onClick={() => { touch(); setHistoryKnown(item); }}>{item === "rate" ? t.knownRate : t.knownTerm}</button>)}</div></fieldset>
               {history.known === "rate" ? input(t.rate, activeRate, setActiveRate, "%") : input(t.originalTerm, historyMonths, setHistoryMonths, t.months)}
               {history.termLocked && <div className="derived-note locked"><span>{t.knownTerm}</span><b>{history.baseline.rows.length} {t.months}</b><small>{t.termLocked}</small></div>}
               {input(t.currentBalance, activeBalance, setActiveBalance, "$")}

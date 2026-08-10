@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
 import SiteFooter from "./SiteFooter";
-import SiteHeader, { getInitialLanguage, type Lang } from "./SiteHeader";
+import SiteHeader from "./SiteHeader";
+import { PAGE_LABELS, ROUTES, type Lang } from "./routes";
 
 const copy = {
   es: {
@@ -29,19 +29,17 @@ const copy = {
   },
 } as const;
 
-export default function PlatformHome() {
-  const [lang, setLang] = useState<Lang>(getInitialLanguage);
+export default function PlatformHome({ lang }: { lang: Lang }) {
   const t = copy[lang];
-  useEffect(() => { document.documentElement.lang = lang; }, [lang]);
 
   const tools = [
-    { number: "01", icon: "◎", title: t.loans, text: t.loansText, cta: t.loansCta, href: "/prestamos/", className: "loan" },
-    { number: "02", icon: "§", title: t.settlement, text: t.settlementText, cta: t.settlementCta, href: "/finiquito/", className: "labor" },
-    { number: "03", icon: "%", title: t.withholding, text: t.withholdingText, cta: t.withholdingCta, href: "/retenciones/", className: "tax" },
+    { number: "01", icon: "◎", title: t.loans, text: t.loansText, cta: t.loansCta, href: ROUTES[lang].loans, className: "loan" },
+    { number: "02", icon: "§", title: t.settlement, text: t.settlementText, cta: t.settlementCta, href: ROUTES[lang].settlement, className: "labor" },
+    { number: "03", icon: "%", title: t.withholding, text: t.withholdingText, cta: t.withholdingCta, href: ROUTES[lang].withholding, className: "tax" },
   ];
 
   return <main className="platform-home">
-    <SiteHeader lang={lang} setLang={setLang} active="home" />
+    <SiteHeader lang={lang} page="home" />
     <section className="platform-hero">
       <p>{t.eyebrow}</p>
       <h1>{t.title}</h1>
