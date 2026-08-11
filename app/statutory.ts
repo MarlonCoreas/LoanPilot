@@ -8,16 +8,48 @@ export type PayFrequency = "monthly" | "fortnightly" | "weekly";
 // commit that re-checks the sources, never as a routine bump.
 export const RULES_REVIEWED = "2026-08-10";
 
-// Executive Decree 12/2025, which replaced articles 2, 3(a) and 6 of Decree
-// 11/2025 with a single table broken down by sector. In force since 1 June
-// 2025. These are the daily rates; the decree states the monthly equivalent as
-// the daily rate times 365/12, not times 30.
-export const DAILY_MINIMUM_WAGE: Record<WageSector, number> = {
-  commerce: 13.44,   // comercio, servicios, industria, ingenios, agroindustria
-  maquila: 13.227,   // maquila textil y confección
-  coffee: 10.035,    // beneficios de café y recolección de caña de azúcar
-  agriculture: 8.96, // agropecuario, pesca y recolección de café
+export type WageTable = {
+  /** First day the table applies, inclusive. */
+  from: string;
+  decree: string;
+  daily: Record<WageSector, number>;
 };
+
+/**
+ * Minimum wage tables, newest first. A settlement has to be priced with the
+ * table in force on the last day worked: article 58 caps the daily base at the
+ * "salario mínimo diario legal vigente", and the MTPS calculator applies a
+ * single rate — the one current at termination — across every year of service,
+ * rather than one rate per year.
+ *
+ * Only the table this project has read back against its decree is listed.
+ * Earlier terminations are priced with the oldest entry and flagged, which is
+ * visible guesswork rather than the silent kind.
+ */
+export const MINIMUM_WAGE_TABLES: WageTable[] = [
+  {
+    // Executive Decree 12/2025, which replaced articles 2, 3(a) and 6 of Decree
+    // 11/2025 with a single table broken down by sector. The decree states the
+    // monthly equivalent as the daily rate times 365/12, not times 30.
+    from: "2025-06-01",
+    decree: "D.E. 12/2025",
+    daily: {
+      commerce: 13.44,   // comercio, servicios, industria, ingenios, agroindustria
+      maquila: 13.227,   // maquila textil y confección
+      coffee: 10.035,    // beneficios de café y recolección de caña de azúcar
+      agriculture: 8.96, // agropecuario, pesca y recolección de café
+    },
+  },
+];
+
+/** The table in force today, and the sector list the interface iterates. */
+export const DAILY_MINIMUM_WAGE: Record<WageSector, number> = MINIMUM_WAGE_TABLES[0].daily;
+
+export function minimumWageAt(isoDate: string) {
+  const table = MINIMUM_WAGE_TABLES.find((item) => isoDate >= item.from);
+  const oldest = MINIMUM_WAGE_TABLES[MINIMUM_WAGE_TABLES.length - 1];
+  return { table: table ?? oldest, predatesTables: !table };
+}
 
 export const PAY_PERIODS: Record<PayFrequency, number> = {
   monthly: 12,
@@ -125,10 +157,6 @@ function daysInclusive(start: Date, end: Date) {
   return Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1;
 }
 
-function daysInYear(year: number) {
-  return (Date.UTC(year + 1, 0, 1) - Date.UTC(year, 0, 1)) / DAY_MS;
-}
-
 const EARLIEST_DATE = utcDate(EARLIEST_EMPLOYMENT_DATE);
 const LATEST_DATE = utcDate(LATEST_EMPLOYMENT_DATE);
 
@@ -136,11 +164,34 @@ const LATEST_DATE = utcDate(LATEST_EMPLOYMENT_DATE);
 // ten, 19 days; ten or more, 21 days. The October 2025 reform amended articles
 // 197, 200 and 202 — the dates — and left this scale untouched. Under a year
 // the caller prorates these 15 days, which is what reformed article 197 grants.
-function aguinaldoDays(serviceYears: number) {
-  if (serviceYears >= 10) return 21;
-  if (serviceYears >= 3) return 19;
+// Takes completed years: with service measured in days, 1,095 days divides into
+// exactly 3.0 while the third anniversary is still a day away.
+function aguinaldoDays(completedYears: number) {
+  if (completedYears >= 10) return 21;
+  if (completedYears >= 3) return 19;
   return 15;
 }
+
+/**
+ * Every accrual in a settlement is priced as days over 365, counting both the
+ * first and the last day worked. That is what the MTPS calculator does, and it
+ * differs from counting whole anniversaries in two ways worth keeping: a leap
+ * day inside a year of service is paid, and the day of departure is paid.
+ */
+const YEAR_DAYS = 365;
+
+export const QUINCENA25 = {
+  /** Article 2: only salaries at or below this monthly figure. */
+  salaryCeiling: 1500,
+  /** Article 2: half the monthly nominal salary. */
+  rate: 0.5,
+  /**
+   * Article 1 starts the general regime in 2027; article 6 leaves 2026
+   * voluntary for private employers, so nothing is owed as of right before
+   * then and the estimate stays silent.
+   */
+  mandatoryFrom: "2027-01-01",
+};
 
 export function calculateSettlement(input: {
   startDate: string;
@@ -157,25 +208,45 @@ export function calculateSettlement(input: {
   const invalid = !Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())
     || end < start || start < EARLIEST_DATE || end > LATEST_DATE;
   if (invalid) return {
-    invalid: true, serviceYears: 0, completedYears: 0, serviceMonths: 0, dailySalary: 0,
-    indemnityBaseDaily: 0, indemnity: 0, eligibleForResignationBenefit: false, pendingSalary: 0,
-    vacationDays: 0, vacation: 0, aguinaldoDays: 0, aguinaldo: 0, total: 0,
+    invalid: true, serviceYears: 0, completedYears: 0, serviceMonths: 0, serviceDays: 0,
+    dailySalary: 0, indemnityBaseDaily: 0, minimumWageDecree: "", minimumWagePredatesTables: false,
+    indemnity: 0, eligibleForResignationBenefit: false, pendingSalary: 0,
+    vacationDays: 0, vacation: 0, aguinaldoDays: 0, aguinaldo: 0,
+    quincena25: 0, quincena25Applies: false, total: 0,
   };
 
   const salary = Math.max(0, input.monthlySalary || 0);
   const dailySalary = salary / 30;
   const service = calendarService(start, end);
+
+  // Split the way the MTPS statement does — complete years, then the days past
+  // the last anniversary — because each line is rounded on its own and summing
+  // the rounded parts is what reproduces the official figure to the cent.
+  const yearsDays = Math.round((service.anniversary.getTime() - start.getTime()) / DAY_MS);
+  const fractionDays = Math.round((end.getTime() - service.anniversary.getTime()) / DAY_MS) + 1;
+  const serviceDays = yearsDays + fractionDays;
+
+  const wage = minimumWageAt(isoDate(end));
   const capMultiplier = input.termination === "dismissal" ? 4 : 2;
-  const indemnityBaseDaily = Math.min(dailySalary, DAILY_MINIMUM_WAGE[input.sector] * capMultiplier);
+  const indemnityBaseDaily = Math.min(dailySalary, wage.table.daily[input.sector] * capMultiplier);
   const eligibleForResignationBenefit = service.completedYears >= 2;
+
+  // Article 58 grants 30 days per year "y proporcionalmente por fracciones de
+  // año", with a 15-day floor. Article 8 of the Voluntary Resignation Law says
+  // 15 days "por cada año de servicio"; this estimator used to read that as
+  // complete years only, but the MTPS calculator — the official service this
+  // site links to — pays the fraction as a separate line, so it is paid here.
+  const daysPerYear = input.termination === "dismissal" ? 30 : 15;
+  const accrue = (days: number) => round2(indemnityBaseDaily * daysPerYear * days / YEAR_DAYS);
+  const earned = input.termination === "dismissal" || eligibleForResignationBenefit
+    ? accrue(yearsDays) + accrue(fractionDays)
+    : 0;
   const indemnity = input.termination === "dismissal"
-    ? Math.max(indemnityBaseDaily * 30 * service.years, indemnityBaseDaily * 15)
-    // Article 8 says "por cada año de servicio" and, unlike article 58, does
-    // not add proportional fractions. The estimator therefore uses completed years.
-    : eligibleForResignationBenefit ? indemnityBaseDaily * 15 * service.completedYears : 0;
+    ? Math.max(earned, indemnityBaseDaily * 15)
+    : earned;
 
   const pendingSalary = dailySalary * Math.max(0, input.pendingSalaryDays || 0);
-  const proportionalVacationDays = 15 * service.fraction;
+  const proportionalVacationDays = 15 * fractionDays / YEAR_DAYS;
   const vacationDays = 15 * Math.max(0, input.unusedVacationPeriods || 0) + proportionalVacationDays;
   const vacation = dailySalary * vacationDays * 1.30;
 
@@ -187,29 +258,53 @@ export function calculateSettlement(input: {
   const cutoff = new Date(Date.UTC(year, 9, 20));
   const yearStart = new Date(Date.UTC(year, 0, 1));
   const workStartThisYear = start > yearStart ? start : yearStart;
-  let earnedAguinaldoDays = 0;
-  if (!input.aguinaldoPaid && workStartThisYear <= end) {
+  // Share of the year's bonus already earned, 0 to 1, kept separate from the
+  // day scale so the Quincena 25 can reuse it without repeating the rules.
+  let aguinaldoFraction = 0;
+  let fullAguinaldoDays = aguinaldoDays(service.completedYears);
+  if (workStartThisYear <= end) {
     if (end < cutoff) {
-      earnedAguinaldoDays = aguinaldoDays(service.years) * daysInclusive(workStartThisYear, end) / daysInYear(year);
+      aguinaldoFraction = daysInclusive(workStartThisYear, end) / YEAR_DAYS;
     } else {
-      const serviceAtCutoff = calendarService(start, cutoff).years;
-      const fullDays = aguinaldoDays(serviceAtCutoff);
-      earnedAguinaldoDays = serviceAtCutoff >= 1
-        ? fullDays
-        : fullDays * daysInclusive(workStartThisYear, cutoff) / daysInYear(year);
+      const atCutoff = calendarService(start, cutoff);
+      fullAguinaldoDays = aguinaldoDays(atCutoff.completedYears);
+      aguinaldoFraction = atCutoff.completedYears >= 1
+        ? 1
+        : daysInclusive(workStartThisYear, cutoff) / YEAR_DAYS;
     }
   }
+  const earnedAguinaldoDays = input.aguinaldoPaid ? 0 : fullAguinaldoDays * Math.min(1, aguinaldoFraction);
   // The October 2025 package also exempted aguinaldo from income tax up to
   // $1,500, but as a transitory provision for the 2025 fiscal year only. It is
   // deliberately not modelled here; check for a 2026 equivalent before adding
   // it, and note this estimate is gross either way.
   const aguinaldo = dailySalary * earnedAguinaldoDays;
-  const total = indemnity + pendingSalary + vacation + aguinaldo;
+
+  // Decree 499 article 3 grants the Quincena 25 when the contract ends with
+  // employer responsibility or the worker is dismissed without legal cause,
+  // "o la parte proporcional, según corresponda", applying the rules of the
+  // aguinaldo. Voluntary resignation is not among the cases it names, so it
+  // never carries this line. The proportion runs over the calendar year, which
+  // is the cycle a payment made every January closes.
+  const quincena25Applies = input.termination === "dismissal"
+    && salary > 0
+    && salary <= QUINCENA25.salaryCeiling
+    && isoDate(end) >= QUINCENA25.mandatoryFrom;
+  const quincena25 = quincena25Applies
+    ? salary * QUINCENA25.rate * Math.min(1, daysInclusive(workStartThisYear, end) / YEAR_DAYS)
+    : 0;
+
+  const total = indemnity + pendingSalary + vacation + aguinaldo + quincena25;
 
   return {
     invalid: false,
-    serviceYears: service.years,
+    serviceYears: serviceDays / YEAR_DAYS,
+    serviceDays,
     completedYears: service.completedYears,
+    minimumWageDecree: wage.table.decree,
+    minimumWagePredatesTables: wage.predatesTables,
+    quincena25: round2(quincena25),
+    quincena25Applies,
     // Whole months past the last anniversary. Reported separately because
     // rounding the decimal year to two places shows "2.00" for someone who is
     // still days short of the two years the resignation benefit requires.
@@ -252,10 +347,11 @@ export function calculatePayrollWithholding(input: {
    * any other remuneration, so a worker just under the limit per period can sit
    * above it across the year. Left out, the period is annualised as before.
    *
-   * Taxable pay only. The Quincena 25 (Legislative Decree 499, 14 January 2026)
-   * is declared renta no gravable and exempt from income tax, ISSS and AFP, so
-   * it neither reaches this figure nor moves any other number in this module:
-   * https://www.asamblea.gob.sv/node/13840
+   * Taxable pay only. Legislative Decree 499 of 14 January 2026 declares the
+   * Quincena 25 "rentas no gravables, y en consecuencia excluidos del cómputo
+   * de la renta obtenida" (art. 4), so it never reaches this figure. Article 1
+   * also keeps it out of withholding and out of "la base de cálculo de otras
+   * prestaciones", which is why nothing else in this module touches it either.
    */
   annualGross?: number;
 }) {

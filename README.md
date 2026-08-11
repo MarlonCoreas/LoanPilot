@@ -85,6 +85,18 @@ decreto que la respalda escrito al lado. Al cambiar cualquiera:
    muestra ese valor, así que una fecha desactualizada afirma algo que no se
    comprobó.
 
+Los salarios mínimos no son una constante suelta sino `MINIMUM_WAGE_TABLES`,
+ordenada de la más nueva a la más antigua: una liquidación se calcula con la
+tabla vigente el último día de trabajo. Al publicarse un decreto nuevo se
+antepone una entrada; no se edita la anterior. Si la fecha de salida es previa
+a la tabla más antigua verificada, la calculadora lo advierte en pantalla en
+lugar de aparentar una cifra de la época.
+
+La prueba `reproduces a real MTPS settlement statement to the cent` compara el
+resultado contra una constancia real del servicio oficial del MTPS. Es la
+referencia externa del módulo: si un cambio la rompe, la aritmética dejó de
+coincidir con la del ministerio.
+
 ## Publicación
 
 ```bash

@@ -21,6 +21,8 @@ const copy = {
     service: "Antigüedad estimada", year: "año", yearPlural: "años", month: "mes", monthPlural: "meses",
     total: "Total bruto estimado", indemnity: "Indemnización / prestación",
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
+    quincena25: "Quincena 25", quincena25Note: "D.L. 499 art. 3: procede en despido o terminación con responsabilidad patronal, proporcional al tiempo del ciclo. Obligatoria para el sector privado desde 2027.",
+    wageOutOfRange: "La salida es anterior a la tabla de salarios mínimos más antigua que hemos verificado. El tope se calcula con esa tabla y puede no ser la que estaba vigente ese día.",
     dailyBase: "Salario diario usado para la prestación", vacationDays: "Días de vacaciones incluidos",
     resignationOk: "La antigüedad cumple el mínimo de dos años. El derecho exige además preaviso y renuncia con las formalidades legales.",
     resignationNo: "No se alcanza el mínimo de dos años para la prestación por renuncia voluntaria.",
@@ -59,6 +61,8 @@ const copy = {
     service: "Estimated service", year: "year", yearPlural: "years", month: "month", monthPlural: "months",
     total: "Estimated gross total", indemnity: "Severance / benefit",
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
+    quincena25: "Quincena 25", quincena25Note: "Decree 499 art. 3: due on dismissal or termination with employer responsibility, prorated over the cycle. Mandatory for private employers from 2027.",
+    wageOutOfRange: "The end date precedes the oldest minimum wage table we have verified. The cap uses that table, which may not be the one in force that day.",
     dailyBase: "Daily salary used for the benefit", vacationDays: "Vacation days included",
     resignationOk: "Service meets the two-year minimum. Entitlement also requires statutory notice and resignation formalities.",
     resignationNo: "Service does not meet the two-year minimum for the voluntary resignation benefit.",
@@ -158,8 +162,10 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <div className="results-kicker">{t.result}</div>
           {settlement.invalid ? <div className="warning">! {t.invalidDates}</div> : <>
             <div className="legal-total"><span>{t.total}</span><strong>{money.format(settlement.total)}</strong><small>{t.service}: {serviceLabel(settlement, t)}</small></div>
-            <div className="legal-breakdown"><div className="primary"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacation}</span><b>{money.format(settlement.vacation)}</b></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div></div>
+            <div className="legal-breakdown"><div className="primary"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacation}</span><b>{money.format(settlement.vacation)}</b></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
             <div className="legal-facts"><div><span>{t.dailyBase}</span><b>{money.format(settlement.indemnityBaseDaily)}</b></div><div><span>{t.vacationDays}</span><b>{settlement.vacationDays.toFixed(2)}</b></div></div>
+            {settlement.minimumWagePredatesTables && <div className="legal-callout warn"><span>!</span><p>{t.wageOutOfRange}</p></div>}
+            {settlement.quincena25Applies && <div className="legal-callout"><span>§</span><p>{t.quincena25Note}</p></div>}
             <div className={`legal-callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
           </>}
           <p className="legal-disclaimer">{t.grossNote}</p>
