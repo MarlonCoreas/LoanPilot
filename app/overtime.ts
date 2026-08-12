@@ -57,10 +57,88 @@ export const FACTORS = {
   holidayOvertimeNocturnal: 5,
 } as const;
 
+/** Horas de solape entre dos intervalos abiertos por la derecha. */
+const overlap = (from: number, to: number, start: number, end: number) =>
+  Math.max(0, Math.min(to, end) - Math.max(from, start));
+
+/**
+ * Las horas nocturnas dentro de un tramo, medido en horas absolutas desde el
+ * inicio del día en que empezó el turno.
+ *
+ * La noche del art. 161 va de las 19:00 a las 6:00, así que en la línea
+ * absoluta cada jornada aporta el tramo [24k+19, 24k+30). Se recorren los
+ * ciclos vecinos porque un turno puede empezar de madrugada o cruzar
+ * medianoche, y en ambos casos toca noche de días distintos.
+ */
+function nightHoursBetween(from: number, to: number) {
+  let total = 0;
+  for (let cycle = -1; cycle <= 2; cycle++) {
+    total += overlap(from, to, 24 * cycle + NIGHT_STARTS_AT, 24 * cycle + 24 + NIGHT_ENDS_AT);
+  }
+  return total;
+}
+
+export type ShiftSplitIssue = "range" | "empty" | "tooLong";
+
+/**
+ * Reparte un turno entre horas diurnas y nocturnas, y entre ordinarias y extra.
+ *
+ * Es la parte que un trabajador no tiene por qué saber hacer: dónde corta la
+ * noche, cuántas horas nocturnas convierten la jornada en nocturna, y cuáles de
+ * sus horas son ya extraordinarias. El reparto ordinario/extra es cronológico:
+ * las primeras horas del turno cubren la jornada y el resto es tiempo extra.
+ */
+export function splitShiftHours(input: {
+  /** Hora de entrada y de salida en formato decimal (14.5 = 14:30). */
+  startHour: number;
+  endHour: number;
+  /** Jornada ordinaria que aplica; determina dónde termina lo ordinario. */
+  ordinaryDayHours: number;
+}) {
+  const startHour = Number.isFinite(input.startHour) ? input.startHour : 0;
+  const endHour = Number.isFinite(input.endHour) ? input.endHour : 0;
+  const issues: ShiftSplitIssue[] = [];
+  if (startHour < 0 || startHour >= 24 || endHour < 0 || endHour >= 24) issues.push("range");
+
+  // Salir a la misma hora que se entró describiría un turno de 24 horas o de
+  // ninguna; ninguna de las dos es una lectura que valga la pena adivinar.
+  const duration = endHour === startHour ? 0 : (endHour - startHour + 24) % 24;
+  if (duration <= 0) issues.push("empty");
+  if (duration > 16) issues.push("tooLong");
+
+  const invalid = issues.length > 0;
+  const ordinaryDayHours = clean(input.ordinaryDayHours);
+  const ordinaryHours = invalid ? 0 : Math.min(duration, ordinaryDayHours);
+  const overtimeHours = invalid ? 0 : duration - ordinaryHours;
+
+  const ordinaryEnd = startHour + ordinaryHours;
+  const shiftEnd = startHour + (invalid ? 0 : duration);
+  const ordinaryNightHours = nightHoursBetween(startHour, ordinaryEnd);
+  const overtimeNightHours = nightHoursBetween(ordinaryEnd, shiftEnd);
+  const nightHours = ordinaryNightHours + overtimeNightHours;
+
+  return {
+    invalid,
+    issues,
+    totalHours: round2(invalid ? 0 : duration),
+    nightHours: round2(nightHours),
+    dayHours: round2((invalid ? 0 : duration) - nightHours),
+    /** Art. 161: más de cuatro horas nocturnas hacen nocturna la jornada. */
+    classifiedNocturnal: !invalid && nightHours > 4,
+    ordinaryHours: round2(ordinaryHours),
+    ordinaryNightHours: round2(ordinaryNightHours),
+    overtimeHours: round2(overtimeHours),
+    overtimeNocturnalHours: round2(overtimeNightHours),
+    overtimeDiurnalHours: round2(overtimeHours - overtimeNightHours),
+  };
+}
+
 export type OvertimeValidationIssue =
   | "salary"
   | "ordinaryHours"
-  | "ordinaryLimit"
+  | "ordinaryDayImpossible"
+  | "shiftsWhole"
+  | "shiftsRange"
   | "restDaysWhole"
   | "restDaysRange"
   | "restDaysMissing"
@@ -98,6 +176,14 @@ export type OvertimeInput = {
   shiftKind: ShiftKind;
   /** Horas pactadas de la jornada ordinaria diaria (art. 142). */
   ordinaryDayHours: number;
+  /**
+   * Turnos trabajados en el período, sólo si la jornada excede el máximo legal.
+   *
+   * Un turno de 12×12 de vigilancia no cabe en las 8 horas del art. 161: cuatro
+   * de esas horas son extraordinarias en cada turno, y para convertirlas en un
+   * monto hay que saber cuántos turnos hubo.
+   */
+  shiftsInPeriod: number;
   /** Horas de días ordinarios, sin repetir las de descansos o asuetos. */
   overtimeDiurnalHours: number;
   overtimeNocturnalHours: number;
@@ -126,9 +212,31 @@ export function calculateOvertime(input: OvertimeInput) {
   const shiftLimit = SHIFT_LIMITS[shiftKind];
   const ordinaryDayHours = clean(input.ordinaryDayHours);
   const dailySalary = salary / 30;
-  const hourlyPrecise = ordinaryDayHours > 0 ? dailySalary / ordinaryDayHours : 0;
 
-  const overtimeDiurnalHours = clean(input.overtimeDiurnalHours);
+  /**
+   * La jornada que la ley reconoce como ordinaria, que no siempre es la pactada.
+   *
+   * Un turno de 12 horas no convierte doce horas en ordinarias: el art. 161
+   * fija el máximo y el resto es tiempo extraordinario. Dividir el salario
+   * diario entre las 12 pactadas abarataría la hora básica justo para quien
+   * trabaja de más, así que el divisor es siempre el máximo legal.
+   */
+  const legalOrdinaryDayHours = ordinaryDayHours > 0
+    ? Math.min(ordinaryDayHours, shiftLimit.day)
+    : 0;
+  const hourlyPrecise = legalOrdinaryDayHours > 0 ? dailySalary / legalOrdinaryDayHours : 0;
+
+  /** Las horas que cada turno pactado deja por encima del máximo legal. */
+  const extendedShiftHours = Math.max(0, ordinaryDayHours - shiftLimit.day);
+  const shiftsInPeriod = clean(input.shiftsInPeriod);
+  const extendedShiftOvertimeHours = round2(extendedShiftHours * shiftsInPeriod);
+
+  const enteredOvertimeDiurnalHours = clean(input.overtimeDiurnalHours);
+  // El exceso del turno se paga como hora extra diurna: se suma a las que la
+  // persona haya registrado aparte, en vez de pedirle que las multiplique.
+  const overtimeDiurnalHours = round2(
+    enteredOvertimeDiurnalHours + extendedShiftOvertimeHours,
+  );
   const overtimeNocturnalHours = clean(input.overtimeNocturnalHours);
   const nightOrdinaryHours = clean(input.nightOrdinaryHours);
   const restDaysWorked = clean(input.restDaysWorked);
@@ -149,12 +257,16 @@ export function calculateOvertime(input: OvertimeInput) {
 
   if (salary <= 0) issues.push("salary");
   if (ordinaryDayHours <= 0) issues.push("ordinaryHours");
-  if (ordinaryDayHours > shiftLimit.day) issues.push("ordinaryLimit");
+  // Exceder el máximo legal ya no invalida el cálculo: es la situación de
+  // quien más necesita la herramienta. Sólo se rechaza lo que no cabe en un día.
+  if (ordinaryDayHours > HOURS_IN_A_DAY) issues.push("ordinaryDayImpossible");
+  if (!whole(shiftsInPeriod)) issues.push("shiftsWhole");
+  if (shiftsInPeriod > 31) issues.push("shiftsRange");
   if (!whole(restDaysWorked)) issues.push("restDaysWhole");
   if (restDaysWorked > 31) issues.push("restDaysRange");
   if (restDaysWorked === 0 && restHoursWorked > 0) issues.push("restDaysMissing");
   if (restDaysWorked > 0 && restHoursWorked === 0) issues.push("restHoursMissing");
-  if (restDaysWorked > 0 && restDayOrdinaryHours > restDaysWorked * ordinaryDayHours) {
+  if (restDaysWorked > 0 && restDayOrdinaryHours > restDaysWorked * legalOrdinaryDayHours) {
     issues.push("restOrdinaryExcess");
   }
   // Las horas de descanso son el total del período, no las de un día: sin este
@@ -168,7 +280,7 @@ export function calculateOvertime(input: OvertimeInput) {
   // La hora extra empieza donde termina la jornada ordinaria, así que en un
   // asueto sólo caben las horas del día que la jornada no ocupa ya.
   if (holidaysWorked > 0
-    && holidayOvertimeHours > holidaysWorked * Math.max(0, HOURS_IN_A_DAY - ordinaryDayHours)) {
+    && holidayOvertimeHours > holidaysWorked * Math.max(0, HOURS_IN_A_DAY - legalOrdinaryDayHours)) {
     issues.push("holidayHoursCapacity");
   }
   if (!whole(coincidentRestHolidayDays)) issues.push("coincidentDaysWhole");
@@ -275,6 +387,21 @@ export function calculateOvertime(input: OvertimeInput) {
      * sueldo pactado, y el cálculo no puede distinguirlo desde el salario.
      */
     nightPremiumMayBeIncluded: shiftKind === "nocturnal" && nightOrdinaryHours > 0,
+    /**
+     * El reparto de una jornada más larga que el máximo legal.
+     *
+     * Antes esto era un muro: quien tiene turnos de 12×12 —vigilancia, sobre
+     * todo— escribía 12 y no obtenía ningún cálculo. Ahora la herramienta hace
+     * el reparto que el mensaje de error le pedía hacer a mano.
+     */
+    exceedsOrdinaryDay: extendedShiftHours > 0,
+    legalOrdinaryDayHours,
+    extendedShiftHours,
+    shiftsInPeriod,
+    extendedShiftOvertimeHours,
+    enteredOvertimeDiurnalHours,
+    /** Excede el máximo pero aún no dice cuántos turnos: faltan horas por sumar. */
+    needsShiftCount: extendedShiftHours > 0 && shiftsInPeriod === 0,
     dailySalary: round2(dailySalary),
     hourly: round2(hourlyPrecise),
     overtimeDiurnalRate,
@@ -336,6 +463,5 @@ export function calculateOvertime(input: OvertimeInput) {
       + holidayOvertimeDiurnal
       + holidayOvertimeNocturnal,
     ),
-    exceedsOrdinaryDay: ordinaryDayHours > shiftLimit.day,
   };
 }

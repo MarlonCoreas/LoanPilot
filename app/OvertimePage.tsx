@@ -5,8 +5,10 @@ import {
   NIGHT_STARTS_AT,
   OVERTIME_REVIEWED,
   SHIFT_LIMITS,
+  splitShiftHours,
   type OvertimeValidationIssue,
   type ShiftKind,
+  type ShiftSplitIssue,
 } from "./overtime";
 import { reviewedLine } from "./reviewed";
 import SiteFooter from "./SiteFooter";
@@ -24,13 +26,23 @@ const copy = {
     salary: "Salario mensual ordinario",
     salaryHint: "Sueldo base del mes, sin recargos ni comisiones.",
     shift: "Tipo de jornada ordinaria",
+    // El desplegable lleva sólo el nombre; lo que distingue una jornada de otra
+    // vive en la nota de abajo, donde se lee entero en vez de cortarse.
     shifts: {
-      diurnal: "Diurna — hasta 4 horas nocturnas",
-      nocturnal: "Nocturna — más de 4 horas nocturnas",
-      dangerousDiurnal: "Peligrosa o insalubre — diurna, sin autorización",
-      dangerousNocturnal: "Peligrosa o insalubre — nocturna, sin autorización",
-      minorUnder16: "Menor de 16 años — sólo diurna",
-      minor16to17: "De 16 a 17 años — sólo diurna",
+      diurnal: "Diurna",
+      nocturnal: "Nocturna",
+      dangerousDiurnal: "Peligrosa — diurna",
+      dangerousNocturnal: "Peligrosa — nocturna",
+      minorUnder16: "Menor de 16 años",
+      minor16to17: "De 16 a 17 años",
+    },
+    shiftNotes: {
+      diurnal: `Hasta 4 horas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00.`,
+      nocturnal: `Más de 4 horas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00.`,
+      dangerousDiurnal: "Labor peligrosa o insalubre en horario diurno, sin autorización.",
+      dangerousNocturnal: "Labor peligrosa o insalubre en horario nocturno, sin autorización.",
+      minorUnder16: "Sólo jornada diurna, con un máximo de 2 horas extra al día.",
+      minor16to17: "Sólo jornada diurna.",
     },
     dayHours: "Horas pactadas de tu jornada diaria",
     dayHoursHint: (day: number, week: number) => `Máximo para esta jornada: ${day} al día y ${week} a la semana.`,
@@ -40,6 +52,37 @@ const copy = {
     nocturnal: "Horas extra nocturnas",
     nightOrdinary: "Horas ordinarias ejecutadas de noche",
     nightOrdinaryHint: `Sólo las trabajadas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00; no incluyas horas extra.`,
+    shiftCount: "Turnos que trabajaste en el período",
+    shiftCountHint: "Cuántas veces cumpliste ese turno largo durante el mes.",
+    extendedTitle: "Tu turno pasa de la jornada legal",
+    extendedBody: (contracted: number, legal: number, excess: number) =>
+      `Pactaste ${contracted} h por turno, pero el art. 161 reconoce ${legal} h como jornada ordinaria. Las ${excess} h restantes de cada turno son extraordinarias, y por eso tu hora básica se calcula sobre ${legal} h y no sobre ${contracted}: dividirla entre ${contracted} abarataría la hora justo por trabajar de más.`,
+    extendedAsk: "Indica cuántos turnos trabajaste y las sumamos como horas extra diurnas.",
+    extendedDone: (shifts: number, excess: number, total: number) =>
+      `${shifts} ${shifts === 1 ? "turno" : "turnos"} × ${excess} h = ${total} h extra diurnas, ya incluidas en el total.`,
+    helperToggle: "No sé cuáles de mis horas fueron diurnas y cuáles nocturnas",
+    helperHint: "Escribe el horario de un turno y lo repartimos por ti.",
+    helperStart: "Hora de entrada",
+    helperEnd: "Hora de salida",
+    helperShifts: "Veces que trabajaste ese turno",
+    helperSplit: (total: number, day: number, night: number) =>
+      `Cada turno ${total === 1 ? "es" : "son"} ${total} h: ${day} ${agree(day, "diurna")} y ${night} ${agree(night, "nocturna")}.`,
+    helperNocturnal: `Con más de 4 horas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00, tu jornada se considera nocturna (art. 161) y su máximo baja a ${SHIFT_LIMITS.nocturnal.day} h.`,
+    helperPerShift: (ordinary: number, night: number, extraDay: number, extraNight: number) => {
+      const parts = [`${ordinary} h ${agree(ordinary, "ordinaria")}`];
+      if (night > 0) parts.push(`${night} de ellas con recargo nocturno`);
+      if (extraDay > 0) parts.push(`${extraDay} h extra ${agree(extraDay, "diurna")}`);
+      if (extraNight > 0) parts.push(`${extraNight} h extra ${agree(extraNight, "nocturna")}`);
+      return `Por turno: ${parts.join(", ")}.`;
+    },
+    helperApply: "Usar estos valores",
+    helperApplied: "Listo: copiamos las horas a los campos de abajo.",
+    helperShiftsNeeded: "Indica cuántas veces trabajaste ese turno para pasar las horas al cálculo.",
+    helperIssue: (issue: ShiftSplitIssue) => ({
+      range: "Las horas deben estar entre 00:00 y 23:59.",
+      empty: "La salida no puede ser igual a la entrada.",
+      tooLong: "Ese turno pasa de 16 horas. Revisa si intercambiaste la entrada y la salida.",
+    })[issue],
     minorDaily: "Máximo de horas extra en un solo día",
     minorDailyHint: "Para menores de 16 años el máximo legal es 2 horas extra por día (art. 116).",
     specialToggle: "Trabajé en día de descanso semanal o en día de asueto",
@@ -89,7 +132,9 @@ const copy = {
     validation: (issue: OvertimeValidationIssue, limit: number) => ({
       salary: "Escribe un salario mensual mayor que cero.",
       ordinaryHours: "Escribe las horas pactadas de tu jornada diaria.",
-      ordinaryLimit: `La jornada seleccionada no puede exceder ${limit} horas ordinarias al día. Pasa el exceso a horas extra.`,
+      ordinaryDayImpossible: "Una jornada no puede pasar de 24 horas al día.",
+      shiftsWhole: "Los turnos trabajados deben ser números enteros.",
+      shiftsRange: "Los turnos no pueden superar 31 en un período mensual.",
       restDaysWhole: "Los días de descanso deben ser números enteros.",
       restDaysRange: "Los días de descanso no pueden superar 31 en un período mensual.",
       restDaysMissing: "Indica cuántos días de descanso corresponden a esas horas.",
@@ -138,12 +183,20 @@ const copy = {
     salaryHint: "Monthly base pay, excluding premiums and commissions.",
     shift: "Ordinary shift type",
     shifts: {
-      diurnal: "Daytime — up to 4 night hours",
-      nocturnal: "Night — more than 4 night hours",
-      dangerousDiurnal: "Dangerous or unhealthy — daytime, no authorization",
-      dangerousNocturnal: "Dangerous or unhealthy — night, no authorization",
-      minorUnder16: "Under 16 — daytime only",
-      minor16to17: "Age 16 to 17 — daytime only",
+      diurnal: "Daytime",
+      nocturnal: "Night",
+      dangerousDiurnal: "Hazardous — daytime",
+      dangerousNocturnal: "Hazardous — night",
+      minorUnder16: "Under 16",
+      minor16to17: "Age 16 to 17",
+    },
+    shiftNotes: {
+      diurnal: `Up to 4 hours between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00.`,
+      nocturnal: `More than 4 hours between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00.`,
+      dangerousDiurnal: "Dangerous or unhealthy work on a daytime schedule, unauthorised.",
+      dangerousNocturnal: "Dangerous or unhealthy work on a night schedule, unauthorised.",
+      minorUnder16: "Daytime only, with a maximum of 2 overtime hours per day.",
+      minor16to17: "Daytime only.",
     },
     dayHours: "Contracted hours in your ordinary day",
     dayHoursHint: (day: number, week: number) => `Maximum for this shift: ${day} per day and ${week} per week.`,
@@ -153,6 +206,37 @@ const copy = {
     nocturnal: "Night overtime hours",
     nightOrdinary: "Ordinary hours performed at night",
     nightOrdinaryHint: `Only hours between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00; do not include overtime.`,
+    shiftCount: "Shifts you worked in the period",
+    shiftCountHint: "How many times you worked that long shift during the month.",
+    extendedTitle: "Your shift runs past the legal working day",
+    extendedBody: (contracted: number, legal: number, excess: number) =>
+      `You are contracted for ${contracted} h per shift, but article 161 recognises ${legal} h as the ordinary working day. The remaining ${excess} h of each shift are overtime, which is why your basic hour is worked out over ${legal} h and not ${contracted}: dividing by ${contracted} would cheapen the hour precisely for working longer.`,
+    extendedAsk: "Enter how many shifts you worked and we will add them as daytime overtime.",
+    extendedDone: (shifts: number, excess: number, total: number) =>
+      `${shifts} ${shifts === 1 ? "shift" : "shifts"} × ${excess} h = ${total} daytime overtime h, already included in the total.`,
+    helperToggle: "I do not know which of my hours were daytime and which were night",
+    helperHint: "Enter the schedule of one shift and we will split it for you.",
+    helperStart: "Start time",
+    helperEnd: "End time",
+    helperShifts: "Times you worked that shift",
+    helperSplit: (total: number, day: number, night: number) =>
+      `Each shift is ${total} h: ${day} daytime and ${night} at night.`,
+    helperNocturnal: `With more than 4 hours between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00, your shift counts as a night shift (art. 161) and its maximum drops to ${SHIFT_LIMITS.nocturnal.day} h.`,
+    helperPerShift: (ordinary: number, night: number, extraDay: number, extraNight: number) => {
+      const parts = [`${ordinary} ordinary h`];
+      if (night > 0) parts.push(`${night} of them with the night premium`);
+      if (extraDay > 0) parts.push(`${extraDay} h daytime overtime`);
+      if (extraNight > 0) parts.push(`${extraNight} h night overtime`);
+      return `Per shift: ${parts.join(", ")}.`;
+    },
+    helperApply: "Use these values",
+    helperApplied: "Done: the hours were copied into the fields below.",
+    helperShiftsNeeded: "Enter how many times you worked that shift to carry the hours into the calculation.",
+    helperIssue: (issue: ShiftSplitIssue) => ({
+      range: "Times must be between 00:00 and 23:59.",
+      empty: "The end time cannot equal the start time.",
+      tooLong: "That shift runs past 16 hours. Check whether you swapped the start and end times.",
+    })[issue],
     minorDaily: "Most overtime worked in one day",
     minorDailyHint: "Workers under 16 may work no more than 2 overtime hours in one day (art. 116).",
     specialToggle: "I worked on a weekly rest day or a public holiday",
@@ -202,7 +286,9 @@ const copy = {
     validation: (issue: OvertimeValidationIssue, limit: number) => ({
       salary: "Enter a monthly salary greater than zero.",
       ordinaryHours: "Enter the contracted hours in your ordinary working day.",
-      ordinaryLimit: `The selected shift cannot exceed ${limit} ordinary hours per day. Move the excess to overtime.`,
+      ordinaryDayImpossible: "A working day cannot exceed 24 hours.",
+      shiftsWhole: "Shifts worked must be whole numbers.",
+      shiftsRange: "Shifts cannot exceed 31 in one monthly period.",
       restDaysWhole: "Rest days must be whole numbers.",
       restDaysRange: "Rest days cannot exceed 31 in one monthly period.",
       restDaysMissing: "Enter how many rest days correspond to those hours.",
@@ -249,8 +335,20 @@ const number = (value: string) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+/** Concordancia de número para los adjetivos que describen horas. */
+const agree = (count: number, singular: string) => (count === 1 ? singular : `${singular}s`);
+
+const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+
+/** "14:30" a 14.5. Un valor vacío o ilegible se sale del rango a propósito. */
+const clockHour = (value: string) => {
+  const [hours, minutes] = value.split(":");
+  if (hours === undefined || minutes === undefined) return Number.NaN;
+  return number(hours) + number(minutes) / 60;
+};
+
 type FieldKey =
-  | "salary" | "dayHours" | "nocturnal" | "nightOrdinary" | "minorDaily"
+  | "salary" | "dayHours" | "shifts" | "nocturnal" | "nightOrdinary" | "minorDaily"
   | "restDays" | "restOrdinary" | "restExtraDay" | "restExtraNight"
   | "holidays" | "holidayExtraDay" | "holidayExtraNight" | "coincident";
 
@@ -265,7 +363,9 @@ type FieldKey =
 const ISSUE_FIELDS: Record<OvertimeValidationIssue, FieldKey[]> = {
   salary: ["salary"],
   ordinaryHours: ["dayHours"],
-  ordinaryLimit: ["dayHours"],
+  ordinaryDayImpossible: ["dayHours"],
+  shiftsWhole: ["shifts"],
+  shiftsRange: ["shifts"],
   restDaysWhole: ["restDays"],
   restDaysRange: ["restDays"],
   restDaysMissing: ["restDays"],
@@ -335,8 +435,14 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
   const [nocturnal, setNocturnal] = useState("0");
   const [nightOrdinary, setNightOrdinary] = useState("0");
   const [minorDailyOvertime, setMinorDailyOvertime] = useState("0");
+  const [shifts, setShifts] = useState("0");
   // Ocho de las trece casillas sólo importan a quien trabajó un domingo o un
   // asueto. Plegadas, la mayoría llena cinco campos y termina.
+  const [showHelper, setShowHelper] = useState(false);
+  const [helperStart, setHelperStart] = useState("14:00");
+  const [helperEnd, setHelperEnd] = useState("02:00");
+  const [helperShifts, setHelperShifts] = useState("0");
+  const [helperApplied, setHelperApplied] = useState(false);
   const [showSpecialDays, setShowSpecialDays] = useState(false);
   const [restDays, setRestDays] = useState("0");
   const [restOrdinary, setRestOrdinary] = useState("0");
@@ -346,6 +452,38 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
   const [holidayExtraDay, setHolidayExtraDay] = useState("0");
   const [holidayExtraNight, setHolidayExtraNight] = useState("0");
   const [coincident, setCoincident] = useState("0");
+
+  /**
+   * El reparto del turno, en dos pasos por una circularidad aparente.
+   *
+   * El máximo de la jornada depende de si es nocturna, y eso depende de cuántas
+   * horas nocturnas tiene el turno. Pero ese total sale del horario y no del
+   * punto donde termina lo ordinario, así que basta con clasificar primero y
+   * repartir después: no hay iteración que pueda oscilar.
+   *
+   * Las jornadas peligrosas y las de personas menores conservan su propio
+   * máximo, que la clasificación diurna/nocturna no puede subir ni bajar.
+   */
+  const helperTimes = { startHour: clockHour(helperStart), endHour: clockHour(helperEnd) };
+  const helperProbe = splitShiftHours({ ...helperTimes, ordinaryDayHours: SHIFT_LIMITS.diurnal.day });
+  const helperIsPlainShift = shiftKind === "diurnal" || shiftKind === "nocturnal";
+  const helperKind: ShiftKind = helperIsPlainShift
+    ? (helperProbe.classifiedNocturnal ? "nocturnal" : "diurnal")
+    : shiftKind;
+  const split = splitShiftHours({ ...helperTimes, ordinaryDayHours: SHIFT_LIMITS[helperKind].day });
+  const helperShiftCount = number(helperShifts);
+
+  const applyHelper = () => {
+    setShiftKind(helperKind);
+    setDayHours(String(split.ordinaryHours));
+    setDiurnal(String(round2(split.overtimeDiurnalHours * helperShiftCount)));
+    setNocturnal(String(round2(split.overtimeNocturnalHours * helperShiftCount)));
+    setNightOrdinary(String(round2(split.ordinaryNightHours * helperShiftCount)));
+    // El reparto ya deja la jornada dentro del máximo legal, así que el ajuste
+    // por turno extendido no tiene nada que hacer y se apaga solo.
+    setShifts("0");
+    setHelperApplied(true);
+  };
 
   const selectShift = (next: ShiftKind) => {
     const previousLimit = SHIFT_LIMITS[shiftKind].day;
@@ -363,6 +501,7 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
     monthlySalary: number(monthlySalary),
     shiftKind,
     ordinaryDayHours: number(dayHours),
+    shiftsInPeriod: number(shifts),
     overtimeDiurnalHours: number(diurnal),
     overtimeNocturnalHours: number(nocturnal),
     nightOrdinaryHours: number(nightOrdinary),
@@ -378,7 +517,7 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
   }), [
     coincident, dayHours, diurnal, holidayExtraDay, holidayExtraNight, holidays,
     minorDailyOvertime, monthlySalary, nightOrdinary, nocturnal, restDays, restExtraDay, restExtraNight,
-    restOrdinary, shiftKind, showSpecialDays,
+    restOrdinary, shiftKind, shifts, showSpecialDays,
   ]);
 
   // Cada línea lleva la operación que la produjo. Sin ella, el desglose pide
@@ -447,13 +586,62 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
                 {(Object.keys(SHIFT_LIMITS) as ShiftKind[]).map((kind) =>
                   <option key={kind} value={kind}>{t.shifts[kind]}</option>)}
               </select>
+              <small className="field-note">{t.shiftNotes[shiftKind]}</small>
             </label>
+            {/* El máximo deja de ser un tope duro del campo: un turno de 12×12
+                es real, y la herramienta ahora lo reparte en vez de rechazarlo. */}
             <HourField label={t.dayHours} value={dayHours} onChange={setDayHours} invalid={bad("dayHours")}
               note={t.dayHoursHint(result.shiftLimit.day, result.shiftLimit.week)}
-              step="0.5" max={String(result.shiftLimit.day)} />
+              step="0.5" max="24" />
+            {result.exceedsOrdinaryDay && <HourField label={t.shiftCount} value={shifts} onChange={setShifts}
+              note={t.shiftCountHint} invalid={bad("shifts")} step="1" max="31" />}
           </div>
+          {result.exceedsOrdinaryDay && <div className="legal-callout extended-shift">
+            <span>§</span><div>
+              <b>{t.extendedTitle}</b>
+              <p>{t.extendedBody(result.ordinaryDayHours, result.legalOrdinaryDayHours, result.extendedShiftHours)}</p>
+              <p className="extended-outcome">{result.needsShiftCount
+                ? t.extendedAsk
+                : t.extendedDone(result.shiftsInPeriod, result.extendedShiftHours, result.extendedShiftOvertimeHours)}</p>
+            </div>
+          </div>}
 
           <div className="section-title second"><span>02</span><div><h2>{t.extras}</h2><p>{t.extrasHint}</p></div></div>
+          <label className="check-field">
+            <input type="checkbox" checked={showHelper}
+              onChange={(event) => { setShowHelper(event.target.checked); setHelperApplied(false); }} />
+            <span>{t.helperToggle}</span>
+          </label>
+          {showHelper && <div className="shift-helper">
+            <p className="field-note">{t.helperHint}</p>
+            <div className="field-grid special-grid">
+              <label className="field"><span>{t.helperStart}</span>
+                <div className="input-wrap date-wrap"><input type="time" value={helperStart}
+                  onChange={(event) => { setHelperStart(event.target.value); setHelperApplied(false); }} /></div>
+              </label>
+              <label className="field"><span>{t.helperEnd}</span>
+                <div className="input-wrap date-wrap"><input type="time" value={helperEnd}
+                  onChange={(event) => { setHelperEnd(event.target.value); setHelperApplied(false); }} /></div>
+              </label>
+              <HourField label={t.helperShifts} value={helperShifts}
+                onChange={(value) => { setHelperShifts(value); setHelperApplied(false); }} step="1" max="31" />
+            </div>
+            {split.invalid
+              ? <div className="legal-callout warn" role="alert"><span>!</span>
+                  <p>{split.issues.map((issue) => t.helperIssue(issue)).join(" ")}</p></div>
+              : <div className="legal-callout helper-outcome">
+                  <span>◷</span><div>
+                    <b>{t.helperSplit(split.totalHours, split.dayHours, split.nightHours)}</b>
+                    {split.classifiedNocturnal && helperIsPlainShift && <p>{t.helperNocturnal}</p>}
+                    <p>{t.helperPerShift(split.ordinaryHours, split.ordinaryNightHours,
+                      split.overtimeDiurnalHours, split.overtimeNocturnalHours)}</p>
+                    {helperShiftCount > 0
+                      ? <button type="button" className="helper-apply" onClick={applyHelper}>{t.helperApply}</button>
+                      : <p className="helper-needs">{t.helperShiftsNeeded}</p>}
+                    {helperApplied && <p className="helper-done">{t.helperApplied}</p>}
+                  </div>
+                </div>}
+          </div>}
           <div className="field-grid">
             <HourField label={t.diurnal} value={diurnal} onChange={setDiurnal} />
             <HourField label={t.nocturnal} value={nocturnal} onChange={setNocturnal} invalid={bad("nocturnal")} />

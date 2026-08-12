@@ -1,12 +1,84 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { calculateOvertime, FACTORS, SHIFT_LIMITS, NIGHT_STARTS_AT } from "../app/overtime.ts";
+import {
+  calculateOvertime, splitShiftHours, FACTORS, SHIFT_LIMITS, NIGHT_STARTS_AT,
+} from "../app/overtime.ts";
+
+test("a shift that never touches the night is all daytime", () => {
+  const office = splitShiftHours({ startHour: 8, endHour: 17, ordinaryDayHours: 8 });
+
+  assert.equal(office.invalid, false);
+  assert.equal(office.totalHours, 9);
+  assert.equal(office.dayHours, 9);
+  assert.equal(office.nightHours, 0);
+  assert.equal(office.classifiedNocturnal, false);
+  // Las primeras 8 h cubren la jornada; la novena ya es extraordinaria.
+  assert.equal(office.ordinaryHours, 8);
+  assert.equal(office.overtimeDiurnalHours, 1);
+});
+
+test("a shift crossing midnight splits at 19:00 and 6:00", () => {
+  // 14:00 a 02:00: cinco horas de día y siete de noche.
+  const evening = splitShiftHours({ startHour: 14, endHour: 2, ordinaryDayHours: 7 });
+
+  assert.equal(evening.totalHours, 12);
+  assert.equal(evening.dayHours, 5);
+  assert.equal(evening.nightHours, 7);
+  // Más de cuatro horas nocturnas hacen nocturna la jornada (art. 161).
+  assert.equal(evening.classifiedNocturnal, true);
+  // Las 7 ordinarias van de 14:00 a 21:00, así que dos caen de noche.
+  assert.equal(evening.ordinaryNightHours, 2);
+  // Y las 5 extra, de 21:00 a 02:00, son todas nocturnas.
+  assert.equal(evening.overtimeNocturnalHours, 5);
+  assert.equal(evening.overtimeDiurnalHours, 0);
+});
+
+test("the night classification does not depend on where the ordinary block ends", () => {
+  // El corte ordinario/extra mueve el reparto, no el total de horas nocturnas:
+  // por eso la clasificación es estable y la página no necesita iterar.
+  const short = splitShiftHours({ startHour: 18, endHour: 6, ordinaryDayHours: 6 });
+  const long = splitShiftHours({ startHour: 18, endHour: 6, ordinaryDayHours: 8 });
+
+  assert.equal(short.nightHours, long.nightHours);
+  assert.equal(short.classifiedNocturnal, long.classifiedNocturnal);
+  assert.notEqual(short.ordinaryNightHours, long.ordinaryNightHours);
+});
+
+test("half hours survive the split at both ends of the night", () => {
+  // 18:30 a 06:30 toca día por los dos extremos: media hora antes de las 19:00
+  // y media hora después de las 6:00.
+  const result = splitShiftHours({ startHour: 18.5, endHour: 6.5, ordinaryDayHours: 7 });
+
+  assert.equal(result.totalHours, 12);
+  assert.equal(result.dayHours, 1);
+  assert.equal(result.nightHours, 11);
+  // Las 7 ordinarias corren de 18:30 a 01:30: seis horas y media de noche.
+  assert.equal(result.ordinaryNightHours, 6.5);
+  // Las 5 extra van de 01:30 a 06:30, con la última media hora ya de día.
+  assert.equal(result.overtimeNocturnalHours, 4.5);
+  assert.equal(result.overtimeDiurnalHours, 0.5);
+});
+
+test("a shift that cannot be read is refused instead of guessed", () => {
+  // Salir a la misma hora describe un turno de cero horas o de veinticuatro.
+  const same = splitShiftHours({ startHour: 8, endHour: 8, ordinaryDayHours: 8 });
+  assert.ok(same.issues.includes("empty"));
+
+  // 06:00 a 05:00 son 23 horas: casi siempre entrada y salida intercambiadas.
+  const reversed = splitShiftHours({ startHour: 6, endHour: 5, ordinaryDayHours: 8 });
+  assert.ok(reversed.issues.includes("tooLong"));
+  assert.equal(reversed.totalHours, 0);
+
+  const outOfRange = splitShiftHours({ startHour: 25, endHour: 8, ordinaryDayHours: 8 });
+  assert.ok(outOfRange.issues.includes("range"));
+});
 
 const base = {
   monthlySalary: 0,
   shiftKind: "diurnal",
   ordinaryDayHours: 8,
+  shiftsInPeriod: 0,
   overtimeDiurnalHours: 0,
   overtimeNocturnalHours: 0,
   nightOrdinaryHours: 0,
@@ -121,6 +193,73 @@ test("every unit rate reproduces its own line to the cent", () => {
   assert.equal(result.overtimeDiurnal, 12.5);
   // El recargo del asueto se cuenta por día trabajado, no por hora (art. 192).
   assert.equal(result.holidaySurchargeRate, result.dailySalary);
+});
+
+test("a shift longer than the legal day is split instead of refused", () => {
+  // Vigilancia con turnos de 12×12: quince turnos en el mes. Antes la
+  // herramienta se negaba a calcular y le pedía hacer el reparto a mano.
+  const guard = calculateOvertime({
+    ...base,
+    monthlySalary: 480,
+    ordinaryDayHours: 12,
+    shiftsInPeriod: 15,
+  });
+
+  assert.equal(guard.invalid, false);
+  assert.equal(guard.exceedsOrdinaryDay, true);
+  assert.equal(guard.legalOrdinaryDayHours, 8);
+  assert.equal(guard.extendedShiftHours, 4);
+  assert.equal(guard.extendedShiftOvertimeHours, 60);
+
+  // La hora básica sale de las 8 legales, no de las 12 pactadas: dividir entre
+  // 12 daría $1.33 y abarataría la hora justo por trabajar de más.
+  assert.equal(guard.hourly, 2);
+  assert.equal(guard.overtimeDiurnalHours, 60);
+  assert.equal(guard.overtimeDiurnal, 240);
+  assert.equal(guard.total, 240);
+});
+
+test("the extended shift adds to overtime entered separately, it does not replace it", () => {
+  const result = calculateOvertime({
+    ...base,
+    monthlySalary: 480,
+    ordinaryDayHours: 12,
+    shiftsInPeriod: 10,
+    overtimeDiurnalHours: 5,
+  });
+
+  assert.equal(result.enteredOvertimeDiurnalHours, 5);
+  assert.equal(result.extendedShiftOvertimeHours, 40);
+  assert.equal(result.overtimeDiurnalHours, 45);
+  assert.equal(result.overtimeDiurnal, 180);
+});
+
+test("a long shift without a shift count is prompted, not silently dropped", () => {
+  const result = calculateOvertime({
+    ...base,
+    monthlySalary: 480,
+    ordinaryDayHours: 12,
+  });
+
+  assert.equal(result.invalid, false);
+  assert.equal(result.needsShiftCount, true);
+  assert.equal(result.extendedShiftOvertimeHours, 0);
+  // La hora básica ya es la correcta aunque falten los turnos.
+  assert.equal(result.hourly, 2);
+
+  const counted = calculateOvertime({ ...base, monthlySalary: 480, ordinaryDayHours: 12, shiftsInPeriod: 15 });
+  assert.equal(counted.needsShiftCount, false);
+});
+
+test("a day that cannot exist is still refused", () => {
+  const impossible = calculateOvertime({ ...base, monthlySalary: 480, ordinaryDayHours: 25 });
+  assert.ok(impossible.issues.includes("ordinaryDayImpossible"));
+  assert.equal(impossible.total, 0);
+
+  const fractionalShifts = calculateOvertime({
+    ...base, monthlySalary: 480, ordinaryDayHours: 12, shiftsInPeriod: 1.5,
+  });
+  assert.ok(fractionalShifts.issues.includes("shiftsWhole"));
 });
 
 test("ordinary night work earns the 25% surcharge", () => {
@@ -241,8 +380,10 @@ test("validates the selected shift instead of assuming an eight-hour daytime lim
     shiftKind: "nocturnal",
     ordinaryDayHours: 8,
   });
-  assert.equal(night.invalid, true);
-  assert.ok(night.issues.includes("ordinaryLimit"));
+  // La octava hora de una jornada nocturna ya es extraordinaria (art. 161).
+  assert.equal(night.invalid, false);
+  assert.equal(night.legalOrdinaryDayHours, 7);
+  assert.equal(night.extendedShiftHours, 1);
 
   const dangerous = calculateOvertime({
     ...base,
