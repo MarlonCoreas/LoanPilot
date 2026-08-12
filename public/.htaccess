@@ -11,7 +11,13 @@
 </IfModule>
 
 <IfModule mod_deflate.c>
-  AddOutputFilterByType DEFLATE text/html text/css text/xml text/plain application/javascript application/json image/svg+xml
+  # text/javascript va primero por una razón: desde Apache 2.4 los .js se
+  # sirven con ese tipo y no con application/javascript, así que la lista
+  # heredada dejaba el bundle principal —el archivo más pesado del sitio—
+  # viajando sin comprimir. application/xml cubre el sitemap por lo mismo.
+  AddOutputFilterByType DEFLATE text/javascript application/javascript \
+    text/html text/css text/xml application/xml application/xhtml+xml \
+    text/plain application/json image/svg+xml
 </IfModule>
 
 <IfModule mod_expires.c>
@@ -21,14 +27,18 @@
   # contenido, así que pueden cachearse indefinidamente.
   <FilesMatch "\.(js|css|woff2)$">
     ExpiresDefault "access plus 1 year"
-    Header append Cache-Control "immutable"
+    <IfModule mod_headers.c>
+      Header append Cache-Control "immutable"
+    </IfModule>
   </FilesMatch>
 
   # index.html no lleva hash: debe revalidarse para que un despliegue nuevo
   # llegue al usuario de inmediato.
   <FilesMatch "\.(html)$">
     ExpiresDefault "access plus 0 seconds"
-    Header set Cache-Control "no-cache, must-revalidate"
+    <IfModule mod_headers.c>
+      Header set Cache-Control "no-cache, must-revalidate"
+    </IfModule>
   </FilesMatch>
 
   <FilesMatch "\.(svg|ico|png|jpg|webp)$">
