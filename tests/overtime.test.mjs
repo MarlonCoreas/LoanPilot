@@ -45,6 +45,50 @@ test("the night classification does not depend on where the ordinary block ends"
   assert.notEqual(short.ordinaryNightHours, long.ordinaryNightHours);
 });
 
+test("hazardous work turns nocturnal half an hour sooner than ordinary work", () => {
+  // Art. 162: en tareas peligrosas o insalubres el umbral baja de "más de
+  // cuatro" a "más de tres y media" horas nocturnas. El mismo horario puede
+  // ser diurno en una oficina y nocturno en una labor peligrosa.
+  assert.equal(SHIFT_LIMITS.diurnal.nocturnalFrom, 4);
+  assert.equal(SHIFT_LIMITS.dangerousDiurnal.nocturnalFrom, 3.5);
+
+  // 15:00 a 22:45 deja 3 h 45 min de noche: por encima de 3.5, por debajo de 4.
+  const times = { startHour: 15, endHour: 22.75, ordinaryDayHours: 8 };
+  const ordinary = splitShiftHours({ ...times, nocturnalFrom: 4 });
+  const hazardous = splitShiftHours({ ...times, nocturnalFrom: 3.5 });
+
+  assert.equal(ordinary.nightHours, 3.75);
+  assert.equal(hazardous.nightHours, 3.75);
+  assert.equal(ordinary.classifiedNocturnal, false);
+  assert.equal(hazardous.classifiedNocturnal, true);
+});
+
+test("the shift limits match the consolidated Labour Code text", () => {
+  // Art. 161: diurna 8/44, nocturna 7/39. Art. 162: peligrosa 7/39 y 6/36.
+  // Art. 116: menores de dieciséis, 6/34.
+  assert.equal(SHIFT_LIMITS.diurnal.day, 8);
+  assert.equal(SHIFT_LIMITS.diurnal.week, 44);
+  assert.equal(SHIFT_LIMITS.nocturnal.day, 7);
+  assert.equal(SHIFT_LIMITS.dangerousNocturnal.day, 6);
+  assert.equal(SHIFT_LIMITS.dangerousNocturnal.week, 36);
+  assert.equal(SHIFT_LIMITS.minorUnder16.day, 6);
+  assert.equal(SHIFT_LIMITS.minorUnder16.week, 34);
+
+  // Art. 116 limita a dos horas extra diarias sólo a los menores de dieciséis;
+  // para los de dieciséis y diecisiete no fija tope, y la herramienta tampoco
+  // debe inventarlo. Lo que sí alcanza a ambos es la prohibición nocturna, que
+  // el artículo extiende a toda persona menor de dieciocho años.
+  const older = calculateOvertime({
+    ...base, monthlySalary: 600, shiftKind: "minor16to17", overtimeDiurnalHours: 40,
+  });
+  assert.equal(older.invalid, false);
+
+  const atNight = calculateOvertime({
+    ...base, monthlySalary: 600, shiftKind: "minor16to17", nightOrdinaryHours: 1,
+  });
+  assert.ok(atNight.issues.includes("minorNightWork"));
+});
+
 test("half hours survive the split at both ends of the night", () => {
   // 18:30 a 06:30 toca día por los dos extremos: media hora antes de las 19:00
   // y media hora después de las 6:00.
@@ -103,12 +147,12 @@ test("the statutory factors and shift limits match the cited articles", () => {
   assert.equal(FACTORS.holidaySurcharge, 1);
   assert.equal(FACTORS.holidayOvertimeDiurnal, 4);
   assert.equal(FACTORS.holidayOvertimeNocturnal, 5);
-  assert.deepEqual(SHIFT_LIMITS.diurnal, { day: 8, week: 44 });
-  assert.deepEqual(SHIFT_LIMITS.nocturnal, { day: 7, week: 39 });
-  assert.deepEqual(SHIFT_LIMITS.dangerousDiurnal, { day: 7, week: 39 });
-  assert.deepEqual(SHIFT_LIMITS.dangerousNocturnal, { day: 6, week: 36 });
-  assert.deepEqual(SHIFT_LIMITS.minorUnder16, { day: 6, week: 34 });
-  assert.deepEqual(SHIFT_LIMITS.minor16to17, { day: 8, week: 44 });
+  assert.deepEqual(SHIFT_LIMITS.diurnal, { day: 8, week: 44, nocturnalFrom: 4 });
+  assert.deepEqual(SHIFT_LIMITS.nocturnal, { day: 7, week: 39, nocturnalFrom: 4 });
+  assert.deepEqual(SHIFT_LIMITS.dangerousDiurnal, { day: 7, week: 39, nocturnalFrom: 3.5 });
+  assert.deepEqual(SHIFT_LIMITS.dangerousNocturnal, { day: 6, week: 36, nocturnalFrom: 3.5 });
+  assert.deepEqual(SHIFT_LIMITS.minorUnder16, { day: 6, week: 34, nocturnalFrom: 4 });
+  assert.deepEqual(SHIFT_LIMITS.minor16to17, { day: 8, week: 44, nocturnalFrom: 4 });
   assert.equal(NIGHT_STARTS_AT, 19);
 });
 

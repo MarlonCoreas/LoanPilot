@@ -67,7 +67,8 @@ const copy = {
     helperShifts: "Veces que trabajaste ese turno",
     helperSplit: (total: number, day: number, night: number) =>
       `Cada turno ${total === 1 ? "es" : "son"} ${total} h: ${day} ${agree(day, "diurna")} y ${night} ${agree(night, "nocturna")}.`,
-    helperNocturnal: `Con más de 4 horas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00, tu jornada se considera nocturna (art. 161) y su máximo baja a ${SHIFT_LIMITS.nocturnal.day} h.`,
+    helperNocturnal: (threshold: number, limit: number) =>
+      `Con más de ${threshold} horas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00, tu jornada se considera nocturna y su máximo baja a ${limit} h (arts. 161 y 162).`,
     helperPerShift: (ordinary: number, night: number, extraDay: number, extraNight: number) => {
       const parts = [`${ordinary} h ${agree(ordinary, "ordinaria")}`];
       if (night > 0) parts.push(`${night} de ellas con recargo nocturno`);
@@ -233,7 +234,8 @@ const copy = {
     helperShifts: "Times you worked that shift",
     helperSplit: (total: number, day: number, night: number) =>
       `Each shift is ${total} h: ${day} daytime and ${night} at night.`,
-    helperNocturnal: `With more than 4 hours between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00, your shift counts as a night shift (art. 161) and its maximum drops to ${SHIFT_LIMITS.nocturnal.day} h.`,
+    helperNocturnal: (threshold: number, limit: number) =>
+      `With more than ${threshold} hours between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00, your shift counts as a night shift and its maximum drops to ${limit} h (arts. 161 and 162).`,
     helperPerShift: (ordinary: number, night: number, extraDay: number, extraNight: number) => {
       const parts = [`${ordinary} ordinary h`];
       if (night > 0) parts.push(`${night} of them with the night premium`);
@@ -371,6 +373,12 @@ const clockHour = (value: string) => {
   return number(hours) + number(minutes) / 60;
 };
 
+/** Los dos pares que el horario puede reclasificar entre sí (arts. 161 y 162). */
+const NOCTURNAL_PAIRS: readonly (readonly [ShiftKind, ShiftKind])[] = [
+  ["diurnal", "nocturnal"],
+  ["dangerousDiurnal", "dangerousNocturnal"],
+];
+
 type FieldKey =
   | "salary" | "dayHours" | "shifts" | "diurnal" | "nocturnal" | "nightOrdinary" | "minorDaily"
   | "restDays" | "restOrdinary" | "restExtraDay" | "restExtraNight"
@@ -490,12 +498,21 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
    * máximo, que la clasificación diurna/nocturna no puede subir ni bajar.
    */
   const helperTimes = { startHour: clockHour(helperStart), endHour: clockHour(helperEnd) };
-  const helperProbe = splitShiftHours({ ...helperTimes, ordinaryDayHours: SHIFT_LIMITS.diurnal.day });
-  const helperIsPlainShift = shiftKind === "diurnal" || shiftKind === "nocturnal";
-  const helperKind: ShiftKind = helperIsPlainShift
-    ? (helperProbe.classifiedNocturnal ? "nocturnal" : "diurnal")
+  // Una labor peligrosa se vuelve nocturna con media hora menos que una
+  // ordinaria (art. 162), así que el par entre el que se reclasifica manda
+  // también sobre el umbral. Las jornadas de personas menores no entran: el
+  // art. 116 les prohíbe la noche por completo.
+  const helperPair = NOCTURNAL_PAIRS.find((pair) => pair.includes(shiftKind));
+  const nocturnalFrom = SHIFT_LIMITS[shiftKind].nocturnalFrom;
+  const helperProbe = splitShiftHours({
+    ...helperTimes, nocturnalFrom, ordinaryDayHours: SHIFT_LIMITS[shiftKind].day,
+  });
+  const helperKind: ShiftKind = helperPair
+    ? helperPair[helperProbe.classifiedNocturnal ? 1 : 0]
     : shiftKind;
-  const split = splitShiftHours({ ...helperTimes, ordinaryDayHours: SHIFT_LIMITS[helperKind].day });
+  const split = splitShiftHours({
+    ...helperTimes, nocturnalFrom, ordinaryDayHours: SHIFT_LIMITS[helperKind].day,
+  });
   const helperShiftCount = number(helperShifts);
 
   const applyHelper = () => {
@@ -754,7 +771,7 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
               : <div className="legal-callout helper-outcome">
                   <span>◷</span><div>
                     <b>{t.helperSplit(split.totalHours, split.dayHours, split.nightHours)}</b>
-                    {split.classifiedNocturnal && helperIsPlainShift && <p>{t.helperNocturnal}</p>}
+                    {split.classifiedNocturnal && helperPair && <p>{t.helperNocturnal(nocturnalFrom, SHIFT_LIMITS[helperKind].day)}</p>}
                     <p>{t.helperPerShift(split.ordinaryHours, split.ordinaryNightHours,
                       split.overtimeDiurnalHours, split.overtimeNocturnalHours)}</p>
                     {helperShiftCount > 0

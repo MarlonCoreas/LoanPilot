@@ -21,14 +21,26 @@ export type ShiftKind =
   | "minorUnder16"
   | "minor16to17";
 
-/** Límites de los arts. 116, 161 y 162. */
-export const SHIFT_LIMITS: Record<ShiftKind, { day: number; week: number }> = {
-  diurnal: { day: 8, week: 44 },
-  nocturnal: { day: 7, week: 39 },
-  dangerousDiurnal: { day: 7, week: 39 },
-  dangerousNocturnal: { day: 6, week: 36 },
-  minorUnder16: { day: 6, week: 34 },
-  minor16to17: { day: 8, week: 44 },
+/**
+ * Límites de los arts. 116, 161 y 162, leídos contra el texto consolidado.
+ *
+ * `nocturnalFrom` es el número de horas nocturnas a partir del cual la jornada
+ * se considera nocturna para efectos de su duración. El art. 161 lo fija en más
+ * de cuatro, pero el 162 lo baja a más de tres y media en tareas peligrosas o
+ * insalubres: el mismo horario puede ser diurno en una oficina y nocturno en
+ * una labor peligrosa.
+ */
+export const SHIFT_LIMITS: Record<ShiftKind, {
+  day: number; week: number; nocturnalFrom: number;
+}> = {
+  diurnal: { day: 8, week: 44, nocturnalFrom: 4 },
+  nocturnal: { day: 7, week: 39, nocturnalFrom: 4 },
+  dangerousDiurnal: { day: 7, week: 39, nocturnalFrom: 3.5 },
+  dangerousNocturnal: { day: 6, week: 36, nocturnalFrom: 3.5 },
+  // Art. 116: ninguna persona menor de dieciocho años puede trabajar de noche,
+  // así que el umbral nunca llega a usarse para estas jornadas.
+  minorUnder16: { day: 6, week: 34, nocturnalFrom: 4 },
+  minor16to17: { day: 8, week: 44, nocturnalFrom: 4 },
 };
 
 /** Alias conservado para las referencias generales de la interfaz. */
@@ -37,22 +49,42 @@ export const ORDINARY_LIMITS = {
   nocturnal: SHIFT_LIMITS.nocturnal,
 };
 
-/** Factores sobre la hora básica; expresan el pago total de esa hora. */
+/**
+ * Factores sobre la hora básica; expresan el pago total de esa hora.
+ *
+ * Los cuatro factores nocturnos salen de una misma regla, y conviene dejarla
+ * escrita porque no está en ningún artículo suelto. Los arts. 175 y 192 dicen
+ * que, en descanso y asueto, "el cálculo para el pago de los recargos
+ * respectivos" se hace sobre el salario extraordinario de ese día. El 25% de
+ * nocturnidad del art. 168 es uno de esos recargos, y el ejemplo publicado por
+ * el MTPS fija el orden: sobre una hora de $1.50 la extra diurna da $3.00 y la
+ * nocturna $3.74, o sea el 25% cae sobre la hora ya recargada al 100% y no
+ * sobre la básica. Aplicar ese mismo orden a las bases de 3 y 4 es lo que
+ * produce 3.75 y 5.
+ */
 export const FACTORS = {
   /** Art. 169: hora básica más recargo del 100%. */
   overtimeDiurnal: 2,
-  /** Arts. 168-169 y ejemplo del MTPS: la hora extra nocturna vale 2.5 veces. */
+  /** Arts. 168-169, con el orden del ejemplo del MTPS: 2 × 1.25. */
   overtimeNocturnal: 2.5,
   /** Art. 168: recargo de nocturnidad sobre la hora ordinaria. */
   nightSurcharge: 0.25,
-  /** Art. 175: recargo por las horas ordinarias trabajadas en descanso. */
+  /** Art. 175: "más una remuneración del 50% como mínimo, por las horas que trabajen". */
   restDaySurcharge: 0.5,
-  /** Art. 175: (hora + 50%) más recargo de hora extra del 100%. */
+  /** Art. 175: la base es el salario extraordinario del día (150%), más el 100%. */
   restDayOvertimeDiurnal: 3,
   restDayOvertimeNocturnal: 3.75,
-  /** Art. 192: el asueto trabajado vale el doble. */
+  /**
+   * Art. 192: el asueto trabajado vale el doble.
+   *
+   * Se paga por el día y no por hora: el artículo habla del "salario ordinario
+   * más un recargo del ciento por ciento de éste", sin la coletilla "por las
+   * horas que trabajen" que el art. 175 sí lleva para el descanso. El contraste
+   * entre ambos textos es deliberado, así que un asueto trabajado a medias se
+   * paga completo.
+   */
   holidaySurcharge: 1,
-  /** Art. 192: la hora extra usa como base el salario extraordinario doble. */
+  /** Art. 192: la base es el salario extraordinario del asueto (200%), más el 100%. */
   holidayOvertimeDiurnal: 4,
   holidayOvertimeNocturnal: 5,
 } as const;
@@ -94,6 +126,8 @@ export function splitShiftHours(input: {
   endHour: number;
   /** Jornada ordinaria que aplica; determina dónde termina lo ordinario. */
   ordinaryDayHours: number;
+  /** Horas nocturnas que vuelven nocturna la jornada; 4 salvo tarea peligrosa. */
+  nocturnalFrom?: number;
 }) {
   const startHour = Number.isFinite(input.startHour) ? input.startHour : 0;
   const endHour = Number.isFinite(input.endHour) ? input.endHour : 0;
@@ -123,8 +157,8 @@ export function splitShiftHours(input: {
     totalHours: round2(invalid ? 0 : duration),
     nightHours: round2(nightHours),
     dayHours: round2((invalid ? 0 : duration) - nightHours),
-    /** Art. 161: más de cuatro horas nocturnas hacen nocturna la jornada. */
-    classifiedNocturnal: !invalid && nightHours > 4,
+    /** Arts. 161 y 162: el umbral es cuatro horas, o tres y media si es peligrosa. */
+    classifiedNocturnal: !invalid && nightHours > (input.nocturnalFrom ?? 4),
     ordinaryHours: round2(ordinaryHours),
     ordinaryNightHours: round2(ordinaryNightHours),
     overtimeHours: round2(overtimeHours),
