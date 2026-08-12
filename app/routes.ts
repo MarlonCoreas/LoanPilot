@@ -1,8 +1,15 @@
 export type Lang = "es" | "en";
-export type Page = "home" | "loans" | "settlement" | "withholding";
+export type Page = "home" | "loans" | "settlement" | "overtime" | "withholding";
 
 export const LANGS = ["es", "en"] as const;
-export const PAGES = ["home", "loans", "settlement", "withholding"] as const;
+export const PAGES = ["home", "loans", "settlement", "overtime", "withholding"] as const;
+
+/**
+ * The calculators, in the order they appear everywhere: the header, the footer,
+ * the home directory and the error page each used to carry their own copy of
+ * this list, which is four places to forget when a tool is added.
+ */
+export const TOOL_PAGES = PAGES.filter((page): page is Exclude<Page, "home"> => page !== "home");
 
 // The URL is the only source of truth for language. The toggle used to flip
 // client state and remember it in localStorage, which left an English reader on
@@ -10,8 +17,8 @@ export const PAGES = ["home", "loans", "settlement", "withholding"] as const;
 // said Spanish: unshareable, and invisible to search engines. Switching
 // language now navigates, so every translation is a page a crawler can reach.
 export const ROUTES: Record<Lang, Record<Page, string>> = {
-  es: { home: "/", loans: "/prestamos/", settlement: "/finiquito/", withholding: "/retenciones/" },
-  en: { home: "/en/", loans: "/en/loans/", settlement: "/en/settlement/", withholding: "/en/withholding/" },
+  es: { home: "/", loans: "/prestamos/", settlement: "/finiquito/", overtime: "/horas-extras/", withholding: "/retenciones/" },
+  en: { home: "/en/", loans: "/en/loans/", settlement: "/en/settlement/", overtime: "/en/overtime/", withholding: "/en/withholding/" },
 };
 
 export const SITE_ORIGIN = "https://loanpilot.marloncoreas.com";
@@ -22,15 +29,15 @@ export const OG_LOCALE: Record<Lang, string> = { es: "es_SV", en: "en_US" };
 // These names appeared verbatim in the header, the footer and the home
 // directory — three files, two languages, six chances to drift apart.
 export const PAGE_LABELS: Record<Lang, Record<Page, string>> = {
-  es: { home: "Inicio", loans: "Préstamos", settlement: "Finiquito", withholding: "Retenciones" },
-  en: { home: "Home", loans: "Loans", settlement: "Settlement", withholding: "Withholding" },
+  es: { home: "Inicio", loans: "Préstamos", settlement: "Finiquito", overtime: "Horas extras", withholding: "Retenciones" },
+  en: { home: "Home", loans: "Loans", settlement: "Settlement", overtime: "Overtime", withholding: "Withholding" },
 };
 
 export const PAGE_META: Record<Lang, Record<Page, { title: string; description: string; ogTitle: string }>> = {
   es: {
     home: {
       title: "Herramientas financieras para El Salvador | LoanPilot",
-      description: "Calculadoras gratuitas de préstamos, finiquito, indemnización y retenciones salariales para El Salvador.",
+      description: "Calculadoras gratuitas de préstamos, finiquito, horas extras y retenciones salariales para El Salvador.",
       ogTitle: "LoanPilot | Herramientas financieras para El Salvador",
     },
     loans: {
@@ -43,6 +50,11 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
       description: "Estima indemnización, vacaciones, aguinaldo y salarios pendientes conforme a las reglas laborales de El Salvador.",
       ogTitle: "LoanPilot | Finiquito e indemnización",
     },
+    overtime: {
+      title: "Calculadora de horas extras en El Salvador | LoanPilot",
+      description: "Calcula la hora extra diurna y nocturna, el recargo nocturno y el pago por trabajar en día de descanso o asueto.",
+      ogTitle: "LoanPilot | Horas extras",
+    },
     withholding: {
       title: "Calculadora de retenciones salariales | LoanPilot",
       description: "Estima AFP, ISSS e ISR con las tablas oficiales de retención vigentes en El Salvador.",
@@ -52,7 +64,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
   en: {
     home: {
       title: "Financial tools for El Salvador | LoanPilot",
-      description: "Free calculators for loans, employment settlements, severance and payroll withholding in El Salvador.",
+      description: "Free calculators for loans, employment settlements, overtime pay and payroll withholding in El Salvador.",
       ogTitle: "LoanPilot | Financial tools for El Salvador",
     },
     loans: {
@@ -65,6 +77,11 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
       description: "Estimate severance, vacation, year-end bonus and unpaid salary under the employment rules of El Salvador.",
       ogTitle: "LoanPilot | Settlement and severance",
     },
+    overtime: {
+      title: "Overtime pay calculator for El Salvador | LoanPilot",
+      description: "Work out daytime and night overtime, the night surcharge and pay for working a weekly rest day or public holiday.",
+      ogTitle: "LoanPilot | Overtime pay",
+    },
     withholding: {
       title: "Payroll withholding calculator | LoanPilot",
       description: "Estimate pension, ISSS and income tax using the official withholding tables in force in El Salvador.",
@@ -73,16 +90,123 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
   },
 };
 
+/**
+ * Copy for the social card of each page, and the alt text that travels with it.
+ *
+ * Every page used to share one image — the loan card — so a link to the
+ * settlement calculator previewed in WhatsApp with "Entiende tu préstamo"
+ * above a description about severance. The card is part of a page's identity,
+ * like its title, so it belongs in this table beside PAGE_META.
+ *
+ * `accent` is the colour of the second headline line, and echoes the icon of
+ * the matching card on the home page: gold for the employment tool, mint for
+ * the rest.
+ */
+export const OG_CARD: Record<Lang, Record<Page, {
+  eyebrow: string; line1: string; line2: string; sub: string; alt: string; accent: string;
+}>> = {
+  es: {
+    home: {
+      eyebrow: "HERRAMIENTAS FINANCIERAS",
+      line1: "Números importantes,", line2: "explicados con claridad.",
+      sub: "Préstamos, finiquito, horas extras y retenciones salariales de El Salvador, calculados en tu navegador.",
+      alt: "LoanPilot: números importantes, explicados con claridad.",
+      accent: "#a9f4cf",
+    },
+    loans: {
+      eyebrow: "CALCULADORA DE PRÉSTAMOS",
+      line1: "Entiende tu préstamo.", line2: "Decide con claridad.",
+      sub: "Calcula la cuota, el costo efectivo real y cuánto ahorras haciendo abonos a capital.",
+      alt: "LoanPilot: calculadora de préstamos con cuota, costo efectivo y abonos a capital.",
+      accent: "#a9f4cf",
+    },
+    settlement: {
+      eyebrow: "FINIQUITO E INDEMNIZACIÓN",
+      line1: "Lo que te toca", line2: "al terminar tu empleo.",
+      sub: "Indemnización, vacaciones, aguinaldo y salario pendiente con las reglas del Código de Trabajo.",
+      alt: "LoanPilot: calculadora de finiquito e indemnización de El Salvador.",
+      accent: "#ffd88a",
+    },
+    overtime: {
+      eyebrow: "HORAS EXTRAS",
+      line1: "Cada hora extra,", line2: "pagada como manda la ley.",
+      sub: "Hora extra diurna y nocturna, recargo nocturno, día de descanso y asueto con los recargos del Código de Trabajo.",
+      alt: "LoanPilot: calculadora de horas extras y recargos de El Salvador.",
+      accent: "#a9d9e8",
+    },
+    withholding: {
+      eyebrow: "RETENCIONES SALARIALES",
+      line1: "Cada descuento", line2: "de tu salario, claro.",
+      sub: "AFP, ISSS y renta con las tablas oficiales de retención vigentes en El Salvador.",
+      alt: "LoanPilot: calculadora de retenciones de AFP, ISSS e ISR de El Salvador.",
+      accent: "#a9f4cf",
+    },
+  },
+  en: {
+    home: {
+      eyebrow: "FINANCIAL TOOLS",
+      line1: "Important numbers,", line2: "explained clearly.",
+      sub: "Loans, settlements, overtime pay and payroll withholding for El Salvador, worked out in your browser.",
+      alt: "LoanPilot: important numbers, explained clearly.",
+      accent: "#a9f4cf",
+    },
+    loans: {
+      eyebrow: "LOAN CALCULATOR",
+      line1: "Understand your loan.", line2: "Decide with clarity.",
+      sub: "Work out the payment, the real effective cost and how much extra principal payments save.",
+      alt: "LoanPilot: loan calculator with payments, effective cost and extra principal payments.",
+      accent: "#a9f4cf",
+    },
+    settlement: {
+      eyebrow: "SETTLEMENT AND SEVERANCE",
+      line1: "What you are owed", line2: "when a job ends.",
+      sub: "Severance, vacation, year-end bonus and unpaid salary under the Labour Code of El Salvador.",
+      alt: "LoanPilot: employment settlement and severance calculator for El Salvador.",
+      accent: "#ffd88a",
+    },
+    overtime: {
+      eyebrow: "OVERTIME PAY",
+      line1: "Every extra hour,", line2: "paid the way the law says.",
+      sub: "Daytime and night overtime, the night surcharge, rest days and public holidays under the Labour Code.",
+      alt: "LoanPilot: overtime and surcharge calculator for El Salvador.",
+      accent: "#a9d9e8",
+    },
+    withholding: {
+      eyebrow: "PAYROLL WITHHOLDING",
+      line1: "Every deduction", line2: "from your pay, clear.",
+      sub: "Pension, ISSS and income tax using the official withholding tables in force in El Salvador.",
+      alt: "LoanPilot: pension, ISSS and income tax withholding calculator for El Salvador.",
+      accent: "#a9f4cf",
+    },
+  },
+};
+
+/** Path of the social card for a page, relative to the site root. */
+export function ogImagePath(lang: Lang, page: Page) {
+  return `/og/${lang}-${page}.png`;
+}
+
 const BY_PATH = new Map<string, { lang: Lang; page: Page }>();
 for (const lang of LANGS) {
   for (const page of PAGES) BY_PATH.set(ROUTES[lang][page], { lang, page });
 }
 
-/** Maps a pathname, with or without its trailing slash, onto a known route. */
-export function resolveRoute(pathname: string): { lang: Lang; page: Page } {
+/**
+ * Maps a pathname, with or without its trailing slash, onto a known route.
+ *
+ * An unknown path used to resolve to the Spanish home page, so a mistyped or
+ * retired URL rendered the home under the wrong address — a soft 404, which
+ * search engines index as a duplicate of the real home. It now reports the
+ * miss, and the caller renders the not-found page.
+ */
+export function resolveRoute(pathname: string): { lang: Lang; page: Page | "notFound" } {
   const trimmed = pathname.replace(/\/+$/, "");
   const normalized = trimmed === "" ? "/" : `${trimmed}/`;
-  return BY_PATH.get(normalized) ?? { lang: "es", page: "home" };
+  const match = BY_PATH.get(normalized);
+  if (match) return match;
+  // Keep the reader in the language the URL asked for: /en/typo/ is a miss in
+  // English, not an invitation to switch them to Spanish.
+  return { lang: normalized.startsWith("/en/") ? "en" : "es", page: "notFound" };
 }
 
 export function absoluteUrl(lang: Lang, page: Page) {

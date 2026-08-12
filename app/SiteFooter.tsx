@@ -1,4 +1,4 @@
-import { PAGE_LABELS, ROUTES, type Lang, type Page } from "./routes";
+import { PAGE_LABELS, ROUTES, TOOL_PAGES, type Lang } from "./routes";
 import { OFFICIAL } from "./sources";
 
 const copy = {
@@ -31,7 +31,7 @@ export default function SiteFooter({ lang }: { lang: Lang }) {
       </div>
       <nav className="footer-column" aria-label={t.tools}>
         <h2>{t.tools}</h2>
-        {(["loans", "settlement", "withholding"] as Page[]).map((page) =>
+        {TOOL_PAGES.map((page) =>
           <a key={page} href={ROUTES[lang][page]}>{PAGE_LABELS[lang][page]}<span>→</span></a>)}
       </nav>
       <nav className="footer-column" aria-label={t.sources}>

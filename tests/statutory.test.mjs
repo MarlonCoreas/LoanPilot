@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   calculatePayrollWithholding, calculateSettlement, DAILY_MINIMUM_WAGE,
-  RULES_REVIEWED, withholdingForTaxable,
+  MINIMUM_WAGE_TABLES, QUINCENA25, RULES_REVIEWED, withholdingForTaxable,
 } from "../app/statutory.ts";
+
+const round = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 // These assertions restate figures the module already declares, which is
 // normally a smell. Here it is the point: every number below is a quotation
@@ -29,13 +31,14 @@ test("statutory figures still match the official texts they are quoted from", ()
   assert.equal(aguinaldoFor(9), 19);
   assert.equal(aguinaldoFor(10), 21);
 
-  // Labor Code art. 177: 15 days of vacation plus a 30% surcharge.
-  const vacation = calculateSettlement({
+  // Labor Code art. 177: 15 days of vacation plus a 30% surcharge. Isolated by
+  // difference so the assertion pins the article and not the proration rule.
+  const withPeriod = (periods) => calculateSettlement({
     startDate: "2020-01-01", endDate: "2026-01-01", monthlySalary: 3000,
-    sector: "commerce", termination: "dismissal", unusedVacationPeriods: 1, aguinaldoPaid: true,
+    sector: "commerce", termination: "dismissal", unusedVacationPeriods: periods, aguinaldoPaid: true,
   });
-  assert.equal(vacation.vacationDays, 15);
-  assert.equal(vacation.vacation, 1950, "100 daily x 15 days x 1.30");
+  assert.equal(withPeriod(1).vacationDays - withPeriod(0).vacationDays, 15);
+  assert.equal(round(withPeriod(1).vacation - withPeriod(0).vacation), 1950, "100 daily x 15 days x 1.30");
 
   // Art. 58 caps the daily base at four daily minimum wages; art. 8 of the
   // Voluntary Resignation Law (Decree 592) caps it at two.
@@ -153,7 +156,9 @@ test("dismissal severance observes the four-minimum-wage daily cap", () => {
     sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
   });
   assert.equal(result.indemnityBaseDaily, 53.76);
-  assert.equal(result.indemnity, 1612.80);
+  // 365 days of complete year plus the day of departure, which is worked.
+  assert.equal(result.serviceDays, 366);
+  assert.equal(result.indemnity, 1617.22);
 });
 
 test("dismissal severance has a minimum of fifteen salary-base days", () => {
@@ -164,7 +169,7 @@ test("dismissal severance has a minimum of fifteen salary-base days", () => {
   assert.equal(result.indemnity, 450);
 });
 
-test("voluntary resignation requires two years and counts completed service years", () => {
+test("voluntary resignation requires two years and then pays fractions too", () => {
   const eligible = calculateSettlement({
     startDate: "2020-01-01", endDate: "2025-08-10", monthlySalary: 1200,
     sector: "commerce", termination: "resignation", aguinaldoPaid: true,
@@ -172,7 +177,9 @@ test("voluntary resignation requires two years and counts completed service year
   assert.equal(eligible.eligibleForResignationBenefit, true);
   assert.equal(eligible.completedYears, 5);
   assert.equal(eligible.indemnityBaseDaily, 26.88);
-  assert.equal(eligible.indemnity, 2016);
+  // 1,827 days of complete years — two leap days inside them — plus 222 days.
+  assert.equal(eligible.serviceDays, 2049);
+  assert.equal(eligible.indemnity, 2263.44);
 
   const ineligible = calculateSettlement({
     startDate: "2025-01-01", endDate: "2026-08-10", monthlySalary: 700,
@@ -180,6 +187,52 @@ test("voluntary resignation requires two years and counts completed service year
   });
   assert.equal(ineligible.eligibleForResignationBenefit, false);
   assert.equal(ineligible.indemnity, 0);
+});
+
+test("the minimum wage cap uses the table in force on the last day worked", () => {
+  const oldest = MINIMUM_WAGE_TABLES[MINIMUM_WAGE_TABLES.length - 1];
+  const priced = (endDate) => calculateSettlement({
+    startDate: "2019-01-01", endDate, monthlySalary: 5000,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
+  });
+
+  const current = priced("2026-06-01");
+  assert.equal(current.minimumWageDecree, "D.E. 12/2025");
+  assert.equal(current.minimumWagePredatesTables, false);
+  assert.equal(current.indemnityBaseDaily, 53.76);
+
+  // Before the oldest table this project has verified, the figure is a stand-in
+  // and has to say so rather than pass for the rate of the day.
+  const older = priced("2024-03-15");
+  assert.equal(older.minimumWagePredatesTables, true);
+  assert.equal(older.minimumWageDecree, oldest.decree);
+});
+
+test("the Quincena 25 follows Decree 499 and stays out of every other case", () => {
+  const settle = (over) => calculateSettlement({
+    startDate: "2020-01-01", endDate: "2027-06-30", monthlySalary: 1200,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true, ...over,
+  });
+
+  // Article 3 names termination with employer responsibility and dismissal
+  // without legal cause. Resignation is not among them.
+  assert.equal(settle({}).quincena25Applies, true);
+  assert.equal(settle({ termination: "resignation" }).quincena25, 0);
+
+  // Article 2: only salaries at or below $1,500.
+  assert.equal(settle({ monthlySalary: QUINCENA25.salaryCeiling }).quincena25Applies, true);
+  assert.equal(settle({ monthlySalary: 1500.01 }).quincena25, 0);
+
+  // Article 6 leaves 2026 voluntary for private employers, so nothing is owed
+  // as of right until the general regime starts.
+  assert.equal(settle({ endDate: "2026-12-31" }).quincena25, 0);
+  assert.equal(settle({ endDate: "2027-01-01" }).quincena25Applies, true);
+
+  // Half a monthly salary, prorated over the calendar year the January payment
+  // closes: 181 days of 2027 worked out of 365.
+  assert.equal(settle({}).quincena25, round(1200 * 0.5 * 181 / 365));
+  // A full year in service takes the whole half salary, never more.
+  assert.equal(settle({ endDate: "2027-12-31" }).quincena25, 600);
 });
 
 test("an end date before the start date yields nothing instead of negative service", () => {
@@ -248,14 +301,33 @@ test("vacation carries the 30% statutory surcharge over complete and proportiona
     sector: "commerce", termination: "dismissal", unusedVacationPeriods: 1, aguinaldoPaid: true,
   });
   assert.equal(result.dailySalary, 30);
-  assert.equal(result.vacationDays, 15, "an exact anniversary leaves no proportional fraction");
-  assert.equal(result.vacation, 585, "15 days of salary plus 30%");
+  // One complete period plus the single day worked on the anniversary itself.
+  assert.equal(round(result.vacationDays), 15.04);
+  assert.equal(result.vacation, 586.6);
 
   const halfway = calculateSettlement({
     startDate: "2020-01-01", endDate: "2026-07-02", monthlySalary: 900,
     sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
   });
   assert.ok(Math.abs(halfway.vacationDays - 7.5) < 0.05, `half a year should accrue about 7.5 days, got ${halfway.vacationDays}`);
+});
+
+test("reproduces a real MTPS settlement statement to the cent", () => {
+  // Voluntary resignation statement issued by the MTPS online service on 9 Dec
+  // 2025: 1 Nov 2021 to 24 Dec 2025, $937.54 a month, commerce. The statement
+  // reports $1,613.90 for the complete years and $59.65 for the 54 remaining
+  // days, $90.16 of proportional vacation, and $21.15 of aguinaldo.
+  const result = calculateSettlement({
+    startDate: "2021-11-01", endDate: "2025-12-24", monthlySalary: 937.54,
+    sector: "commerce", termination: "resignation", aguinaldoPaid: true,
+  });
+  assert.equal(result.serviceDays, 1515, "1,461 days of complete years plus 54");
+  assert.equal(result.indemnityBaseDaily, 26.88, "capped at two daily minimum wages");
+  assert.equal(result.indemnity, 1673.55, "1,613.90 + 59.65");
+  assert.equal(result.vacation, 90.16);
+  // The aguinaldo line is deliberately not compared: the MTPS runs its bonus
+  // year from 12 December, this module still runs it over the calendar year,
+  // and settling that needs the October 2025 reform decree.
 });
 
 test("leaving before the cutoff accrues the year-end bonus in proportion to days worked", () => {
