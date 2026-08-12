@@ -136,6 +136,7 @@ export function splitShiftHours(input: {
 export type OvertimeValidationIssue =
   | "salary"
   | "ordinaryHours"
+  | "negativeHours"
   | "ordinaryDayImpossible"
   | "shiftsWhole"
   | "shiftsRange"
@@ -255,6 +256,11 @@ export function calculateOvertime(input: OvertimeInput) {
   const holidayOvertimeHours = holidayOvertimeDiurnalHours + holidayOvertimeNocturnalHours;
   const issues: OvertimeValidationIssue[] = [];
 
+  // `clean` convierte los negativos en cero para que nunca salga un pago en
+  // contra, pero callarlo dejaba en pantalla un "-5" que no estaba en el total:
+  // el número se veía y no contaba.
+  if (Object.values(input).some((value) => typeof value === "number"
+    && Number.isFinite(value) && value < 0)) issues.push("negativeHours");
   if (salary <= 0) issues.push("salary");
   if (ordinaryDayHours <= 0) issues.push("ordinaryHours");
   // Exceder el máximo legal ya no invalida el cálculo: es la situación de

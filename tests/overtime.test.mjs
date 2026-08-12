@@ -510,12 +510,25 @@ test("empty and negative values cannot produce a negative payslip", () => {
     assert.equal(result.total, 0);
   }
 
+  // Un negativo ya no se descarta en silencio: el campo mostraba "-5" mientras
+  // el total lo ignoraba, así que el número se veía y no contaba.
   const result = calculateOvertime({
     ...base,
     monthlySalary: 600,
     overtimeDiurnalHours: -5,
     overtimeNocturnalHours: 2,
   });
+  assert.ok(result.issues.includes("negativeHours"));
   assert.equal(result.overtimeDiurnal, 0);
-  assert.equal(result.total, 12.5);
+  assert.equal(result.total, 0);
+
+  // Corregido el signo, el resto del período se calcula sin arrastrar el error.
+  const fixed = calculateOvertime({
+    ...base,
+    monthlySalary: 600,
+    overtimeDiurnalHours: 5,
+    overtimeNocturnalHours: 2,
+  });
+  assert.equal(fixed.invalid, false);
+  assert.equal(fixed.total, 37.5);
 });
