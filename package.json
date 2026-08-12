@@ -18,7 +18,7 @@
     "build": "vite build && node scripts/prerender.mjs",
     "preview": "vite preview",
     "package": "bash scripts/package-release.sh",
-    "og": "bash scripts/og-image.sh",
+    "og": "node scripts/og-image.mjs",
     "test": "npm run build && node --test",
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit"

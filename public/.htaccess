@@ -38,3 +38,7 @@
 
 # Evita listados de directorio si el servidor los trae activados.
 Options -Indexes
+
+# Página de error propia. El archivo lo genera el build; sin esta línea el
+# alojamiento muestra la suya, que no se parece en nada al sitio.
+ErrorDocument 404 /404.html

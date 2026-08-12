@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
-import { absoluteUrl, LANGS, PAGES, PAGE_META, ROUTES } from "../app/routes.ts";
+import { FAQ } from "../app/faq.ts";
+import { absoluteUrl, LANGS, OG_CARD, ogImagePath, PAGES, PAGE_META, ROUTES } from "../app/routes.ts";
+import { RULES_REVIEWED } from "../app/statutory.ts";
 
 const outputRoot = new URL("../dist/", import.meta.url);
 const indexHtml = () => readFile(new URL("index.html", outputRoot), "utf8");
@@ -106,7 +108,7 @@ test("the language switch links to the same page in the other language", async (
   for (const [lang, page] of everyPage) {
     const html = await pageHtml(lang, page);
     const other = lang === "es" ? "en" : "es";
-    assert.match(html, new RegExp(`href="${ROUTES[other][page]}" hreflang="${other}"`), `${lang} ${page}`);
+    assert.match(html, new RegExp(`href="${ROUTES[other][page]}" hrefLang="${other}"`, "i"), `${lang} ${page}`);
   }
 });
 
@@ -117,6 +119,11 @@ test("generates a sitemap that matches the routes actually built", async () => {
     listed.sort(),
     everyPage.map(([lang, page]) => absoluteUrl(lang, page)).sort(),
   );
+  // The review date, not the build date: a lastmod that moves on every build
+  // is a field crawlers learn to ignore.
+  const stamps = [...sitemap.matchAll(/<lastmod>([^<]+)<\/lastmod>/g)].map((match) => match[1]);
+  assert.equal(stamps.length, listed.length);
+  assert.deepEqual([...new Set(stamps)], [RULES_REVIEWED]);
 });
 
 test("keeps navigation inside the reader's language", async () => {
@@ -138,13 +145,88 @@ test("keeps navigation inside the reader's language", async () => {
 test("ships link previews, a security policy and a no-JavaScript notice", async () => {
   const html = await indexHtml();
 
-  assert.match(html, /property="og:image" content="https:\/\/[^"]+\/og\.png"/i);
   assert.match(html, /name="twitter:card" content="summary_large_image"/i);
   assert.match(html, /http-equiv="Content-Security-Policy"/i);
   assert.match(html, /<noscript>/i);
+});
 
-  // The card only renders if the file the tags point at actually ships.
-  await access(new URL("og.png", outputRoot));
+test("gives every page its own social card, and ships the image", async () => {
+  const seen = new Set();
+  for (const [lang, page] of everyPage) {
+    const html = await pageHtml(lang, page);
+    const image = `https://loanpilot.marloncoreas.com${ogImagePath(lang, page)}`;
+    const where = `${lang} ${page}`;
+
+    // Sharing the settlement page used to preview the loan card: the right
+    // title above an image describing a different tool entirely.
+    assert.match(html, new RegExp(`property="og:image" content="${image.replaceAll(".", "\\.")}"`), where);
+    assert.match(html, new RegExp(`name="twitter:image" content="${image.replaceAll(".", "\\.")}"`), where);
+    assert.match(html, new RegExp(`property="og:image:alt" content="${OG_CARD[lang][page].alt.slice(0, 30)}`), where);
+
+    // A card is only a preview if the PNG the tags point at actually ships.
+    await access(new URL(ogImagePath(lang, page).slice(1), outputRoot));
+
+    assert.equal(seen.has(image), false, `duplicate card: ${image}`);
+    seen.add(image);
+  }
+});
+
+test("describes every page to search engines with structured data", async () => {
+  for (const [lang, page] of everyPage) {
+    const html = await pageHtml(lang, page);
+    const where = `${lang} ${page}`;
+    const [, json] = html.match(/<script type="application\/ld\+json">(.+?)<\/script>/s) ?? [];
+    assert.ok(json, `${where} ships no structured data`);
+
+    const graph = JSON.parse(json)["@graph"];
+    const types = graph.map((node) => node["@type"]);
+    assert.deepEqual(
+      types,
+      page === "home"
+        ? ["Organization", "WebSite", "FAQPage"]
+        : ["Organization", "WebSite", "WebApplication", "BreadcrumbList"],
+      where,
+    );
+
+    if (page === "home") {
+      // The rich result has to answer what the page answers, not more.
+      const questions = graph[2].mainEntity.map((entry) => entry.name);
+      assert.deepEqual(questions, FAQ[lang].map((entry) => entry.question), where);
+      for (const { question, answer } of FAQ[lang]) {
+        assert.ok(html.includes(question), `${where} hides a question it markets: ${question}`);
+        assert.ok(html.includes(answer.slice(0, 60)), `${where} hides an answer it markets`);
+      }
+    } else {
+      const app = graph[2];
+      assert.equal(app.url, absoluteUrl(lang, page), where);
+      assert.equal(app.inLanguage, lang, where);
+      assert.equal(app.offers.price, "0", where);
+      // The name is the title without the brand suffix, which only works while
+      // every title keeps the "<page> | LoanPilot" shape.
+      assert.equal(app.name, PAGE_META[lang][page].title.replace(" | LoanPilot", ""), where);
+      assert.doesNotMatch(app.name, /LoanPilot/, where);
+    }
+  }
+});
+
+test("ships an error page the server can hand to a missed address", async () => {
+  const html = await readFile(new URL("404.html", outputRoot), "utf8");
+
+  assert.match(html, /<title>Página no encontrada \| LoanPilot<\/title>/);
+  assert.match(html, /Esta página no existe/);
+  // One file for every wrong address, so it claims no address of its own: a
+  // canonical URL here would fold the error page into a real page.
+  assert.match(html, /name="robots" content="noindex, follow"/);
+  assert.doesNotMatch(html, /rel="canonical"/);
+  assert.doesNotMatch(html, /rel="alternate"/);
+  // A dead end is worse than a wrong turn: the tools stay one click away.
+  for (const page of PAGES) assert.match(html, new RegExp(`href="${ROUTES.es[page]}"`), page);
+
+  const sitemap = await readFile(new URL("sitemap.xml", outputRoot), "utf8");
+  assert.doesNotMatch(sitemap, /404/);
+
+  const htaccess = await readFile(new URL(".htaccess", outputRoot), "utf8");
+  assert.match(htaccess, /ErrorDocument 404 \/404\.html/);
 });
 
 test("carries no scaffolding or hosting-provider traces", async () => {

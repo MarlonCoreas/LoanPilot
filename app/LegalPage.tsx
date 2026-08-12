@@ -1,22 +1,9 @@
+import { reviewedLine } from "./reviewed";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import type { Lang } from "./routes";
-import { RULES_REVIEWED } from "./statutory";
 import StatutoryTools from "./StatutoryTools";
 import UtilityHero from "./UtilityHero";
-
-// The badge used to read "Actualizada a 2026" as a hardcoded string, so it kept
-// making the claim no matter how old the figures were. It now renders the date
-// the constants were last checked, which lives beside those constants.
-function reviewedOn(lang: Lang) {
-  const [year, month, day] = RULES_REVIEWED.split("-").map(Number);
-  const formatted = new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-GB", {
-    day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, day)));
-  return lang === "es"
-    ? `Normativa de El Salvador · Fuentes verificadas el ${formatted}`
-    : `El Salvador rules · Sources verified on ${formatted}`;
-}
 
 const heroCopy = {
   es: {
@@ -94,7 +81,7 @@ export default function LegalPage({ lang, page }: { lang: Lang; page: "settlemen
   const hero = heroCopy[lang];
   return <main className="legal-page">
     <SiteHeader lang={lang} page={page} />
-    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={reviewedOn(lang)} />
+    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={reviewedLine(lang)} />
     <StatutoryTools lang={lang} tool={page} />
     <LegalGuide lang={lang} page={page} />
     <SiteFooter lang={lang} />

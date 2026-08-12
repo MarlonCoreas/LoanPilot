@@ -1,18 +1,16 @@
-import { LANGS, PAGE_LABELS, ROUTES, type Lang, type Page } from "./routes";
+import { LANGS, PAGE_LABELS, ROUTES, TOOL_PAGES, type Lang, type Page } from "./routes";
 
 const labels = {
   es: { tools: "Herramientas", language: "Idioma", home: "LoanPilot — inicio" },
   en: { tools: "Tools", language: "Language", home: "LoanPilot — home" },
 } as const;
 
-const NAV: Page[] = ["loans", "settlement", "withholding"];
-
 export default function SiteHeader({ lang, page }: { lang: Lang; page: Page }) {
   const t = labels[lang];
   return <header className="topbar site-topbar">
     <a className="brand" href={ROUTES[lang].home} aria-label={t.home}><span>LP</span> LoanPilot</a>
     <nav aria-label={t.tools}>
-      {NAV.map((item) => <a
+      {TOOL_PAGES.map((item) => <a
         key={item}
         className={page === item ? "active" : ""}
         href={ROUTES[lang][item]}
@@ -26,9 +24,7 @@ export default function SiteHeader({ lang, page }: { lang: Lang; page: Page }) {
         key={item}
         className={lang === item ? "active" : ""}
         href={ROUTES[item][page]}
-        // Spread, not the camelCase prop: React serialises `hrefLang` verbatim.
-        // Browsers fold attribute case, but crawlers and greps are literal.
-        {...{ hreflang: item }}
+        hrefLang={item}
         aria-current={lang === item ? "true" : undefined}
       >{item.toUpperCase()}</a>)}
     </div>

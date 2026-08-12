@@ -12,5 +12,8 @@ export function render(pathname = "/") {
 // Re-exported so the prerender script reads the route table from the same
 // module the application routes with, instead of keeping a second copy.
 export {
-  alternates, absoluteUrl, LANGS, OG_LOCALE, PAGES, PAGE_META, ROUTES, SITE_ORIGIN,
+  alternates, absoluteUrl, LANGS, OG_CARD, OG_LOCALE, ogImagePath, PAGES, PAGE_META, ROUTES,
+  SITE_ORIGIN,
 } from "../app/routes";
+export { structuredDataScript } from "../app/seo";
+export { RULES_REVIEWED } from "../app/statutory";
