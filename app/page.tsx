@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { DateField, Field, SegmentedField, SelectField } from "./fields";
 import {
   addMonths, buildActiveSchedule, buildHistoricalSchedule, buildNewSchedule, isoAfterMonths,
   monthlyIrr, n, parseDate, solveRate, today,
@@ -67,6 +68,30 @@ const copy = {
     guide3: "Seguro sobre saldo", guide3Text: "Suele bajar a medida que amortizas; una prima fija se mantiene igual.",
     guide4: "Abono a capital", guide4Text: "Reduce el saldo que genera intereses. Confirma que el banco lo aplique a capital y no a cuotas futuras.",
     months: "meses", remaining: "pendientes",
+    helpAmount: "El monto que el banco te desembolsa, no lo que vas a terminar pagando. Si te descuentan comisiones del desembolso, ponelo igual completo y anotá las comisiones abajo.",
+    helpRate: "La tasa nominal anual del contrato, en porcentaje. No es la tasa efectiva: esa la calcula la herramienta sumando seguros y comisiones.",
+    helpTerm: "El plazo en años. Si te lo dieron en meses, dividilo entre 12; podés usar decimales.",
+    helpFirstDate: "La fecha en que vence tu primera cuota, no la del desembolso. Marca el arranque del calendario de amortización.",
+    helpPerThousand: "Lo que cobra el seguro por cada mil dólares de saldo pendiente. Aparece en el contrato como tasa por millar y baja conforme amortizás.",
+    helpFixedMonthly: "La prima fija de seguro que se te cobra cada mes, igual durante todo el plazo.",
+    helpCommission: "La comisión de otorgamiento, como porcentaje del monto. Es un cobro de una sola vez al inicio.",
+    helpOtherFees: "Otros cargos obligatorios del desembolso: papeleo, notariado, avalúo. Van en dólares, una sola vez.",
+    helpFeeMode: "Si esos cargos te los descuentan del desembolso —recibís menos— o te los suman al monto financiado, que es lo que cambia la tasa efectiva.",
+    helpCurrentBalance: "Lo que debés hoy de capital, según tu último estado de cuenta. No incluyas los intereses que aún no se han generado.",
+    helpCurrentPayment: "La cuota que pagás cada mes, tal como te la cobran, incluyendo el seguro si viene dentro.",
+    helpNextDate: "La fecha de tu próxima cuota. Desde ahí se proyecta el resto del calendario.",
+    helpCurrentInsurance: "La parte de la cuota que corresponde al seguro, si te viene desglosada. Si no la conocés, dejá cero.",
+    helpOriginalAmount: "El monto con el que se originó el préstamo. Sirve para reconstruir el historial y estimar cuánto llevás pagado de intereses.",
+    helpPaidToDate: "Lo que llevás pagado en total hasta hoy, sumando todas las cuotas. Es opcional y solo afina la reconstrucción.",
+    helpOneExtra: "Un abono extraordinario a capital, de una sola vez. Se aplica en la fecha que indiques al lado.",
+    helpExtraDate: "La fecha en que harías ese abono. Cuanto antes se aplique, más intereses evita.",
+    helpMonthlyExtra: "Un monto adicional que sumarías a cada cuota, todos los meses, para abonar a capital.",
+    helpScheduledPayment: "La cuota pactada en el contrato original, la que corresponde al plazo y la tasa iniciales.",
+    helpNewRate: "La tasa a la que te cambiaron el préstamo, si hubo un ajuste durante la vida del crédito.",
+    helpChangeDate: "Desde qué fecha rige esa tasa nueva.",
+    helpOriginalTerm: "El plazo original del préstamo en años, tal como se firmó.",
+    helpOriginalFirstDate: "La fecha de la primera cuota del contrato original, para reconstruir el historial desde el inicio.",
+    helpHistoryInsurance: "El seguro que venías pagando en ese período, si aplica.",
   },
   en: {
     title1: "Understand your loan.", title2: "Decide with clarity.",
@@ -119,6 +144,30 @@ const copy = {
     guide3: "Balance-based insurance", guide3Text: "Usually falls as principal is repaid; a fixed premium does not.",
     guide4: "Principal prepayment", guide4Text: "Lowers the balance that earns interest. Confirm the lender applies it to principal, not future installments.",
     months: "months", remaining: "remaining",
+    helpAmount: "The amount the lender disburses, not what you will end up paying. If fees are taken out of the disbursement, still enter the full amount and record the fees below.",
+    helpRate: "The contract's nominal annual rate, as a percentage. Not the effective rate — the tool works that one out by adding insurance and fees.",
+    helpTerm: "The term in years. If you were given months, divide by 12; decimals are fine.",
+    helpFirstDate: "The date your first installment falls due, not the disbursement date. It starts the amortisation schedule.",
+    helpPerThousand: "What the insurance charges per thousand dollars of outstanding balance. Contracts state it as a rate per thousand, and it falls as you repay.",
+    helpFixedMonthly: "The flat insurance premium charged every month, unchanged over the whole term.",
+    helpCommission: "The origination fee, as a percentage of the amount. It is a one-off charge at the start.",
+    helpOtherFees: "Other compulsory disbursement charges: paperwork, notary, appraisal. In dollars, charged once.",
+    helpFeeMode: "Whether those charges are taken out of the disbursement — you receive less — or added to the financed amount, which is what moves the effective rate.",
+    helpCurrentBalance: "What you owe in principal today, per your latest statement. Do not include interest that has not accrued yet.",
+    helpCurrentPayment: "The installment you pay each month, as charged, including insurance if it is bundled in.",
+    helpNextDate: "The date of your next installment. The rest of the schedule is projected from there.",
+    helpCurrentInsurance: "The share of the installment that is insurance, if it is itemised for you. Leave it at zero if you do not know.",
+    helpOriginalAmount: "The amount the loan started at. It is used to rebuild the history and estimate how much interest you have paid so far.",
+    helpPaidToDate: "What you have paid in total to date, across all installments. Optional; it only sharpens the reconstruction.",
+    helpOneExtra: "A one-off extra payment against principal. It is applied on the date you set beside it.",
+    helpExtraDate: "The date you would make that payment. The earlier it lands, the more interest it avoids.",
+    helpMonthlyExtra: "An extra amount you would add to every installment, each month, to pay down principal.",
+    helpScheduledPayment: "The installment agreed in the original contract, matching its initial term and rate.",
+    helpNewRate: "The rate your loan was moved to, if it was adjusted during the life of the credit.",
+    helpChangeDate: "The date from which that new rate applies.",
+    helpOriginalTerm: "The loan's original term in years, as signed.",
+    helpOriginalFirstDate: "The first installment date of the original contract, so the history can be rebuilt from the start.",
+    helpHistoryInsurance: "The insurance you were paying during that period, if any.",
   },
 } as const;
 
@@ -147,7 +196,7 @@ function caretAfterSignificant(display: string, count: number) {
 }
 const useCaretEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
-function NumericField({ label, value, suffix, onChange, onTouch }: { label: string; value: string; suffix?: string; onChange: (value: string) => void; onTouch: () => void }) {
+function NumericField({ label, value, suffix, onChange, onTouch, help, lang }: { label: string; value: string; suffix?: string; onChange: (value: string) => void; onTouch: () => void; help?: string; lang: Lang }) {
   const ref = useRef<HTMLInputElement>(null);
   const caret = useRef<number | null>(null);
   useCaretEffect(() => {
@@ -155,7 +204,7 @@ function NumericField({ label, value, suffix, onChange, onTouch }: { label: stri
     ref.current.setSelectionRange(caret.current, caret.current);
     caret.current = null;
   });
-  return <label className="field"><span>{label}</span><div className="input-wrap">{suffix === "$" && <b className="prefix">$</b>}
+  return <Field label={label} help={help} lang={lang}><div className="input-wrap">{suffix === "$" && <b className="prefix">$</b>}
     <input ref={ref} type="text" inputMode="decimal" autoComplete="off" value={groupThousands(value)}
       onFocus={(event) => event.target.select()}
       onChange={(event) => {
@@ -166,7 +215,7 @@ function NumericField({ label, value, suffix, onChange, onTouch }: { label: stri
         onTouch();
         onChange(raw);
       }} />
-    {suffix && suffix !== "$" && <b className="suffix">{suffix}</b>}</div></label>;
+    {suffix && suffix !== "$" && <b className="suffix">{suffix}</b>}</div></Field>;
 }
 
 export default function Home({ lang }: { lang: Lang }) {
@@ -308,8 +357,8 @@ export default function Home({ lang }: { lang: Lang }) {
     autoTable(doc, { startY: scheduleStart + 8, head: [data.schedule[0].map(String)], body: data.schedule.slice(1).map((row) => row.map(String)), theme: "striped", headStyles: { fillColor: [16, 42, 42] }, styles: { fontSize: 6.4, cellPadding: 1.4 }, margin: { left: 8, right: 8 }, didDrawPage: (hook) => { doc.setTextColor(120); doc.setFontSize(7); doc.text(`${lang === "es" ? "Generado" : "Generated"}: ${new Date().toLocaleDateString(lang === "es" ? "es-SV" : "en-US")} · LoanPilot`, 14, hook.doc.internal.pageSize.height - 7); } });
     doc.save(`loanpilot-${data.name}-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
-  const input = (label: string, value: string, setter: (v: string) => void, suffix?: string) => <NumericField label={label} value={value} suffix={suffix} onChange={setter} onTouch={touch} />;
-  const dateInput = (label: string, value: string, setter: (v: string) => void) => <label className="field"><span>{label}</span><div className="input-wrap date-wrap"><input type="date" value={value} onChange={(e) => { touch(); setter(e.target.value); }} /></div></label>;
+  const input = (label: string, value: string, setter: (v: string) => void, suffix?: string, help?: string) => <NumericField label={label} value={value} suffix={suffix} onChange={setter} onTouch={touch} help={help} lang={lang} />;
+  const dateInput = (label: string, value: string, setter: (v: string) => void, help?: string) => <DateField label={label} lang={lang} value={value} help={help} onChange={(next) => { touch(); setter(next); }} />;
 
   return <main>
     <SiteHeader lang={lang} page="loans" />
@@ -321,11 +370,13 @@ export default function Home({ lang }: { lang: Lang }) {
         <div className="export-actions"><span>{t.exportHint}</span><button onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button><button onClick={exportExcel}><i>XLS</i>{t.exportExcel}</button></div>
       </div>
       {mode === "new" ? <div className="calculator-grid">
-        <div className="form-panel"><div className="section-title"><span>01</span><div><h2>{t.basics}</h2><p>{lang === "es" ? "Lo mínimo para una buena estimación" : "The minimum for a useful estimate"}</p></div></div><div className="field-grid">{input(t.amount, amount, setAmount, "$")}{input(t.rate, rate, setRate, "%")}{input(t.term, years, setYears, t.years)}{dateInput(t.firstDate, firstDate, setFirstDate)}</div>
+        <div className="form-panel"><div className="section-title"><span>01</span><div><h2>{t.basics}</h2><p>{lang === "es" ? "Lo mínimo para una buena estimación" : "The minimum for a useful estimate"}</p></div></div><div className="field-grid">{input(t.amount, amount, setAmount, "$", t.helpAmount)}{input(t.rate, rate, setRate, "%", t.helpRate)}{input(t.term, years, setYears, t.years, t.helpTerm)}{dateInput(t.firstDate, firstDate, setFirstDate, t.helpFirstDate)}</div>
           <button className="details-toggle" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen}><span><b>02</b><span><strong>{t.optional}</strong><small>{lang === "es" ? "Seguros, comisiones y cargos" : "Insurance, fees and charges"}</small></span></span><i>{detailsOpen ? "−" : "+"}</i></button>
-          {detailsOpen && <div className="details-body"><fieldset className="field full"><legend>{t.insurance}</legend><div className="segmented">{(["balance", "fixed", "none"] as InsuranceMode[]).map((item) => <button type="button" key={item} aria-pressed={insuranceMode === item} className={insuranceMode === item ? "active" : ""} onClick={() => setInsuranceMode(item)}>{item === "balance" ? t.insBalance : item === "fixed" ? t.insFixed : t.insNone}</button>)}</div></fieldset><div className="field-grid">{insuranceMode !== "none" && input(insuranceMode === "balance" ? t.perThousand : t.fixedMonthly, insuranceValue, setInsuranceValue, "$")}{input(t.commission, commission, setCommission, "%")}{input(t.otherFees, otherFees, setOtherFees, "$")}<label className="field"><span>{t.feeMode}</span><select value={feeMode} onChange={(e) => setFeeMode(e.target.value as "deducted" | "financed")}><option value="deducted">{t.deducted}</option><option value="financed">{t.financed}</option></select></label></div></div>}
+          {detailsOpen && <div className="details-body"><div className="field-grid"><SegmentedField full label={t.insurance} lang={lang} value={insuranceMode} onChange={setInsuranceMode}
+            options={[{ value: "balance", label: t.insBalance }, { value: "fixed", label: t.insFixed }, { value: "none", label: t.insNone }] as const} />{insuranceMode !== "none" && input(insuranceMode === "balance" ? t.perThousand : t.fixedMonthly, insuranceValue, setInsuranceValue, "$", insuranceMode === "balance" ? t.helpPerThousand : t.helpFixedMonthly)}{input(t.commission, commission, setCommission, "%", t.helpCommission)}{input(t.otherFees, otherFees, setOtherFees, "$", t.helpOtherFees)}<SelectField label={t.feeMode} lang={lang} value={feeMode} onChange={setFeeMode} help={t.helpFeeMode}
+            options={[{ value: "deducted", label: t.deducted }, { value: "financed", label: t.financed }] as const} /></div></div>}
         </div>
-        <div className="results-panel"><div className="results-kicker">{t.results}</div><div className="hero-result"><span>{t.firstTotal}</span><strong>{money.format((quote.rows[0]?.payment ?? 0) + (quote.rows[0]?.insurance ?? 0))}</strong><small>{money.format(quote.payment)} {lang === "es" ? "de préstamo + seguro variable" : "loan payment + variable insurance"}</small></div><div className="metric-grid"><div><span>{t.totalInterest}</span><b>{money.format(quote.totalInterest)}</b></div><div><span>{t.totalInsurance}</span><b>{money.format(quote.totalInsurance)}</b></div><div><span>{t.totalCost}</span><b>{money.format(quote.totalPayments)}</b></div><div className="highlight"><span>{t.effective}</span><b>{quote.effective.toFixed(2)}%</b></div><div><span>{t.cashReceived}</span><b>{money.format(quote.net)}</b></div><div><span>{t.totalFees}</span><b>{money.format(quote.fees)}</b></div></div>
+        <div className="results-panel"><div className="results-kicker">{t.results}</div><div className="result-headline"><span>{t.firstTotal}</span><strong>{money.format((quote.rows[0]?.payment ?? 0) + (quote.rows[0]?.insurance ?? 0))}</strong><small>{money.format(quote.payment)} {lang === "es" ? "de préstamo + seguro variable" : "loan payment + variable insurance"}</small></div><div className="result-tiles"><div><span>{t.totalInterest}</span><b>{money.format(quote.totalInterest)}</b></div><div><span>{t.totalInsurance}</span><b>{money.format(quote.totalInsurance)}</b></div><div><span>{t.totalCost}</span><b>{money.format(quote.totalPayments)}</b></div><div className="highlight"><span>{t.effective}</span><b>{quote.effective.toFixed(2)}%</b></div><div><span>{t.cashReceived}</span><b>{money.format(quote.net)}</b></div><div><span>{t.totalFees}</span><b>{money.format(quote.fees)}</b></div></div>
           <div className="year-chart"><div className="chart-head"><b>{t.yearly}</b><span><i className="dot interest" />{t.interest}<i className="dot insurance" />{t.charges}</span></div>{Object.entries(quote.yearly).map(([year, item]) => { const max = Math.max(...Object.values(quote.yearly).map((v) => v.interest + v.insurance), 1); return <div className="bar-row" key={year}><span>{year}</span><div className="bar-track"><i className="bar-int" style={{ width: `${(item.interest / max) * 100}%` }} /><i className="bar-ins" style={{ width: `${(item.insurance / max) * 100}%` }} /></div><b>{money.format(item.interest + item.insurance)}</b></div>; })}</div><button className="schedule-button" onClick={() => setScheduleOpen(!scheduleOpen)}>{scheduleOpen ? t.hideSchedule : t.schedule}<span>→</span></button>
         </div>
       </div> : <>
@@ -336,41 +387,42 @@ export default function Home({ lang }: { lang: Lang }) {
         {activeView === "future" ? <div className="calculator-grid active-grid">
           <div className="form-panel">
             <div className="section-title"><span>01</span><div><h2>{t.activeBasics}</h2><p>{lang === "es" ? "Usa tu último estado de cuenta" : "Use your latest statement"}</p></div></div>
-            <div className="field-grid">{input(t.currentBalance, activeBalance, setActiveBalance, "$")}{input(t.rate, activeRate, setActiveRate, "%")}{input(t.currentPayment, activePayment, setActivePayment, "$")}{dateInput(t.nextDate, nextDate, setNextDate)}{input(t.currentInsurance, activeInsurance, setActiveInsurance, "$")}</div>
+            <div className="field-grid">{input(t.currentBalance, activeBalance, setActiveBalance, "$", t.helpCurrentBalance)}{input(t.rate, activeRate, setActiveRate, "%", t.helpRate)}{input(t.currentPayment, activePayment, setActivePayment, "$", t.helpCurrentPayment)}{dateInput(t.nextDate, nextDate, setNextDate, t.helpNextDate)}{input(t.currentInsurance, activeInsurance, setActiveInsurance, "$", t.helpCurrentInsurance)}</div>
             <div className="optional-strip"><span>{t.optionalHint}</span></div>
-            <div className="field-grid muted-fields">{input(t.originalAmount, originalAmount, setOriginalAmount, "$")}{input(t.paidToDate, paidToDate, setPaidToDate, "$")}</div>
+            <div className="field-grid muted-fields">{input(t.originalAmount, originalAmount, setOriginalAmount, "$", t.helpOriginalAmount)}{input(t.paidToDate, paidToDate, setPaidToDate, "$", t.helpPaidToDate)}</div>
             <div className="section-title second"><span>02</span><div><h2>{t.extraPlan}</h2><p>{lang === "es" ? "Prueba una fecha y un monto" : "Try a date and an amount"}</p></div></div>
-            <div className="field-grid">{input(t.oneExtra, oneExtra, setOneExtra, "$")}{dateInput(t.extraDate, extraDate, setExtraDate)}{input(t.monthlyExtra, monthlyExtra, setMonthlyExtra, "$")}</div>
+            <div className="field-grid">{input(t.oneExtra, oneExtra, setOneExtra, "$", t.helpOneExtra)}{dateInput(t.extraDate, extraDate, setExtraDate, t.helpExtraDate)}{input(t.monthlyExtra, monthlyExtra, setMonthlyExtra, "$", t.helpMonthlyExtra)}</div>
           </div>
           <div className="results-panel active-results">
             <div className="results-kicker">{t.projection}</div>
             {(active.baseline.invalid || active.scenario.invalid) ? <div className="warning">! {t.badPayment}</div> : <>
               <div className="payoff-compare"><div><span>{t.payoffBefore}</span><b>{active.baseline.rows.length ? dateFmt.format(active.baseline.rows.at(-1)!.date) : "—"}</b><small>{active.baseline.rows.length} {t.months}</small></div><span className="arrow">→</span><div className="better"><span>{t.payoffAfter}</span><b>{active.scenario.rows.length ? dateFmt.format(active.scenario.rows.at(-1)!.date) : "—"}</b><small>{active.scenario.rows.length} {t.months}</small></div></div>
               <div className="savings-hero"><span>{t.interestSaved}</span><strong>{money.format(active.interestSaved)}</strong><p><b>{active.monthsSaved}</b> {t.monthsSaved.toLowerCase()}</p></div>
-              <div className="metric-grid two"><div><span>{t.originalInterest}</span><b>{money.format(active.interestBefore)}</b></div><div className="highlight"><span>{t.newInterest}</span><b>{money.format(active.interestAfter)}</b></div></div>
+              <div className="result-tiles"><div><span>{t.originalInterest}</span><b>{money.format(active.interestBefore)}</b></div><div className="highlight"><span>{t.newInterest}</span><b>{money.format(active.interestAfter)}</b></div></div>
               {n(originalAmount) > 0 && <div className="progress-block"><div><span>{lang === "es" ? "Capital amortizado" : "Principal repaid"}</span><b>{Math.max(0, Math.min(100, ((n(originalAmount) - n(activeBalance)) / n(originalAmount)) * 100)).toFixed(0)}%</b></div><div className="progress"><i style={{ width: `${Math.max(0, Math.min(100, ((n(originalAmount) - n(activeBalance)) / n(originalAmount)) * 100))}%` }} /></div><small>{money.format(n(paidToDate))} {lang === "es" ? "pagado en total (incluye interés y cargos)" : "paid in total (includes interest and charges)"}</small></div>}
             </>}
-            <div className="info-box"><span>i</span><p>{t.activeDisclaimer}</p></div>
+            <div className="callout"><span>i</span><p>{t.activeDisclaimer}</p></div>
           </div>
         </div> : <div className="calculator-grid active-grid history-grid">
           <div className="form-panel">
             <div className="section-title"><span>01</span><div><h2>{t.historyBasics}</h2><p>{t.historyBasicsHint}</p></div></div>
             <div className="field-grid">
-              {input(t.originalAmount, originalAmount, setOriginalAmount, "$")}
-              {input(t.scheduledPayment, activePayment, setActivePayment, "$")}
-              {input(t.historyInsurance, activeInsurance, setActiveInsurance, "$")}
-              {dateInput(t.originalFirstDate, historyFirstDate, setHistoryFirstDate)}
+              {input(t.originalAmount, originalAmount, setOriginalAmount, "$", t.helpOriginalAmount)}
+              {input(t.scheduledPayment, activePayment, setActivePayment, "$", t.helpScheduledPayment)}
+              {input(t.historyInsurance, activeInsurance, setActiveInsurance, "$", t.helpHistoryInsurance)}
+              {dateInput(t.originalFirstDate, historyFirstDate, setHistoryFirstDate, t.helpOriginalFirstDate)}
               <div className="derived-note"><span>{t.totalDebit}</span><b>{money.format(n(activePayment) + n(activeInsurance))}</b><small>{t.totalDebitHint}</small></div>
-              <fieldset className="field full"><legend>{t.knownInput}</legend><div className="segmented two">{(["rate", "term"] as KnownInput[]).map((item) => <button type="button" aria-pressed={history.known === item} key={item} className={history.known === item ? "active" : ""} disabled={history.termLocked && item === "term"} onClick={() => { touch(); setHistoryKnown(item); }}>{item === "rate" ? t.knownRate : t.knownTerm}</button>)}</div></fieldset>
-              {history.known === "rate" ? input(t.rate, activeRate, setActiveRate, "%") : input(t.originalTerm, historyMonths, setHistoryMonths, t.months)}
+              <SegmentedField full label={t.knownInput} lang={lang} value={history.known} onChange={(next) => { touch(); setHistoryKnown(next); }}
+                options={[{ value: "rate", label: t.knownRate }, { value: "term", label: t.knownTerm, disabled: history.termLocked }] as const} />
+              {history.known === "rate" ? input(t.rate, activeRate, setActiveRate, "%", t.helpRate) : input(t.originalTerm, historyMonths, setHistoryMonths, t.months, t.helpOriginalTerm)}
               {history.termLocked && <div className="derived-note locked"><span>{t.knownTerm}</span><b>{history.baseline.rows.length} {t.months}</b><small>{t.termLocked}</small></div>}
-              {input(t.currentBalance, activeBalance, setActiveBalance, "$")}
+              {input(t.currentBalance, activeBalance, setActiveBalance, "$", t.helpCurrentBalance)}
               {history.known === "term" && <div className="derived-note"><span>{t.estimatedRate}</span><b>{history.rateUnsolved ? "—" : `${history.annualRate.toFixed(2)}%`}</b><small>{t.estimatedRateHint}</small></div>}
             </div>
             <div className="section-title second"><span>02</span><div><h2>{t.extraHistory}</h2><p>{t.extraHistoryHint}</p></div></div>
             <div className="extra-entry">
-              {dateInput(t.extraDate, historyExtraDate, setHistoryExtraDate)}
-              {input(t.oneExtra, historyExtraAmount, setHistoryExtraAmount, "$")}
+              {dateInput(t.extraDate, historyExtraDate, setHistoryExtraDate, t.helpExtraDate)}
+              {input(t.oneExtra, historyExtraAmount, setHistoryExtraAmount, "$", t.helpOneExtra)}
               <button className="add-extra" onClick={addHistoryExtra}>+ {t.addExtra}</button>
             </div>
             <div className="extra-ledger">
@@ -378,8 +430,8 @@ export default function Home({ lang }: { lang: Lang }) {
             </div>
             <div className="section-title second"><span>03</span><div><h2>{t.rateHistory}</h2><p>{t.rateHistoryHint}</p></div></div>
             <div className="extra-entry rate-entry">
-              {dateInput(t.changeDate, changeDate, setChangeDate)}
-              {input(t.newRate, changeRate, setChangeRate, "%")}
+              {dateInput(t.changeDate, changeDate, setChangeDate, t.helpChangeDate)}
+              {input(t.newRate, changeRate, setChangeRate, "%", t.helpNewRate)}
               {input(`${t.newPayment} (${t.newPaymentHint})`, changePayment, setChangePayment, "$")}
               <button className="add-extra" onClick={addRateChange}>+ {t.addChange}</button>
             </div>
@@ -394,11 +446,11 @@ export default function Home({ lang }: { lang: Lang }) {
               <div className="today-saving"><span>{t.savedToDate}</span><b>{money.format(history.savedToDate)}</b><small>{lang === "es" ? "ya no se generaron gracias a tus abonos anteriores" : "already avoided because of your past prepayments"}</small></div>
               <div className="payoff-compare"><div><span>{t.payoffBefore}</span><b>{history.baseline.rows.length ? dateFmt.format(history.baseline.rows.at(-1)!.date) : "—"}</b><small>{history.baseline.rows.length} {t.months}</small></div><span className="arrow">→</span><div className="better"><span>{t.payoffAfter}</span><b>{history.scenario.rows.length ? dateFmt.format(history.scenario.rows.at(-1)!.date) : "—"}</b><small>{history.scenario.rows.length} {t.months}</small></div></div>
               <div className="balance-compare"><div><span>{t.balanceWithout}</span><b>{money.format(history.balanceTodayWithout)}</b></div><span>− {money.format(history.balanceReduction)}</span><div><span>{t.balanceWith}</span><b>{money.format(history.balanceTodayWith)}</b></div></div>
-              <div className="metric-grid two"><div><span>{t.extrasTotal}</span><b>{money.format(history.extrasTotal)}</b></div><div className="highlight"><span>{t.balanceReduction}</span><b>{money.format(history.balanceReduction)}</b></div></div>
+              <div className="result-tiles"><div><span>{t.extrasTotal}</span><b>{money.format(history.extrasTotal)}</b></div><div className="highlight"><span>{t.balanceReduction}</span><b>{money.format(history.balanceReduction)}</b></div></div>
               {n(activeInsurance) > 0 && <div className="statement-check"><span>{t.insurancePaid}<small>{t.insurancePaidHint}</small></span><b>{money.format(history.insuranceTotal)}</b></div>}
               {n(activeBalance) > 0 && <div className="statement-check"><span>{lang === "es" ? "Comparado con tu estado de cuenta" : "Compared with your statement"}</span><b>{money.format(Math.abs(history.balanceTodayWith - n(activeBalance)))} {lang === "es" ? "de diferencia" : "difference"}</b></div>}
             </>}
-            <div className="info-box"><span>i</span><p>{t.historyDisclaimer}</p></div>
+            <div className="callout"><span>i</span><p>{t.historyDisclaimer}</p></div>
           </div>
         </div>}
       </>}

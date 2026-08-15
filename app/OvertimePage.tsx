@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { CheckField, MoneyField, NumberField, SelectField, TimeField } from "./fields";
 import {
   calculateOvertime,
   NIGHT_ENDS_AT,
@@ -186,6 +187,23 @@ const copy = {
       ["Extra nocturna", "El MTPS aplica el 25% nocturno sobre la hora ya duplicada: equivale a 2.5 veces la hora básica.", "%"],
       ["Días especiales", "En descanso, la extra diurna vale 3 veces la hora; en asueto vale 4. La nocturnidad se aplica sobre esas bases.", "§"],
     ],
+    helpSalary: "Tu salario mensual ordinario, antes de descuentos. De aquí sale la hora básica: el salario del día dividido entre las horas pactadas de tu jornada.",
+    helpShift: "El tipo de jornada que tenés pactada. Define cuántas horas son ordinarias antes de que empiece a contar la hora extra.",
+    helpDayHours: "Las horas que dura tu jornada ordinaria diaria según el contrato, sin contar las extras. No es lo que trabajaste, es lo pactado.",
+    helpShiftCount: "Cuántos turnos de esa duración hiciste en el mes. Solo aparece cuando la jornada declarada pasa del límite legal diario.",
+    helpDiurnal: `Horas extra trabajadas entre las ${NIGHT_ENDS_AT}:00 y las ${NIGHT_STARTS_AT}:00, en día laboral normal. Se pagan al doble de la hora básica.`,
+    helpNocturnal: `Horas extra trabajadas entre las ${NIGHT_STARTS_AT}:00 y las ${NIGHT_ENDS_AT}:00, en día laboral normal. Valen 2.5 veces la hora básica, no 2.25: el 25% nocturno va sobre la hora ya duplicada.`,
+    helpNightOrdinary: "Horas de tu jornada ordinaria —no extras— que caen en horario nocturno. Llevan el recargo del 25% aunque no sean tiempo extra.",
+    helpMinorDaily: "Horas extra de una persona menor de 16 años, que tienen límite diario propio. Solo aparece si elegiste esa jornada.",
+    helpRestDays: "Cuántos días de descanso semanal trabajaste en el mes. El día completo se paga aparte de las horas extra que hayas hecho en él.",
+    helpRestOrdinary: "Horas ordinarias trabajadas en tu día de descanso, dentro de la jornada normal. Las que pasen de ahí van en las casillas de extra.",
+    helpRestExtra: "Horas que en tu día de descanso pasaron de la jornada ordinaria. En descanso la extra diurna vale 3 veces la hora básica.",
+    helpHolidays: "Cuántos días de asueto trabajaste en el mes. Cada uno se paga además del salario del día.",
+    helpCoincident: "Días en que el asueto cayó justo en tu día de descanso. Se cuentan aparte para no pagar dos veces el mismo día.",
+    helpHolidayExtra: "Horas que en el asueto pasaron de la jornada ordinaria. En asueto la extra diurna vale 4 veces la hora básica.",
+    helpHelperStart: "La hora a la que entraste. Sirve para que la herramienta reparta sola el turno entre horas diurnas y nocturnas.",
+    helpHelperEnd: "La hora a la que saliste. Si es menor que la de entrada se entiende que el turno cruza la medianoche.",
+    helpHelperShifts: "Cuántas veces repetiste ese mismo turno en el mes, para multiplicar el reparto que calcule.",
   },
   en: {
     heroTitle: "Every extra hour, paid the way the law says.",
@@ -353,6 +371,23 @@ const copy = {
       ["Night overtime", "The MTPS applies the 25% night premium to the already doubled hour: 2.5 times the basic hour.", "%"],
       ["Special days", "Daytime overtime is 3 times the basic hour on a rest day and 4 times on a holiday; the night premium applies to those bases.", "§"],
     ],
+    helpSalary: "Your ordinary monthly salary, before deductions. The basic hour comes from it: the daily salary divided by the contracted hours of your working day.",
+    helpShift: "The type of working day in your contract. It sets how many hours count as ordinary before overtime starts.",
+    helpDayHours: "How many hours your ordinary daily shift lasts under the contract, excluding overtime. Not what you worked — what was agreed.",
+    helpShiftCount: "How many shifts of that length you worked in the month. It only appears when the declared shift exceeds the daily legal limit.",
+    helpDiurnal: `Overtime hours worked between ${NIGHT_ENDS_AT}:00 and ${NIGHT_STARTS_AT}:00 on an ordinary working day. They pay twice the basic hour.`,
+    helpNocturnal: `Overtime hours worked between ${NIGHT_STARTS_AT}:00 and ${NIGHT_ENDS_AT}:00 on an ordinary working day. They are worth 2.5 times the basic hour, not 2.25: the 25% night premium applies to the already doubled hour.`,
+    helpNightOrdinary: "Hours of your ordinary shift — not overtime — that fall in the night window. They carry the 25% premium even though they are not extra time.",
+    helpMinorDaily: "Overtime worked by someone under 16, which has its own daily limit. It only appears if you selected that shift type.",
+    helpRestDays: "How many weekly rest days you worked during the month. The full day is paid separately from any overtime worked on it.",
+    helpRestOrdinary: "Ordinary hours worked on your rest day, within the normal shift length. Anything beyond that goes in the overtime boxes.",
+    helpRestExtra: "Hours on your rest day that went beyond the ordinary shift. On a rest day, daytime overtime is worth 3 times the basic hour.",
+    helpHolidays: "How many public holidays you worked during the month. Each is paid on top of the day's salary.",
+    helpCoincident: "Days where the holiday fell on your rest day. They are counted separately so the same day is not paid twice.",
+    helpHolidayExtra: "Hours on the holiday that went beyond the ordinary shift. On a holiday, daytime overtime is worth 4 times the basic hour.",
+    helpHelperStart: "The time you clocked in. It lets the tool split the shift into daytime and night hours for you.",
+    helpHelperEnd: "The time you clocked out. If it is earlier than the start, the shift is taken to cross midnight.",
+    helpHelperShifts: "How many times you repeated that same shift during the month, so the split is multiplied accordingly.",
   },
 } as const;
 
@@ -418,24 +453,9 @@ const ISSUE_FIELDS: Record<OvertimeValidationIssue, FieldKey[]> = {
   minorDailyOvertimeLimit: ["minorDaily"],
 };
 
-function HourField({ label, value, onChange, note, step = "0.5", max = "744", invalid = false }: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  note?: string;
-  step?: string;
-  max?: string;
-  invalid?: boolean;
-}) {
-  return <label className="field">
-    <span>{label}</span>
-    <div className={`input-wrap${invalid ? " invalid" : ""}`}>
-      <input type="number" min="0" max={max} step={step} inputMode="decimal" value={value}
-        aria-invalid={invalid || undefined}
-        onChange={(event) => onChange(event.target.value)} />
-    </div>
-    {note && <small className="field-note">{note}</small>}
-  </label>;
+/** NumberField with the defaults an hour count wants: halves, up to a month. */
+function HourField(props: Omit<Parameters<typeof NumberField>[0], "step" | "max"> & { step?: string; max?: string }) {
+  return <NumberField step="0.5" max="744" {...props} />;
 }
 
 export default function OvertimePage({ lang }: { lang: Lang }) {
@@ -706,36 +726,24 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
       </div>}
-      <div className="legal-calculator-grid">
-        <div className="form-panel legal-form">
+      <div className="calculator-grid">
+        <div className="form-panel">
           <div className="section-title"><span>01</span><div><h2>{t.data}</h2><p>{t.dataHint}</p></div></div>
           <div className="field-grid">
-            <label className="field">
-              <span>{t.salary}</span>
-              <div className={`input-wrap${bad("salary") ? " invalid" : ""}`}><b className="prefix">$</b>
-                <input type="number" min="0" step="0.01" inputMode="decimal" value={monthlySalary}
-                  aria-invalid={bad("salary") || undefined}
-                  onChange={(event) => setMonthlySalary(event.target.value)} />
-              </div>
-              <small className="field-note">{t.salaryHint}</small>
-            </label>
-            <label className="field">
-              <span>{t.shift}</span>
-              <select value={shiftKind} onChange={(event) => selectShift(event.target.value as ShiftKind)}>
-                {(Object.keys(SHIFT_LIMITS) as ShiftKind[]).map((kind) =>
-                  <option key={kind} value={kind}>{t.shifts[kind]}</option>)}
-              </select>
-              <small className="field-note">{t.shiftNotes[shiftKind]}</small>
-            </label>
+            <MoneyField label={t.salary} lang={lang} value={monthlySalary} onChange={setMonthlySalary}
+              note={t.salaryHint} help={t.helpSalary} invalid={bad("salary")} />
+            <SelectField label={t.shift} lang={lang} value={shiftKind} onChange={selectShift}
+              note={t.shiftNotes[shiftKind]} help={t.helpShift}
+              options={(Object.keys(SHIFT_LIMITS) as ShiftKind[]).map((kind) => ({ value: kind, label: t.shifts[kind] }))} />
             {/* El máximo deja de ser un tope duro del campo: un turno de 12×12
                 es real, y la herramienta ahora lo reparte en vez de rechazarlo. */}
-            <HourField label={t.dayHours} value={dayHours} onChange={setDayHours} invalid={bad("dayHours")}
+            <HourField label={t.dayHours} value={dayHours} onChange={setDayHours} invalid={bad("dayHours")} help={t.helpDayHours} lang={lang}
               note={t.dayHoursHint(result.shiftLimit.day, result.shiftLimit.week)}
               step="0.5" max="24" />
-            {result.exceedsOrdinaryDay && <HourField label={t.shiftCount} value={shifts} onChange={setShifts}
+            {result.exceedsOrdinaryDay && <HourField label={t.shiftCount} value={shifts} onChange={setShifts} help={t.helpShiftCount} lang={lang}
               note={t.shiftCountHint} invalid={bad("shifts")} step="1" max="31" />}
           </div>
-          {result.exceedsOrdinaryDay && <div className="legal-callout extended-shift">
+          {result.exceedsOrdinaryDay && <div className="callout extended-shift">
             <span>§</span><div>
               <b>{t.extendedTitle}</b>
               <p>{t.extendedBody(result.ordinaryDayHours, result.legalOrdinaryDayHours, result.extendedShiftHours)}</p>
@@ -746,29 +754,22 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
           </div>}
 
           <div className="section-title second"><span>02</span><div><h2>{t.extras}</h2><p>{t.extrasHint}</p></div></div>
-          <label className="check-field">
-            <input type="checkbox" checked={showHelper}
-              onChange={(event) => { setShowHelper(event.target.checked); setHelperApplied(false); }} />
-            <span>{t.helperToggle}</span>
-          </label>
+          <CheckField label={t.helperToggle} checked={showHelper}
+            onChange={(checked) => { setShowHelper(checked); setHelperApplied(false); }} />
           {showHelper && <div className="shift-helper">
             <p className="field-note">{t.helperHint}</p>
             <div className="field-grid special-grid">
-              <label className="field"><span>{t.helperStart}</span>
-                <div className="input-wrap date-wrap"><input type="time" value={helperStart}
-                  onChange={(event) => { setHelperStart(event.target.value); setHelperApplied(false); }} /></div>
-              </label>
-              <label className="field"><span>{t.helperEnd}</span>
-                <div className="input-wrap date-wrap"><input type="time" value={helperEnd}
-                  onChange={(event) => { setHelperEnd(event.target.value); setHelperApplied(false); }} /></div>
-              </label>
-              <HourField label={t.helperShifts} value={helperShifts}
+              <TimeField label={t.helperStart} lang={lang} value={helperStart} help={t.helpHelperStart}
+                onChange={(value) => { setHelperStart(value); setHelperApplied(false); }} />
+              <TimeField label={t.helperEnd} lang={lang} value={helperEnd} help={t.helpHelperEnd}
+                onChange={(value) => { setHelperEnd(value); setHelperApplied(false); }} />
+              <HourField label={t.helperShifts} value={helperShifts} help={t.helpHelperShifts} lang={lang}
                 onChange={(value) => { setHelperShifts(value); setHelperApplied(false); }} step="1" max="31" />
             </div>
             {split.invalid
-              ? <div className="legal-callout warn" role="alert"><span>!</span>
+              ? <div className="callout warn" role="alert"><span>!</span>
                   <p>{split.issues.map((issue) => t.helperIssue(issue)).join(" ")}</p></div>
-              : <div className="legal-callout helper-outcome">
+              : <div className="callout helper-outcome">
                   <span>◷</span><div>
                     <b>{t.helperSplit(split.totalHours, split.dayHours, split.nightHours)}</b>
                     {split.classifiedNocturnal && helperPair && <p>{t.helperNocturnal(nocturnalFrom, SHIFT_LIMITS[helperKind].day)}</p>}
@@ -782,31 +783,27 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
                 </div>}
           </div>}
           <div className="field-grid">
-            <HourField label={t.diurnal} value={diurnal} onChange={setDiurnal} invalid={bad("diurnal")} />
-            <HourField label={t.nocturnal} value={nocturnal} onChange={setNocturnal} invalid={bad("nocturnal")} />
-            <HourField label={t.nightOrdinary} value={nightOrdinary} onChange={setNightOrdinary} invalid={bad("nightOrdinary")}
+            <HourField label={t.diurnal} value={diurnal} onChange={setDiurnal} invalid={bad("diurnal")} help={t.helpDiurnal} lang={lang} />
+            <HourField label={t.nocturnal} value={nocturnal} onChange={setNocturnal} invalid={bad("nocturnal")} help={t.helpNocturnal} lang={lang} />
+            <HourField label={t.nightOrdinary} value={nightOrdinary} onChange={setNightOrdinary} invalid={bad("nightOrdinary")} help={t.helpNightOrdinary} lang={lang}
               note={t.nightOrdinaryHint} />
-            {shiftKind === "minorUnder16" && <HourField label={t.minorDaily} value={minorDailyOvertime}
+            {shiftKind === "minorUnder16" && <HourField label={t.minorDaily} value={minorDailyOvertime} help={t.helpMinorDaily} lang={lang}
               onChange={setMinorDailyOvertime} invalid={bad("minorDaily")} note={t.minorDailyHint} max="2" />}
           </div>
 
           <div className="section-title second"><span>03</span><div><h2>{t.special}</h2><p>{t.specialHint}</p></div></div>
-          <label className="check-field">
-            <input type="checkbox" checked={showSpecialDays}
-              onChange={(event) => setShowSpecialDays(event.target.checked)} />
-            <span>{t.specialToggle}</span>
-          </label>
+          <CheckField label={t.specialToggle} checked={showSpecialDays} onChange={setShowSpecialDays} />
           {showSpecialDays && <>
             <div className="field-grid special-grid">
-              <HourField label={t.restDays} value={restDays} onChange={setRestDays} invalid={bad("restDays")} step="1" max="31" />
-              <HourField label={t.restOrdinary} value={restOrdinary} onChange={setRestOrdinary} invalid={bad("restOrdinary")} note={t.totalHint} />
-              <HourField label={t.restExtraDay} value={restExtraDay} onChange={setRestExtraDay} invalid={bad("restExtraDay")} note={t.totalHint} />
-              <HourField label={t.restExtraNight} value={restExtraNight} onChange={setRestExtraNight} invalid={bad("restExtraNight")} note={t.totalHint} />
-              <HourField label={t.holidays} value={holidays} onChange={setHolidays} invalid={bad("holidays")} step="1" max="31" />
-              <HourField label={t.coincident} value={coincident} onChange={setCoincident} invalid={bad("coincident")}
+              <HourField label={t.restDays} value={restDays} onChange={setRestDays} invalid={bad("restDays")} step="1" max="31" help={t.helpRestDays} lang={lang} />
+              <HourField label={t.restOrdinary} value={restOrdinary} onChange={setRestOrdinary} invalid={bad("restOrdinary")} note={t.totalHint} help={t.helpRestOrdinary} lang={lang} />
+              <HourField label={t.restExtraDay} value={restExtraDay} onChange={setRestExtraDay} invalid={bad("restExtraDay")} note={t.totalHint} help={t.helpRestExtra} lang={lang} />
+              <HourField label={t.restExtraNight} value={restExtraNight} onChange={setRestExtraNight} invalid={bad("restExtraNight")} note={t.totalHint} help={t.helpRestExtra} lang={lang} />
+              <HourField label={t.holidays} value={holidays} onChange={setHolidays} invalid={bad("holidays")} step="1" max="31" help={t.helpHolidays} lang={lang} />
+              <HourField label={t.coincident} value={coincident} onChange={setCoincident} invalid={bad("coincident")} help={t.helpCoincident} lang={lang}
                 note={t.coincidentHint} step="1" max="31" />
-              <HourField label={t.holidayExtraDay} value={holidayExtraDay} onChange={setHolidayExtraDay} invalid={bad("holidayExtraDay")} note={t.totalHint} />
-              <HourField label={t.holidayExtraNight} value={holidayExtraNight} onChange={setHolidayExtraNight} invalid={bad("holidayExtraNight")} note={t.totalHint} />
+              <HourField label={t.holidayExtraDay} value={holidayExtraDay} onChange={setHolidayExtraDay} invalid={bad("holidayExtraDay")} note={t.totalHint} help={t.helpHolidayExtra} lang={lang} />
+              <HourField label={t.holidayExtraNight} value={holidayExtraNight} onChange={setHolidayExtraNight} invalid={bad("holidayExtraNight")} note={t.totalHint} help={t.helpHolidayExtra} lang={lang} />
             </div>
             <p className="field-note payroll-note">{t.holidayOrdinaryNote}</p>
             {result.restDaysWorked > 0 && result.restHoursWorked > 0 && <p className="field-note entry-echo">
@@ -821,38 +818,38 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
         {/* La región viva es sólo el total. Envolviendo el panel entero, cada
             tecla hacía que un lector de pantalla releyera desglose, tarjetas,
             avisos y descargo completos. */}
-        <div className="results-panel legal-results">
+        <div className="results-panel">
           <div className="results-kicker">{t.result}</div>
-          {result.incomplete ? <div className="legal-callout results-empty">
+          {result.incomplete ? <div className="callout results-empty">
             <span>$</span><div><b>{t.emptyTitle}</b><p>{t.emptyLead}</p></div>
-          </div> : result.invalid ? <div className="legal-callout warn validation-callout" role="alert">
+          </div> : result.invalid ? <div className="callout warn validation-callout" role="alert">
             <span>!</span><div>
               <b>{t.invalidTitle}</b>
               {result.issues.map((issue) => <p key={issue}>• {t.validation(issue, result.shiftLimit.day)}</p>)}
             </div>
           </div> : <>
-            <div className="legal-total" aria-live="polite" aria-atomic="true">
+            <div className="result-headline" aria-live="polite" aria-atomic="true">
               <span>{t.total}</span><strong>{money.format(result.total)}</strong>
               <small>{t.hourly}: {money.format(result.hourly)} · {t.daily}: {money.format(result.dailySalary)}</small>
             </div>
             {activeLines.length > 0
-              ? <div className="legal-breakdown">{activeLines.map((line) => <div key={line.label} className={line.primary ? "primary" : ""}>
+              ? <div className="result-tiles">{activeLines.map((line) => <div key={line.label} className={line.primary ? "primary" : ""}>
                 <span>{line.label}</span><b>{money.format(line.value)}</b><i>{line.formula}</i>
               </div>)}</div>
               : <p className="breakdown-empty">{t.noHoursYet}</p>}
-            <div className="legal-facts">
+            <div className="result-facts">
               <div><span>{t.perHourDiurnal}</span><b>{money.format(result.overtimeDiurnalRate)}</b></div>
               <div><span>{t.perHourNocturnal}</span><b>{money.format(result.overtimeNocturnalRate)}</b></div>
             </div>
-            {(result.restDaysWorked > 0 || result.holidaysWorked > 0) && <div className="legal-facts">
+            {(result.restDaysWorked > 0 || result.holidaysWorked > 0) && <div className="result-facts">
               {result.restDaysWorked > 0 && <div><span>{t.restFull}</span><b>{money.format(result.restDayFullValue)}</b><small>{t.restFullNote}</small></div>}
               {result.holidaysWorked > 0 && <div><span>{t.holidayFull}</span><b>{money.format(result.holidayFullValue)}</b><small>{t.holidayFullNote}</small></div>}
             </div>}
-            {result.compensatoryDays > 0 && <div className="legal-callout"><span>§</span><p>{t.compensatory(result.compensatoryDays)}</p></div>}
+            {result.compensatoryDays > 0 && <div className="callout"><span>§</span><p>{t.compensatory(result.compensatoryDays)}</p></div>}
           </>}
-          {result.nightPremiumMayBeIncluded && <div className="legal-callout warn"><span>!</span><p>{t.nightIncluded}</p></div>}
-          <div className="legal-callout"><span>i</span><p>{t.occasional}</p></div>
-          <div className="legal-callout warn"><span>!</span><p>{t.forceMajeure}</p></div>
+          {result.nightPremiumMayBeIncluded && <div className="callout warn"><span>!</span><p>{t.nightIncluded}</p></div>}
+          <div className="callout"><span>i</span><p>{t.occasional}</p></div>
+          <div className="callout warn"><span>!</span><p>{t.forceMajeure}</p></div>
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>

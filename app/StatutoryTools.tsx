@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
+import { CheckField, DateField, FieldGroup, MoneyField, NumberField, SegmentedField, SelectField } from "./fields";
 import { isoAfterMonths, todayIso } from "./loan";
 import type { Lang } from "./routes";
 import { OFFICIAL } from "./sources";
 import {
-  calculatePayrollWithholding, calculateSettlement, DAILY_MINIMUM_WAGE,
+  calculatePayrollWithholding, calculateRecalculation, calculateSettlement, DAILY_MINIMUM_WAGE,
   DECEMBER_RECALC_TABLE, EARLIEST_EMPLOYMENT_DATE, JUNE_RECALC_TABLE, WITHHOLDING_TABLES,
-  type EmploymentEnd, type PayFrequency, type WageSector, type WithholdingBand,
+  withholdingForTaxable,
+  type EmploymentEnd, type PayFrequency, type RecalcPeriod, type WageSector, type WithholdingBand,
 } from "./statutory";
 
 type Tool = "settlement" | "withholding";
@@ -43,14 +45,40 @@ const copy = {
     taxableBefore: "Remuneración gravada antes de deducción fija", taxable: "Base usada en la tabla", band: "Tramo aplicado",
     fiscalDeduction: "Deducción fiscal prorrateada", notCash: "Reduce la base de renta; no se descuenta del pago.",
     noFixed: "La deducción fija de $1,600 corresponde a asalariados con monto anual igual o inferior a $9,100.",
+    fixedOnlyBandTwo: "El literal e) del decreto deja los $1,600 fuera únicamente del Tramo II. Los Tramos III y IV ya los traen incorporados en sus límites, así que aquí no se restan de nuevo.",
     tableTitle: "Tabla oficial para pagos", from: "Desde", to: "Hasta", rate: "%", excess: "Sobre exceso de", fixed: "Cuota fija",
     noRetention: "Sin retención", onwards: "En adelante", recalc: "Tablas de recálculo de junio y diciembre",
     officialPdf: "PDF oficial",
     june: "Junio · acumulado enero-junio", december: "Diciembre · acumulado anual",
-    recalcNote: "En junio y diciembre el patrono debe recalcular con las remuneraciones gravadas acumuladas y restar lo ya retenido. Esta calculadora muestra el período ordinario; las tablas acumuladas quedan visibles para auditoría.",
+    recalcNote: "En junio y diciembre el patrono debe recalcular con las remuneraciones gravadas acumuladas y restar lo ya retenido. Estas son las dos tablas que usa ese recálculo.",
+    recalcTitle: "Recálculo acumulado", recalcSubtitle: "Art. 1 literal f) del Decreto Ejecutivo 10/2025",
+    recalcPeriodLabel: "Período del recálculo", juneOption: "Junio (primero)", decemberOption: "Diciembre (segundo)",
+    accTaxable: "Remuneración gravada acumulada",
+    accTaxableJune: "Enero a junio, haya sido objeto de retención o no.",
+    accTaxableDecember: "Todo el ejercicio, haya sido objeto de retención o no.",
+    accWithheld: "Retenciones ya efectuadas", accWithheldJune: "Suma de enero a mayo.", accWithheldDecember: "Suma de enero a noviembre.",
+    recalcExclusions: "Deja fuera las remuneraciones con retención definitiva y las sujetas al 10% de un segundo patrono (literal h).",
+    settledTaxLabel: "Impuesto del acumulado", alreadyWithheld: "Ya retenido", toWithhold: "A retener en el mes", excessLabel: "Retenido de más",
+    excessNote: "La diferencia negativa no se retiene, pero tampoco se devuelve por planilla: el literal i) deja al trabajador la declaración anual o la solicitud de devolución.",
+    recalcDeductionNote: "El decreto extiende la deducción de $1,600 al Tramo II de estas tablas. Aquí se prorratea a los meses que cubre cada recálculo — $800 en junio y $1,600 en diciembre — porque es lo que mantiene la continuidad con las retenciones mensuales.",
+    recalcEmployerNote: "Si hubo cambio de patrono, el recálculo lo hace el último del período y los acumulados deben incluir lo del anterior, según su constancia de retención.",
     taxDecree: "Decreto Ejecutivo 10/2025: tablas de retención", taxLaw: "Ley de Impuesto sobre la Renta: arts. 29, 37 y 65",
     isssSource: "ISSS: tasa laboral y techo de cotización", pensionSource: "SSF: Ley Integral del Sistema de Pensiones",
     invalidDates: "Revisa las fechas: el último día de trabajo debe ser posterior al ingreso y ambas deben caer entre 1950 y 2100.",
+    helpStart: "El primer día que trabajaste para este patrono, tal como aparece en el contrato. De aquí sale la antigüedad, que define los días de indemnización y de aguinaldo.",
+    helpEnd: "El último día que trabajaste, no el día que te avisaron ni el día que te pagaron. Se cuenta como día trabajado y con él se elige la tabla de salario mínimo vigente.",
+    helpSalary: "El salario mensual ordinario, antes de descuentos. Si tenés comisiones habituales, promedialas y sumalas; no incluyas viáticos ni pagos que no sean salario.",
+    helpSector: "La actividad económica del patrono, no tu puesto. Solo se usa para el tope de la indemnización: el artículo 58 la limita a cuatro salarios mínimos diarios del sector.",
+    helpPendingDays: "Días ya trabajados que todavía no te han pagado al momento de salir. Si estás al día, dejá cero.",
+    helpUnusedVacation: "Períodos completos de vacaciones que cumpliste y nunca te dieron. Es el año completo de servicio que genera los 15 días, no días sueltos: la fracción del año en curso se calcula aparte.",
+    helpGross: "Todo lo que te pagan en el período antes de descuentos, contando lo gravado con renta. La Quincena 25 no va aquí porque el D.L. 499 la declara renta no gravable.",
+    helpFrequency: "Cada cuánto te pagan. Cambia la tabla que se aplica y cómo se prorratean el techo del ISSS y la deducción fija.",
+    helpAnnualGross: "Lo que sumás en el año de renta gravada. Solo decide si tenés derecho a la deducción de $1,600, que corresponde hasta $9,100 anuales. Si lo dejás vacío se estima multiplicando este período.",
+    helpAccTaxable: "La suma de las remuneraciones gravadas del período, ya descontados AFP e ISSS. Entra todo lo gravado aunque en su mes no se le haya retenido nada.",
+    helpAccWithheld: "La suma de lo que ya se te retuvo de renta en los meses anteriores del período. Si cambiaste de patrono, incluí también lo del anterior según su constancia.",
+    differsLead: "Otras calculadoras muestran", differsTail: "en esta casilla, porque aplican la tabla sin restar la deducción de $1,600. Hasta abril de 2025 eso era lo correcto.",
+    differsSummary: "¿Por qué otra calculadora me da un resultado distinto?",
+    differsBody: "Hasta abril de 2025, el literal e) del D.E. 95/2015 decía que las tablas «contienen» la deducción de $1,600, así que no había que restarla aparte y la retención empezaba en un bruto de $612.82. El D.E. 10/2025 lo invirtió: su literal e) se titula «Deducciones no incorporadas» y establece que los valores del Tramo II no la contienen «por lo tanto, para efectos de aplicar la respectiva retención deben ser consideradas en el cálculo correspondiente». Con esa deducción, quien gana hasta $758.33 al mes no retiene nada, y es lo que corresponde: sus $9,100 anuales, menos cotizaciones y menos los $1,600, quedan bajo los $6,600 exentos del artículo 37, así que su declaración anual liquida cero. Una calculadora que no la reste le retiene alrededor de $306 al año que después tendría que solicitar en devolución. Muchas planillas del país siguen con la regla anterior, así que puede que el descuento real que veas sea el otro.",
   },
   en: {
     data: "Employment details", result: "Gross estimate", start: "Employment start date", end: "Last day worked",
@@ -83,14 +111,40 @@ const copy = {
     taxableBefore: "Taxable remuneration before fixed deduction", taxable: "Table tax base", band: "Applied band",
     fiscalDeduction: "Prorated tax deduction", notCash: "Reduces the income-tax base; it is not taken from pay.",
     noFixed: "The $1,600 fixed deduction applies to employees with annual amounts of $9,100 or less.",
+    fixedOnlyBandTwo: "Literal e) of the decree leaves the $1,600 out of band II alone. Bands III and IV already build it into their limits, so it is not subtracted again here.",
     tableTitle: "Official table for", from: "From", to: "To", rate: "%", excess: "Excess over", fixed: "Fixed amount",
     noRetention: "No withholding", onwards: "And above", recalc: "June and December recalculation tables",
     officialPdf: "Official PDF",
     june: "June · January-June cumulative", december: "December · annual cumulative",
-    recalcNote: "In June and December, employers recalculate using cumulative taxable remuneration and subtract prior withholding. This calculator covers an ordinary pay period; the cumulative tables remain visible for audit.",
+    recalcNote: "In June and December, employers recalculate using cumulative taxable remuneration and subtract prior withholding. These are the two tables that recalculation uses.",
+    recalcTitle: "Cumulative recalculation", recalcSubtitle: "Article 1 literal f) of Executive Decree 10/2025",
+    recalcPeriodLabel: "Recalculation period", juneOption: "June (first)", decemberOption: "December (second)",
+    accTaxable: "Cumulative taxable remuneration",
+    accTaxableJune: "January to June, whether it was withheld on or not.",
+    accTaxableDecember: "The whole tax year, whether it was withheld on or not.",
+    accWithheld: "Withholding already made", accWithheldJune: "January to May total.", accWithheldDecember: "January to November total.",
+    recalcExclusions: "Leave out remuneration under final withholding and pay subject to a second employer's 10% (literal h).",
+    settledTaxLabel: "Tax on the cumulative base", alreadyWithheld: "Already withheld", toWithhold: "To withhold this month", excessLabel: "Over-withheld",
+    excessNote: "A negative difference withholds nothing, but payroll does not refund it either: literal i) leaves the worker the annual return or a refund request.",
+    recalcDeductionNote: "The decree extends the $1,600 deduction to band II of these tables. It is prorated here to the months each recalculation covers — $800 in June and $1,600 in December — because that is what keeps it continuous with the monthly withholding.",
+    recalcEmployerNote: "After a change of employer the last one in the period runs the recalculation, and the cumulative figures must include the previous employer's, per its withholding certificate.",
     taxDecree: "Executive Decree 10/2025: withholding tables", taxLaw: "Income Tax Law: articles 29, 37 and 65",
     isssSource: "ISSS: employee rate and contribution ceiling", pensionSource: "SSF: Integral Pension System Law",
     invalidDates: "Check the dates: the last day worked must be after the start date and both must fall between 1950 and 2100.",
+    helpStart: "The first day you worked for this employer, as the contract states it. Length of service comes from here, and it sets the severance and year-end bonus days.",
+    helpEnd: "The last day you actually worked — not the day you were told, nor the day you were paid. It counts as a worked day and it picks the minimum wage table in force.",
+    helpSalary: "The ordinary monthly salary before deductions. Average any recurring commissions and add them; leave out travel allowances and anything that is not salary.",
+    helpSector: "The employer's line of business, not your job title. It is only used for the severance cap: article 58 limits it to four daily minimum wages for that sector.",
+    helpPendingDays: "Days already worked that had not been paid when you left. Leave it at zero if you were paid up to date.",
+    helpUnusedVacation: "Complete vacation periods you earned and never took. It means a full year of service, which is what grants the 15 days — the current year's fraction is worked out separately.",
+    helpGross: "Everything paid to you in the period before deductions, counting what is taxable. The Quincena 25 does not belong here: Decree 499 declares it non-taxable income.",
+    helpFrequency: "How often you are paid. It changes which table applies and how the ISSS ceiling and the fixed deduction are prorated.",
+    helpAnnualGross: "What you add up in taxable income for the year. It only decides whether you qualify for the $1,600 deduction, which applies up to $9,100 a year. Left empty, it is estimated from this period.",
+    helpAccTaxable: "The sum of taxable remuneration for the period, already net of pension and ISSS. Everything taxable counts, even months where nothing was withheld.",
+    helpAccWithheld: "The sum of income tax already withheld from you in the earlier months of the period. After a change of employer, include the previous one's per its certificate.",
+    differsLead: "Other calculators show", differsTail: "in this box, because they apply the table without subtracting the $1,600 deduction. Until April 2025 that was the correct reading.",
+    differsSummary: "Why does another calculator give me a different result?",
+    differsBody: "Until April 2025, literal e) of Decree 95/2015 said the tables already \"contain\" the $1,600 deduction, so there was nothing to subtract separately and withholding began at a gross of $612.82. Decree 10/2025 reversed it: its literal e) is headed \"Deductions not incorporated\" and states that the band II figures do not contain it, \"therefore, for the purposes of applying the respective withholding they must be considered in the corresponding calculation\". With that deduction, someone earning up to $758.33 a month withholds nothing — which is the right answer, because their $9,100 a year, less contributions and less the $1,600, falls under the $6,600 exempt under article 37, so their annual return settles at zero. A calculator that skips it withholds roughly $306 a year they would then have to claim back. Many payrolls in the country still follow the older rule, so the deduction you actually see may well be the other one.",
   },
 } as const;
 
@@ -108,10 +162,6 @@ function serviceLabel(settlement: { completedYears: number; serviceMonths: numbe
   const years = `${settlement.completedYears} ${settlement.completedYears === 1 ? t.year : t.yearPlural}`;
   if (settlement.serviceMonths === 0) return years;
   return `${years} · ${settlement.serviceMonths} ${settlement.serviceMonths === 1 ? t.month : t.monthPlural}`;
-}
-
-function MoneyInput({ label, value, onChange, note }: { label: string; value: string; onChange: (value: string) => void; note?: string }) {
-  return <label className="field"><span>{label}</span><div className="input-wrap"><b className="prefix">$</b><input type="number" min="0" step="0.01" inputMode="decimal" value={value} onChange={(event) => onChange(event.target.value)} /></div>{note && <small className="field-note">{note}</small>}</label>;
 }
 
 function Table({ bands, t, money }: { bands: WithholdingBand[]; t: typeof copy.es | typeof copy.en; money: Intl.NumberFormat }) {
@@ -135,61 +185,124 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const [includeIsss, setIncludeIsss] = useState(true);
   const [applyFixedDeduction, setApplyFixedDeduction] = useState(true);
   const [annualGross, setAnnualGross] = useState("");
+  const [recalcPeriod, setRecalcPeriod] = useState<RecalcPeriod>("june");
+  const [accTaxable, setAccTaxable] = useState("5400");
+  const [accWithheld, setAccWithheld] = useState("400");
 
   const settlement = useMemo(() => calculateSettlement({
     startDate, endDate, monthlySalary: number(monthlySalary), sector, termination,
     pendingSalaryDays: number(pendingDays), unusedVacationPeriods: number(unusedVacation), aguinaldoPaid,
   }), [aguinaldoPaid, endDate, monthlySalary, pendingDays, sector, startDate, termination, unusedVacation]);
   const payroll = useMemo(() => calculatePayrollWithholding({ gross: number(gross), frequency, includeAfp, includeIsss, applyFixedDeduction, annualGross: number(annualGross) }), [annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss]);
+  // What the same pay would withhold under the pre-2025 reading, where the
+  // tables were said to already contain the $1,600. Shown only when it differs,
+  // because that gap is what makes this calculator disagree with the ones that
+  // never caught up with the reform.
+  const withoutFixedDeduction = useMemo(
+    () => withholdingForTaxable(payroll.taxableBeforeFixedDeduction, frequency).amount,
+    [frequency, payroll.taxableBeforeFixedDeduction]);
+  // The annual figure feeds the same $9,100 test in both panels, so the field
+  // the payroll form already asks for is reused rather than duplicated.
+  const recalc = useMemo(() => calculateRecalculation({
+    period: recalcPeriod, accumulatedTaxable: number(accTaxable),
+    accumulatedWithheld: number(accWithheld), applyFixedDeduction, annualGross: number(annualGross),
+  }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, recalcPeriod]);
 
   const frequencyLabel = frequency === "monthly" ? t.monthly : frequency === "fortnightly" ? t.fortnightly : t.weekly;
-  const dateField = (label: string, value: string, setValue: (value: string) => void, min: string, max: string) => <label className="field"><span>{label}</span><div className="input-wrap date-wrap"><input type="date" min={min} max={max} value={value} onChange={(event) => setValue(event.target.value)} /></div></label>;
-  const countField = (label: string, value: string, setValue: (value: string) => void, max: string) => <label className="field"><span>{label}</span><div className="input-wrap"><input type="number" min="0" max={max} step="1" inputMode="numeric" value={value} onChange={(event) => setValue(event.target.value)} /></div></label>;
 
   return <section className="statutory-tools standalone-tools" id="tools">
     {tool === "settlement" ? <>
-      <div className="legal-calculator-grid">
-        <div className="form-panel legal-form">
+      <div className="calculator-grid">
+        <div className="form-panel">
           <div className="section-title"><span>01</span><div><h2>{t.data}</h2><p>{lang === "es" ? "Sector privado regido por el Código de Trabajo" : "Private sector governed by the Labor Code"}</p></div></div>
-          <fieldset className="field full"><legend>{t.cause}</legend><div className="segmented two"><button type="button" aria-pressed={termination === "dismissal"} className={termination === "dismissal" ? "active" : ""} onClick={() => setTermination("dismissal")}>{t.dismissal}</button><button type="button" aria-pressed={termination === "resignation"} className={termination === "resignation" ? "active" : ""} onClick={() => setTermination("resignation")}>{t.resignation}</button></div></fieldset>
-          <div className="field-grid">{dateField(t.start, startDate, setStartDate, EARLIEST_EMPLOYMENT_DATE, endDate)}{dateField(t.end, endDate, setEndDate, startDate, LATEST_END_DATE)}<MoneyInput label={t.salary} value={monthlySalary} onChange={setMonthlySalary} note={t.salaryHint} />
-            <label className="field"><span>{t.sector}</span><select value={sector} onChange={(event) => setSector(event.target.value as WageSector)}>{(Object.keys(DAILY_MINIMUM_WAGE) as WageSector[]).map((item) => <option key={item} value={item}>{sectorLabels[lang][item]}</option>)}</select></label>
-            {countField(t.pendingDays, pendingDays, setPendingDays, "31")}{countField(t.unusedVacation, unusedVacation, setUnusedVacation, "50")}
+          <div className="field-grid">
+            <SegmentedField full label={t.cause} lang={lang} value={termination} onChange={setTermination}
+              options={[{ value: "dismissal", label: t.dismissal }, { value: "resignation", label: t.resignation }] as const} /><DateField label={t.start} lang={lang} value={startDate} onChange={setStartDate} min={EARLIEST_EMPLOYMENT_DATE} max={endDate} help={t.helpStart} />
+            <DateField label={t.end} lang={lang} value={endDate} onChange={setEndDate} min={startDate} max={LATEST_END_DATE} help={t.helpEnd} />
+            <MoneyField label={t.salary} lang={lang} value={monthlySalary} onChange={setMonthlySalary} note={t.salaryHint} help={t.helpSalary} />
+            <SelectField label={t.sector} lang={lang} value={sector} onChange={setSector} help={t.helpSector}
+              options={(Object.keys(DAILY_MINIMUM_WAGE) as WageSector[]).map((item) => ({ value: item, label: sectorLabels[lang][item] }))} />
+            <NumberField label={t.pendingDays} lang={lang} value={pendingDays} onChange={setPendingDays} max="31" help={t.helpPendingDays} />
+            <NumberField label={t.unusedVacation} lang={lang} value={unusedVacation} onChange={setUnusedVacation} max="50" help={t.helpUnusedVacation} />
           </div>
-          <label className="check-field"><input type="checkbox" checked={aguinaldoPaid} onChange={(event) => setAguinaldoPaid(event.target.checked)} /><span>{t.aguinaldoPaid}</span></label>
+          <CheckField label={t.aguinaldoPaid} checked={aguinaldoPaid} onChange={setAguinaldoPaid} />
         </div>
-        <div className="results-panel legal-results">
+        <div className="results-panel">
           <div className="results-kicker">{t.result}</div>
           {settlement.invalid ? <div className="warning">! {t.invalidDates}</div> : <>
-            <div className="legal-total"><span>{t.total}</span><strong>{money.format(settlement.total)}</strong><small>{t.service}: {serviceLabel(settlement, t)}</small></div>
-            <div className="legal-breakdown"><div className="primary"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacation}</span><b>{money.format(settlement.vacation)}</b></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
-            <div className="legal-facts"><div><span>{t.dailyBase}</span><b>{money.format(settlement.indemnityBaseDaily)}</b></div><div><span>{t.vacationDays}</span><b>{settlement.vacationDays.toFixed(2)}</b></div></div>
-            {settlement.minimumWagePredatesTables && <div className="legal-callout warn"><span>!</span><p>{t.wageOutOfRange}</p></div>}
-            {settlement.quincena25Applies && <div className="legal-callout"><span>§</span><p>{t.quincena25Note}</p></div>}
-            <div className={`legal-callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
+            <div className="result-headline"><span>{t.total}</span><strong>{money.format(settlement.total)}</strong><small>{t.service}: {serviceLabel(settlement, t)}</small></div>
+            <div className="result-tiles"><div className="highlight"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacation}</span><b>{money.format(settlement.vacation)}</b></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
+            <div className="result-facts"><div><span>{t.dailyBase}</span><b>{money.format(settlement.indemnityBaseDaily)}</b></div><div><span>{t.vacationDays}</span><b>{settlement.vacationDays.toFixed(2)}</b></div></div>
+            {settlement.minimumWagePredatesTables && <div className="callout warn"><span>!</span><p>{t.wageOutOfRange}</p></div>}
+            {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note}</p></div>}
+            <div className={`callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
           </>}
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>
       <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.laborCode} target="_blank" rel="noreferrer"><b>01</b>{t.code}<span>↗</span></a><a href={OFFICIAL.laborService} target="_blank" rel="noreferrer"><b>02</b>{t.officialCalc}<span>↗</span></a><a href={OFFICIAL.resignation} target="_blank" rel="noreferrer"><b>03</b>{t.resignationLaw}<span>↗</span></a><a href={OFFICIAL.minimumWage} target="_blank" rel="noreferrer"><b>04</b>{t.wageDecree}<span>↗</span></a><a href={OFFICIAL.aguinaldoReform} target="_blank" rel="noreferrer"><b>05</b>{t.aguinaldoReform}<span>↗</span></a></div></div>
     </> : <>
-      <div className="legal-calculator-grid">
-        <div className="form-panel legal-form">
+      <div className="calculator-grid">
+        <div className="form-panel">
           <div className="section-title"><span>01</span><div><h2>{t.payrollData}</h2><p>{lang === "es" ? "Servicios permanentes y persona domiciliada" : "Permanent services and a domiciled individual"}</p></div></div>
-          <div className="field-grid"><MoneyInput label={t.gross} value={gross} onChange={setGross} /><label className="field"><span>{t.frequency}</span><select value={frequency} onChange={(event) => setFrequency(event.target.value as PayFrequency)}><option value="monthly">{t.monthly}</option><option value="fortnightly">{t.fortnightly}</option><option value="weekly">{t.weekly}</option></select></label><MoneyInput label={t.annualGross} value={annualGross} onChange={setAnnualGross} note={t.annualGrossHint} /></div>
-          <div className="payroll-checks"><label className="check-field"><input type="checkbox" checked={includeAfp} onChange={(event) => setIncludeAfp(event.target.checked)} /><span>{t.includeAfp}</span></label><label className="check-field"><input type="checkbox" checked={includeIsss} onChange={(event) => setIncludeIsss(event.target.checked)} /><span>{t.includeIsss}</span></label><label className="check-field"><input type="checkbox" checked={applyFixedDeduction} onChange={(event) => setApplyFixedDeduction(event.target.checked)} /><span>{t.fixedDeduction}</span></label></div>
+          <div className="field-grid"><MoneyField label={t.gross} lang={lang} value={gross} onChange={setGross} help={t.helpGross} />
+            <SelectField label={t.frequency} lang={lang} value={frequency} onChange={setFrequency} help={t.helpFrequency}
+              options={[{ value: "monthly", label: t.monthly }, { value: "fortnightly", label: t.fortnightly }, { value: "weekly", label: t.weekly }] as const} />
+            <MoneyField label={t.annualGross} lang={lang} value={annualGross} onChange={setAnnualGross} note={t.annualGrossHint} help={t.helpAnnualGross} /></div>
+          <div className="payroll-checks">
+            <CheckField label={t.includeAfp} checked={includeAfp} onChange={setIncludeAfp} />
+            <CheckField label={t.includeIsss} checked={includeIsss} onChange={setIncludeIsss} />
+            <CheckField label={t.fixedDeduction} checked={applyFixedDeduction} onChange={setApplyFixedDeduction} />
+          </div>
           {includeIsss && frequency !== "monthly" && <p className="field-note payroll-note">{t.isssApprox}</p>}
+          {/* These two explain the deduction checkbox and the annual income
+              field, not the result, so they sit beside the controls they talk
+              about — which also stops the form column from running empty
+              against a much taller results column. */}
+          {!payroll.qualifiesForFixedDeduction && applyFixedDeduction && <div className="callout warn"><span>i</span><p>{t.noFixed}</p></div>}
+          {payroll.qualifiesForFixedDeduction && applyFixedDeduction && payroll.bandBeforeFixedDeduction > 2 && <div className="callout"><span>§</span><p>{t.fixedOnlyBandTwo}</p></div>}
         </div>
-        <div className="results-panel legal-results payroll-results">
-          <div className="results-kicker">{frequencyLabel}</div><div className="legal-total"><span>{t.takeHome}</span><strong>{money.format(payroll.net)}</strong><small>{t.band}: {payroll.band} · {(payroll.marginalRate * 100).toFixed(0)}%</small></div>
-          <div className="legal-breakdown"><div className="primary"><span>{t.isr}</span><b>{money.format(payroll.isr)}</b></div><div><span>{t.afp}</span><b>{money.format(payroll.afp)}</b></div><div><span>{t.isss}</span><b>{money.format(payroll.isss)}</b></div><div><span>{t.taxable}</span><b>{money.format(payroll.taxable)}</b></div></div>
+        <div className="results-panel payroll-results">
+          <div className="results-kicker">{frequencyLabel}</div><div className="result-headline"><span>{t.takeHome}</span><strong>{money.format(payroll.net)}</strong><small>{t.band}: {payroll.band} · {(payroll.marginalRate * 100).toFixed(0)}%</small></div>
+          <div className="result-tiles"><div className="highlight"><span>{t.isr}</span><b>{money.format(payroll.isr)}</b></div><div><span>{t.afp}</span><b>{money.format(payroll.afp)}</b></div><div><span>{t.isss}</span><b>{money.format(payroll.isss)}</b></div><div><span>{t.taxable}</span><b>{money.format(payroll.taxable)}</b></div></div>
           <div className="tax-base-flow"><span>{t.taxableBefore}<b>{money.format(payroll.taxableBeforeFixedDeduction)}</b></span><i>−</i><span>{t.fiscalDeduction}<b>{money.format(payroll.fixedDeduction)}</b><small>{t.notCash}</small></span><i>=</i><span>{t.taxable}<b>{money.format(payroll.taxable)}</b></span></div>
-          <div className="legal-facts"><div><span>{t.annualUsed}</span><b>{money.format(payroll.annualIncome)}</b><small>{payroll.annualIncomeDeclared ? t.annualDeclared : t.annualEstimated}</small></div></div>
-          {!payroll.qualifiesForFixedDeduction && applyFixedDeduction && <div className="legal-callout warn"><span>i</span><p>{t.noFixed}</p></div>}
+          <div className="result-facts"><div><span>{t.annualUsed}</span><b>{money.format(payroll.annualIncome)}</b><small>{payroll.annualIncomeDeclared ? t.annualDeclared : t.annualEstimated}</small></div></div>
+          {withoutFixedDeduction > payroll.isr && <div className="callout"><span>≠</span><p>{t.differsLead} <b>{money.format(withoutFixedDeduction)}</b> {t.differsTail}</p></div>}
         </div>
       </div>
+      <section className="recalc-band">
+        <div className="section-title"><span>02</span><div><h2>{t.recalcTitle}</h2><p>{t.recalcSubtitle}</p></div></div>
+        <div className="recalc-controls">
+          {/* A div and a span rather than a fieldset and a legend: a legend is
+              laid out in the fieldset's border area instead of taking a grid
+              row, so the control rose about 16px above the inputs beside it.
+              The grouping is kept for assistive tech with role and label. */}
+          <SegmentedField label={t.recalcPeriodLabel} lang={lang} value={recalcPeriod} onChange={setRecalcPeriod}
+            options={[{ value: "june", label: t.juneOption }, { value: "december", label: t.decemberOption }] as const} />
+          <MoneyField label={t.accTaxable} lang={lang} value={accTaxable} onChange={setAccTaxable} note={recalcPeriod === "june" ? t.accTaxableJune : t.accTaxableDecember} help={t.helpAccTaxable} />
+          <MoneyField label={t.accWithheld} lang={lang} value={accWithheld} onChange={setAccWithheld} note={recalcPeriod === "june" ? t.accWithheldJune : t.accWithheldDecember} help={t.helpAccWithheld} />
+        </div>
+        {/* The settled tax, what was already withheld, and the difference, read
+            as one sentence. The difference is the only place the headline
+            figure appears: showing it again above the chain repeated the same
+            number twice with opposite signs. */}
+        <div className="recalc-outcome">
+          <div><span>{t.settledTaxLabel}</span><b>{money.format(recalc.settledTax)}</b><small>{t.taxable}: {money.format(recalc.taxable)} · {t.fiscalDeduction}: {money.format(recalc.fixedDeduction)}</small></div>
+          <i aria-hidden="true">−</i>
+          <div><span>{t.alreadyWithheld}</span><b>{money.format(recalc.accumulatedWithheld)}</b><small>{recalcPeriod === "june" ? t.accWithheldJune : t.accWithheldDecember}</small></div>
+          <i aria-hidden="true">=</i>
+          <div className="recalc-result"><span>{recalc.excess > 0 ? t.excessLabel : t.toWithhold}</span><strong>{recalc.excess > 0 ? `−${money.format(recalc.excess)}` : money.format(recalc.withholding)}</strong><small>{recalcPeriod === "june" ? t.june : t.december} · {t.band} {recalc.band}</small></div>
+        </div>
+        <div className="recalc-notes">
+          <p className="field-note">{t.recalcExclusions}</p>
+          {recalc.fixedDeduction > 0 && <div className="callout"><span>§</span><p>{t.recalcDeductionNote}</p></div>}
+          {recalc.excess > 0 && <div className="callout warn"><span>!</span><p>{t.excessNote}</p></div>}
+          <div className="callout"><span>i</span><p>{t.recalcEmployerNote}</p></div>
+        </div>
+      </section>
       <div className="tax-tables"><div className="table-heading"><div><span>DECRETO EJECUTIVO 10/2025</span><h2>{t.tableTitle} {frequencyLabel.toLowerCase()}</h2></div><a href={OFFICIAL.withholding} target="_blank" rel="noreferrer">{t.officialPdf} ↗</a></div><Table bands={WITHHOLDING_TABLES[frequency]} t={t} money={money} />
         <details><summary>{t.recalc}</summary><p>{t.recalcNote}</p><div className="recalc-grid"><div><h3>{t.june}</h3><Table bands={JUNE_RECALC_TABLE} t={t} money={money} /></div><div><h3>{t.december}</h3><Table bands={DECEMBER_RECALC_TABLE} t={t} money={money} /></div></div></details>
+        <details><summary>{t.differsSummary}</summary><p>{t.differsBody}</p></details>
       </div>
       <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.withholding} target="_blank" rel="noreferrer"><b>01</b>{t.taxDecree}<span>↗</span></a><a href={OFFICIAL.incomeTax} target="_blank" rel="noreferrer"><b>02</b>{t.taxLaw}<span>↗</span></a><a href={OFFICIAL.isss} target="_blank" rel="noreferrer"><b>03</b>{t.isssSource}<span>↗</span></a><a href={OFFICIAL.pensions} target="_blank" rel="noreferrer"><b>04</b>{t.pensionSource}<span>↗</span></a></div></div>
     </>}

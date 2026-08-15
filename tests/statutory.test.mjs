@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  calculatePayrollWithholding, calculateSettlement, DAILY_MINIMUM_WAGE,
+  calculatePayrollWithholding, calculateRecalculation, calculateSettlement,
+  DAILY_MINIMUM_WAGE, DECEMBER_RECALC_TABLE, JUNE_RECALC_TABLE,
   MINIMUM_WAGE_TABLES, QUINCENA25, RULES_REVIEWED, withholdingForTaxable,
 } from "../app/statutory.ts";
 
@@ -111,6 +112,134 @@ test("the $9,100 eligibility limit is measured on gross income, not on the base 
   assert.equal(fortnightly.fixedDeduction, 66.67);
   const overFortnightly = calculatePayrollWithholding({ gross: 400, frequency: "fortnightly" });
   assert.equal(overFortnightly.qualifiesForFixedDeduction, false);
+});
+
+test("the $1,600 deduction is only applied in band II, the one the decree leaves it out of", () => {
+  // Literal e) of Executive Decree 10/2025 exempts band II alone. Bands III and
+  // IV displace the article 37 limits by exactly $1,600 ($9,142.86 + 1,600 =
+  // $10,742.86 = 895.24 × 12), so applying it again there deducts it twice.
+  // Only a declared annual income reaches this: annualising any band III period
+  // clears $9,100 on its own.
+  const bandThree = calculatePayrollWithholding({ gross: 1500, frequency: "monthly", annualGross: 3000 });
+  assert.equal(bandThree.qualifiesForFixedDeduction, true, "$3,000 a year is inside the limit");
+  assert.equal(bandThree.bandBeforeFixedDeduction, 3);
+  assert.equal(bandThree.fixedDeduction, 0);
+  assert.equal(bandThree.taxable, 1361.25);
+  assert.equal(bandThree.isr, 153.2);
+
+  // The band is read before the deduction, so band II keeps it even when
+  // subtracting it drops the base into band I and the withholding to zero —
+  // which is what liquidating the year under article 37 gives.
+  const bandTwo = calculatePayrollWithholding({ gross: 700, frequency: "monthly" });
+  assert.equal(bandTwo.bandBeforeFixedDeduction, 2);
+  assert.equal(bandTwo.fixedDeduction, 133.33);
+  assert.equal(bandTwo.band, 1);
+  assert.equal(bandTwo.isr, 0);
+});
+
+test("the recalculation tables are the ones printed in literal f)", () => {
+  // Executive Decree 10/2025, article 1 literal f), numerals 1) and 2). The
+  // June figures are the monthly table times six and December's times twelve,
+  // which is the relationship the continuity test below leans on.
+  assert.deepEqual(JUNE_RECALC_TABLE, [
+    { from: 0.01, to: 3300, rate: 0, excess: 0, fixed: 0 },
+    { from: 3300.01, to: 5371.44, rate: 0.10, excess: 3300, fixed: 106.20 },
+    { from: 5371.45, to: 12228.60, rate: 0.20, excess: 5371.44, fixed: 360 },
+    { from: 12228.61, to: null, rate: 0.30, excess: 12228.60, fixed: 1731.42 },
+  ]);
+  assert.deepEqual(DECEMBER_RECALC_TABLE, [
+    { from: 0.01, to: 6600, rate: 0, excess: 0, fixed: 0 },
+    { from: 6600.01, to: 10742.86, rate: 0.10, excess: 6600, fixed: 212.12 },
+    { from: 10742.87, to: 24457.14, rate: 0.20, excess: 10742.86, fixed: 720 },
+    { from: 24457.15, to: null, rate: 0.30, excess: 24457.14, fixed: 3462.86 },
+  ]);
+});
+
+// The whole point of the mechanism is that the accumulated tables land on the
+// same tax the ordinary periods already withheld, so a steady salary should
+// settle to nothing extra. Any misreading of the accumulation period — a
+// December that covered only the second semester, say — breaks this at once.
+test("a steady salary recalculates to what the monthly periods already withheld", () => {
+  const monthly = calculatePayrollWithholding({ gross: 1500, frequency: "monthly" });
+  assert.equal(monthly.isr, 153.20);
+
+  const june = calculateRecalculation({
+    period: "june",
+    accumulatedTaxable: monthly.taxableBeforeFixedDeduction * 6,
+    accumulatedWithheld: monthly.isr * 5,
+  });
+  assert.equal(june.settledTax, 919.21, "6 x 153.20 = 919.20, off by a cent of table rounding");
+  assert.equal(june.withholding, 153.21, "one more ordinary period, not a correction");
+  assert.equal(june.excess, 0);
+
+  const december = calculateRecalculation({
+    period: "december",
+    accumulatedTaxable: monthly.taxableBeforeFixedDeduction * 12,
+    accumulatedWithheld: monthly.isr * 11,
+  });
+  assert.equal(december.settledTax, 1838.43, "12 x 153.20 = 1838.40");
+  assert.equal(december.withholding, 153.23);
+});
+
+test("the $1,600 deduction is prorated to the months each recalculation covers", () => {
+  // Literal f) names the flat $1,600 for band II of both tables, but the June
+  // table is the monthly one scaled by six and the monthly one takes $1,600/12
+  // per period. Six months of that is $800; taking the whole $1,600 against a
+  // half-year table would leave band II workers over-withheld until December.
+  const june = calculateRecalculation({
+    period: "june", accumulatedTaxable: 5000, accumulatedWithheld: 0, annualGross: 9000,
+  });
+  assert.equal(june.qualifiesForFixedDeduction, true);
+  assert.equal(june.bandBeforeFixedDeduction, 2);
+  assert.equal(june.fixedDeduction, 800);
+  assert.equal(june.taxable, 4200);
+  assert.equal(june.settledTax, 196.20);
+
+  const december = calculateRecalculation({
+    period: "december", accumulatedTaxable: 9000, accumulatedWithheld: 0, annualGross: 9000,
+  });
+  assert.equal(december.fixedDeduction, 1600, "the annual settlement takes the whole deduction");
+  assert.equal(december.taxable, 7400);
+  assert.equal(december.settledTax, 292.12);
+
+  // Bands III and IV build the deduction into their limits, here as in the
+  // periodic tables, so it must not be subtracted twice.
+  const bandThree = calculateRecalculation({
+    period: "june", accumulatedTaxable: 8167.50, accumulatedWithheld: 0, annualGross: 9000,
+  });
+  assert.equal(bandThree.bandBeforeFixedDeduction, 3);
+  assert.equal(bandThree.fixedDeduction, 0);
+});
+
+test("a negative difference withholds nothing and is not paid back through payroll", () => {
+  // "Si la diferencia es negativa no se retendrá valor alguno." Literal i)
+  // leaves the worker the annual return or a refund request, so the excess is
+  // reported as such and never as money the December payslip returns.
+  const overWithheld = calculateRecalculation({
+    period: "june", accumulatedTaxable: 8167.50, accumulatedWithheld: 1000,
+  });
+  assert.equal(overWithheld.settledTax, 919.21);
+  assert.equal(overWithheld.withholding, 0);
+  assert.equal(overWithheld.excess, 80.79);
+});
+
+test("the recalculation accumulates remuneration that was never withheld on", () => {
+  // "considerando todas las remuneraciones gravadas acumuladas a dichos meses,
+  // hayan sido objeto de retención o no": months below the withholding
+  // threshold still enter the base, which is what makes December settle up.
+  const untouched = calculateRecalculation({
+    period: "december", accumulatedTaxable: 12000, accumulatedWithheld: 0,
+  });
+  assert.equal(untouched.band, 3);
+  assert.equal(untouched.settledTax, 971.43);
+  assert.equal(untouched.withholding, 971.43);
+
+  // A worker who changed employers mid-year is not excluded: the last employer
+  // runs it over both jobs, so the inputs simply already carry the earlier one.
+  const merged = calculateRecalculation({
+    period: "december", accumulatedTaxable: 12000, accumulatedWithheld: 400,
+  });
+  assert.equal(merged.withholding, 571.43);
 });
 
 test("contributions can be switched off without disturbing the tax base", () => {

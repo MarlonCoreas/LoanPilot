@@ -6,7 +6,7 @@ export type PayFrequency = "monthly" | "fortnightly" | "weekly";
 // texts linked in the interface. The badge the user sees repeats this date, so
 // a stale value is a claim the site cannot back: change it only in the same
 // commit that re-checks the sources, never as a routine bump.
-export const RULES_REVIEWED = "2026-08-10";
+export const RULES_REVIEWED = "2026-08-14";
 
 export type WageTable = {
   /** First day the table applies, inclusive. */
@@ -86,9 +86,11 @@ export const WITHHOLDING_TABLES: Record<PayFrequency, WithholdingBand[]> = {
   ],
 };
 
-// Transcribed literally from the decree. The $106.20 fixed amount does not line
-// up with half the December figure ($106.06) or six monthly ones ($106.02); the
-// official table says $106.20, so it stays as published. Do not "correct" it.
+// Article 1 literal f), numerals 1) and 2). Transcribed literally. The $106.20
+// fixed amount does not line up with half the December figure ($106.06) or six
+// monthly ones ($106.02); it is inherited unchanged from Decree 95/2015, whose
+// June band started at $2,832 instead of $3,300, and the official table still
+// says $106.20. It stays as published — do not "correct" it.
 export const JUNE_RECALC_TABLE: WithholdingBand[] = [
   { from: 0.01, to: 3300, rate: 0, excess: 0, fixed: 0 },
   { from: 3300.01, to: 5371.44, rate: 0.10, excess: 3300, fixed: 106.20 },
@@ -102,6 +104,21 @@ export const DECEMBER_RECALC_TABLE: WithholdingBand[] = [
   { from: 10742.87, to: 24457.14, rate: 0.20, excess: 10742.86, fixed: 720 },
   { from: 24457.15, to: null, rate: 0.30, excess: 24457.14, fixed: 3462.86 },
 ];
+
+export type RecalcPeriod = "june" | "december";
+
+export const RECALC_TABLES: Record<RecalcPeriod, WithholdingBand[]> = {
+  june: JUNE_RECALC_TABLE,
+  december: DECEMBER_RECALC_TABLE,
+};
+
+/**
+ * Months each recalculation accumulates. Literal f) accumulates January to June
+ * for the first one and the whole "ejercicio o período de imposición" for the
+ * second, and both tables are the periodic ones scaled by exactly these months:
+ * June band I ends at 550 × 6 and December's at 550 × 12.
+ */
+export const RECALC_MONTHS: Record<RecalcPeriod, number> = { june: 6, december: 12 };
 
 // Both fields are free-text `<input type="date">`, so a typo like "0025-01-01"
 // is a value the browser happily submits. Anything outside this window is
@@ -324,15 +341,18 @@ export function calculateSettlement(input: {
   };
 }
 
-export function withholdingForTaxable(taxable: number, frequency: PayFrequency) {
+function applyBands(taxable: number, table: WithholdingBand[]) {
   const amount = Math.max(0, round2(taxable));
-  const table = WITHHOLDING_TABLES[frequency];
   const band = table.find((item) => item.to === null || amount <= item.to) ?? table.at(-1)!;
   return {
     band: table.indexOf(band) + 1,
     amount: round2(band.fixed + Math.max(0, amount - band.excess) * band.rate),
     rate: band.rate,
   };
+}
+
+export function withholdingForTaxable(taxable: number, frequency: PayFrequency) {
+  return applyBands(taxable, WITHHOLDING_TABLES[frequency]);
 }
 
 export function calculatePayrollWithholding(input: {
@@ -373,19 +393,108 @@ export function calculatePayrollWithholding(input: {
   const declaredAnnual = round2(Math.max(0, input.annualGross || 0));
   const annualIncome = declaredAnnual > 0 ? declaredAnnual : round2(gross * periods);
   const qualifiesForFixedDeduction = annualIncome <= 9100;
-  // Executive Decree 10/2025 states that band II does not build the $1,600
-  // deduction into its fixed amount, so it belongs in the periodic withholding
-  // and not only in the annual return.
+  // Literal e) of Executive Decree 10/2025 leaves the $1,600 out of band II
+  // alone — "los valores consignados únicamente en el Tramo II [...] no
+  // contienen las deducciones" — so that is the only band where it belongs in
+  // the periodic withholding rather than only in the annual return. Bands III
+  // and IV already carry it: their limits are the article 37 ones displaced by
+  // exactly $1,600 ($9,142.86 + 1,600 = $10,742.86 = 895.24 × 12), and
+  // subtracting it there deducted it twice. Band I never withholds either way.
+  //
+  // The band is read from the base before the deduction, which is the figure
+  // the table's own limits are written in. A base that band II then drops below
+  // $550 still withholds nothing, which is what the annual liquidation gives.
+  const bandBeforeFixedDeduction = withholdingForTaxable(taxableBeforeFixedDeduction, input.frequency).band;
   const fixedDeduction = input.applyFixedDeduction !== false && qualifiesForFixedDeduction
+    && bandBeforeFixedDeduction === 2
     ? round2(1600 / periods)
     : 0;
   const taxable = round2(Math.max(0, taxableBeforeFixedDeduction - fixedDeduction));
   const withholding = withholdingForTaxable(taxable, input.frequency);
   const net = round2(gross - afp - isss - withholding.amount);
   return {
-    gross, afp, isss, fixedDeduction, qualifiesForFixedDeduction,
+    gross, afp, isss, fixedDeduction, qualifiesForFixedDeduction, bandBeforeFixedDeduction,
     annualIncome, annualIncomeDeclared: declaredAnnual > 0,
     taxableBeforeFixedDeduction, taxable, isr: withholding.amount,
     band: withholding.band, marginalRate: withholding.rate, net,
+  };
+}
+
+/**
+ * The June and December recalculation of article 1 literal f) of Executive
+ * Decree 10/2025, which derogated Decree 95/2015 with effect from May 2025.
+ * (The procedure is not in article 4: articles 2 to 4 are the public-sector
+ * filing rule, the derogation and the vigencia clause.)
+ *
+ * The decree accumulates the taxable remuneration "hayan sido objeto de
+ * retención o no", applies the period table, and subtracts what was already
+ * withheld — January to May for June, January to November for December. Two
+ * consequences the caller has to carry into the interface:
+ *
+ * - A negative difference withholds nothing. It is not refunded through
+ *   payroll; literal i) sends the worker to the annual return or to a refund
+ *   request, so this function reports it as `excess`, never as a payment.
+ * - On a change of employer the last one in the period runs the recalculation
+ *   over both jobs, using the constancia de retención from the previous one.
+ *   Nothing here excludes a worker who changed jobs; the accumulated figures
+ *   are simply expected to already include the earlier employer.
+ *
+ * Remuneration under retención definitiva, and the 10% of literal h) that a
+ * second employer withholds, are excluded from the accumulation by the decree
+ * and so must be left out of `accumulatedTaxable` by the caller.
+ */
+export function calculateRecalculation(input: {
+  period: RecalcPeriod;
+  /** Taxable remuneration accumulated over the period, net of contributions. */
+  accumulatedTaxable: number;
+  /** Withholding already made in the preceding monthly periods. */
+  accumulatedWithheld: number;
+  applyFixedDeduction?: boolean;
+  /** Annual figure for the $9,100 test; estimated from the period when absent. */
+  annualGross?: number;
+}) {
+  const months = RECALC_MONTHS[input.period];
+  const table = RECALC_TABLES[input.period];
+  const accumulatedTaxable = round2(Math.max(0, input.accumulatedTaxable || 0));
+  const accumulatedWithheld = round2(Math.max(0, input.accumulatedWithheld || 0));
+
+  const declaredAnnual = round2(Math.max(0, input.annualGross || 0));
+  // Scaling the accumulated base to a year measures the limit on taxable pay
+  // rather than on the gross the decree names, so a declared figure is always
+  // the better one and the interface asks for it.
+  const annualIncome = declaredAnnual > 0 ? declaredAnnual : round2(accumulatedTaxable * 12 / months);
+  const qualifiesForFixedDeduction = annualIncome <= 9100;
+
+  // Literal f) closes by extending the band II rule of literal e) to these two
+  // tables by name: the $1,600 "respecto del Tramo II de las tablas contenidas
+  // en los numerales 1) y 2)". Bands III and IV already carry it in their
+  // limits, exactly as in the periodic tables.
+  const bandBeforeFixedDeduction = applyBands(accumulatedTaxable, table).band;
+  // The decree writes the deduction as the flat $1,600 with no proration
+  // clause, but the June table is the monthly table scaled by six, and the
+  // monthly one takes $1,600/12 per period — so six months of it is $800.
+  // Deducting the full $1,600 against a half-year table would break the
+  // continuity the recalculation exists to provide, leaving band II workers
+  // permanently over-withheld until December. December, being the annual
+  // settlement, takes the whole $1,600 either way.
+  const fixedDeduction = input.applyFixedDeduction !== false && qualifiesForFixedDeduction
+    && bandBeforeFixedDeduction === 2
+    ? round2(1600 * months / 12)
+    : 0;
+
+  const taxable = round2(Math.max(0, accumulatedTaxable - fixedDeduction));
+  const settled = applyBands(taxable, table);
+  const difference = round2(settled.amount - accumulatedWithheld);
+
+  return {
+    period: input.period, months, accumulatedTaxable, accumulatedWithheld,
+    annualIncome, annualIncomeDeclared: declaredAnnual > 0,
+    qualifiesForFixedDeduction, bandBeforeFixedDeduction, fixedDeduction,
+    taxable, settledTax: settled.amount,
+    band: settled.band, marginalRate: settled.rate,
+    /** The positive difference, which is what June or December withholds. */
+    withholding: difference > 0 ? difference : 0,
+    /** Over-withholding. Recoverable only through the annual return. */
+    excess: difference < 0 ? round2(-difference) : 0,
   };
 }

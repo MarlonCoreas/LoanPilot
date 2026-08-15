@@ -43,6 +43,9 @@ puede afirmar algo que la página no diga.
   quincenales y semanales.
 - Tablas oficiales de retención y recálculo de junio y diciembre, con enlaces a
   las normas vigentes.
+- Recálculo acumulado de junio y diciembre: liquida el impuesto del período
+  sobre las remuneraciones gravadas acumuladas, resta lo ya retenido e indica
+  si queda diferencia a retener o retención en exceso.
 - Interfaz responsive en español e inglés.
 - Todos los cálculos se ejecutan localmente en el navegador.
 
