@@ -457,6 +457,12 @@ test("reproduces a real MTPS settlement statement to the cent", () => {
   // The aguinaldo line is deliberately not compared: the MTPS runs its bonus
   // year from 12 December, this module still runs it over the calendar year,
   // and settling that needs the October 2025 reform decree.
+  //
+  // Left open on purpose as of August 2026. It is scheduled for the pass that
+  // extracts the statutory constants into dated data files, where the bonus
+  // year becomes a declared date rather than a hardcoded 1 January. Do not
+  // patch it inline here: changing the cycle silently moves every proportional
+  // bonus this suite pins, and it needs its own source check first.
 });
 
 test("leaving before the cutoff accrues the year-end bonus in proportion to days worked", () => {
@@ -482,4 +488,202 @@ test("the 2025 October 20 reform grants the full due year-end bonus at the cutof
   });
   assert.equal(result.aguinaldoDays, 19);
   assert.equal(result.aguinaldo, 570);
+});
+
+// --- Vacation battery -------------------------------------------------------
+//
+// The vacation line was audited in August 2026 after the default form — five
+// years of service, $900, zero pending periods — reported $1.60. The formula
+// turned out to be right and was left untouched; what these cases pin is the
+// full shape of it, so the next reader can tell an implausible-looking number
+// from a wrong one without re-deriving the units.
+//
+// Units, once, for the whole block: `dailySalary` is dollars per day
+// (salary/30), `fractionDays` is days since the last anniversary counted
+// inclusively, and 15 is days of vacation per year of service. The proportional
+// part is `15 x fractionDays / 365` days of salary. There is one division by
+// 365 in the chain and no year-to-day mixing.
+
+const vacationCase = (overrides) => calculateSettlement({
+  sector: "commerce", termination: "dismissal", monthlySalary: 900, aguinaldoPaid: true, ...overrides,
+});
+
+test("vacation with under a year of service is the prorated fraction alone", () => {
+  // 1 Jan to 1 Jul inclusive is 182 days, so no anniversary has been reached
+  // and every vacation day owed is proportional.
+  const result = vacationCase({ startDate: "2026-01-01", endDate: "2026-07-01" });
+  assert.equal(result.completedYears, 0);
+  assert.equal(result.serviceDays, 182);
+  assert.equal(result.completeVacationDays, 0);
+  assert.equal(result.completeVacation, 0);
+  assert.equal(result.proportionalVacationDays.toFixed(6), "7.479452", "15 x 182 / 365");
+  assert.equal(result.proportionalVacation, 291.70, "30 daily x 7.479452 days x 1.30");
+  assert.equal(result.vacation, 291.70);
+});
+
+test("leaving on the anniversary itself accrues a single day of the new period", () => {
+  // This is the case that triggered the audit, and it looks wrong until the
+  // units are spelled out. Someone hired on 16 Aug 2021 who leaves on 16 Aug
+  // 2026 has closed five vacation periods and has started a sixth. The last
+  // day worked counts, so the new period is exactly ONE day old:
+  //
+  //   15 days/year x 1 day / 365 days/year = 0.0410959 days of salary
+  //   $30/day x 0.0410959 days x 1.30      = $1.60
+  //
+  // The $1.60 is not a scaling error. It is the whole answer to "what did the
+  // sixth period accrue", and the five closed periods are absent because the
+  // caller declared zero of them unpaid — which is what a worker who took
+  // their vacation every year should declare.
+  const result = vacationCase({ startDate: "2021-08-16", endDate: "2026-08-16", unusedVacationPeriods: 0 });
+  assert.equal(result.completedYears, 5);
+  assert.equal(result.serviceDays, 1827);
+  assert.equal(result.proportionalVacationDays.toFixed(7), "0.0410959");
+  assert.equal(result.proportionalVacation, 1.60);
+  assert.equal(result.completeVacation, 0);
+  assert.equal(result.vacation, 1.60);
+});
+
+test("each unpaid complete period adds exactly 15 days of salary plus the 30%", () => {
+  const at = (unusedVacationPeriods) => vacationCase({
+    startDate: "2021-08-16", endDate: "2026-08-16", unusedVacationPeriods,
+  });
+  const [none, one, two] = [at(0), at(1), at(2)];
+
+  assert.equal(none.completeVacationDays, 0);
+  assert.equal(one.completeVacationDays, 15);
+  assert.equal(two.completeVacationDays, 30);
+  assert.equal(none.completeVacation, 0);
+  assert.equal(one.completeVacation, 585, "30 daily x 15 days x 1.30");
+  assert.equal(two.completeVacation, 1170, "twice the same period, not a different rate");
+
+  // The proportional part is independent of how many periods went unpaid.
+  for (const result of [none, one, two]) {
+    assert.equal(result.proportionalVacation, 1.60);
+  }
+  assert.equal(round(one.vacation - none.vacation), 585);
+  assert.equal(round(two.vacation - one.vacation), 585, "the surcharge does not compound");
+
+  // The reported total is the sum of the two published lines, so a reader
+  // adding up what is on screen cannot land a cent away from the headline.
+  for (const result of [none, one, two]) {
+    assert.equal(result.vacation, round(result.completeVacation + result.proportionalVacation));
+    assert.equal(round(result.vacationDays), round(result.completeVacationDays + result.proportionalVacationDays));
+  }
+});
+
+test("years plus a fraction pay both parts, and the fraction ignores the closed years", () => {
+  // 15 Mar 2020 to 30 Sep 2026: six closed periods and 200 days into a seventh.
+  const result = vacationCase({
+    startDate: "2020-03-15", endDate: "2026-09-30", unusedVacationPeriods: 2,
+  });
+  assert.equal(result.completedYears, 6);
+  assert.equal(result.serviceDays, 2391);
+  assert.equal(result.proportionalVacationDays.toFixed(6), "8.219178", "15 x 200 / 365");
+  assert.equal(result.proportionalVacation, 320.55);
+  assert.equal(result.completeVacation, 1170, "the two periods the caller declared unpaid");
+  assert.equal(result.vacation, 1490.55);
+
+  // Six years of service do not enlarge the proportional part: it is measured
+  // from the last anniversary, not from the hire date.
+  const shorter = vacationCase({
+    startDate: "2025-03-15", endDate: "2025-09-30", unusedVacationPeriods: 0,
+  });
+  assert.equal(shorter.proportionalVacationDays.toFixed(6), "8.219178");
+});
+
+test("vacation is identical on dismissal and resignation, and is never capped", () => {
+  // Article 58's four-minimum-wage cap and article 8's two-minimum-wage one
+  // bound the severance base, not the vacation base: vacation is paid on the
+  // real ordinary salary whatever ended the contract.
+  const dates = { startDate: "2020-01-01", endDate: "2026-01-01", unusedVacationPeriods: 1 };
+  const dismissal = vacationCase({ ...dates, monthlySalary: 9000, termination: "dismissal" });
+  const resignation = vacationCase({ ...dates, monthlySalary: 9000, termination: "resignation" });
+
+  assert.equal(dismissal.indemnityBaseDaily, 53.76, "13.44 x 4");
+  assert.equal(resignation.indemnityBaseDaily, 26.88, "13.44 x 2");
+  assert.equal(dismissal.vacation, resignation.vacation);
+  assert.equal(dismissal.completeVacation, resignation.completeVacation);
+  assert.equal(dismissal.proportionalVacation, resignation.proportionalVacation);
+  // $9,000/30 = $300 a day, ten times the capped severance base of $26.88.
+  assert.equal(dismissal.completeVacation, 5850, "300 daily x 15 days x 1.30");
+});
+
+test("the severance base sits exactly on the four- and two-minimum-wage caps per sector", () => {
+  const baseFor = (monthlySalary, sector, termination) => calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-01-01", monthlySalary, sector, termination, aguinaldoPaid: true,
+  }).indemnityBaseDaily;
+
+  // Decree 12/2025 daily rates, times four for dismissal (art. 58) and twice
+  // for voluntary resignation (art. 8 of Decree 592). Each sector is probed a
+  // dollar of daily salary under the cap, exactly on it, and a dollar over.
+  const caps = [
+    { sector: "commerce", daily: 13.44 },
+    { sector: "maquila", daily: 13.227 },
+    { sector: "coffee", daily: 10.035 },
+    { sector: "agriculture", daily: 8.96 },
+  ];
+  for (const { sector, daily } of caps) {
+    for (const [termination, multiplier] of [["dismissal", 4], ["resignation", 2]]) {
+      const capDaily = round(daily * multiplier);
+      const atCap = daily * multiplier * 30;
+      assert.equal(baseFor(atCap - 30, sector, termination), round(capDaily - 1),
+        `${sector}/${termination}: below the cap the real salary is used`);
+      assert.equal(baseFor(atCap, sector, termination), capDaily,
+        `${sector}/${termination}: exactly on the cap`);
+      assert.equal(baseFor(atCap + 30, sector, termination), capDaily,
+        `${sector}/${termination}: above the cap it stops at the cap`);
+    }
+  }
+});
+
+test("the year-end bonus scale window is flagged, not silently resolved", () => {
+  // Hired 15 Oct 2023, left 5 Oct 2026. On the last day worked they had two
+  // complete years (15-day step); had they stayed ten more days to the cutoff
+  // they would have had three (19-day step). The reform does not say which
+  // scale an early leaver takes, so the conservative figure is the one paid
+  // and the alternative is named beside it.
+  const ambiguous = calculateSettlement({
+    startDate: "2023-10-15", endDate: "2026-10-05", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal",
+  });
+  assert.equal(ambiguous.completedYears, 2);
+  assert.equal(ambiguous.aguinaldoScaleAmbiguous, true);
+  assert.equal(ambiguous.aguinaldoScaleDays, 15, "the scale at the last day worked");
+  assert.equal(ambiguous.aguinaldoAlternativeScaleDays, 19, "the scale at 20 October");
+  // Both readings share the same 278/365 fraction: only the step differs.
+  assert.equal(ambiguous.aguinaldoDays.toFixed(4), "11.4247");
+  assert.equal(ambiguous.aguinaldo, 342.74, "the figure actually reported");
+  assert.equal(ambiguous.aguinaldoAlternativeDays.toFixed(4), "14.4712");
+  assert.equal(ambiguous.aguinaldoAlternative, 434.14, "shown only as the alternative");
+
+  // Well clear of any step: six complete years on both dates, so there is
+  // nothing to disclose and the alternative fields stay empty.
+  const settled = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-10-05", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal",
+  });
+  assert.equal(settled.aguinaldoScaleAmbiguous, false);
+  assert.equal(settled.aguinaldoAlternativeScaleDays, 0);
+  assert.equal(settled.aguinaldoAlternative, 0);
+  assert.equal(settled.aguinaldoDays.toFixed(4), "14.4712", "19 days over 278/365");
+
+  // Past the cutoff the worker did reach the qualifying date, so the scale is
+  // read there and nothing is ambiguous. This case is unchanged by the window
+  // check: it is the branch that already used the 20 October seniority.
+  const afterCutoff = calculateSettlement({
+    startDate: "2023-11-01", endDate: "2026-12-15", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal",
+  });
+  assert.equal(afterCutoff.completedYears, 3, "three years on the last day worked");
+  assert.equal(afterCutoff.aguinaldoScaleAmbiguous, false);
+  assert.equal(afterCutoff.aguinaldoDays, 15, "two years at 20 October, paid in full");
+  assert.equal(afterCutoff.aguinaldo, 450);
+
+  // A bonus already paid has no figure to disclose either way.
+  const paid = calculateSettlement({
+    startDate: "2023-10-15", endDate: "2026-10-05", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
+  });
+  assert.equal(paid.aguinaldoScaleAmbiguous, false);
+  assert.equal(paid.aguinaldo, 0);
 });

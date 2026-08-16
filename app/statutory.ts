@@ -228,11 +228,19 @@ export function calculateSettlement(input: {
     invalid: true, serviceYears: 0, completedYears: 0, serviceMonths: 0, serviceDays: 0,
     dailySalary: 0, indemnityBaseDaily: 0, minimumWageDecree: "", minimumWagePredatesTables: false,
     indemnity: 0, eligibleForResignationBenefit: false, pendingSalary: 0,
-    vacationDays: 0, vacation: 0, aguinaldoDays: 0, aguinaldo: 0,
+    vacationDays: 0, vacation: 0, completeVacationPeriods: 0, completeVacationDays: 0,
+    completeVacation: 0, proportionalVacationDays: 0, proportionalVacation: 0,
+    aguinaldoDays: 0, aguinaldo: 0, aguinaldoScaleAmbiguous: false, aguinaldoScaleDays: 0,
+    aguinaldoAlternativeScaleDays: 0, aguinaldoAlternativeDays: 0, aguinaldoAlternative: 0,
     quincena25: 0, quincena25Applies: false, total: 0,
   };
 
   const salary = Math.max(0, input.monthlySalary || 0);
+  // Thirty, not the 365/12 ≈ 30.42 that the wage decree uses for its own
+  // monthly equivalent. The MTPS constancia reproduced in the tests settles
+  // which one the settlement runs on: 937.54/30 × (15 × 54/365) × 1.30 gives
+  // the $90.16 the statement prints, where 30.42 would give $88.92. Changing
+  // this divisor breaks that reconciliation, so it is not a free choice.
   const dailySalary = salary / 30;
   const service = calendarService(start, end);
 
@@ -263,9 +271,21 @@ export function calculateSettlement(input: {
     : earned;
 
   const pendingSalary = dailySalary * Math.max(0, input.pendingSalaryDays || 0);
+
+  // Vacation is reported as two lines, not one. The proportional part alone is
+  // a startlingly small number — leaving on the anniversary itself accrues a
+  // single day, which is 15/365 of a day of salary — and folded into a single
+  // total it reads as a broken calculation rather than as the answer to what
+  // was actually asked, which is what the complete periods field controls.
+  // Each part is rounded on its own and the total is their sum, the same way
+  // the indemnity splits its complete years from its remaining days.
+  const completeVacationPeriods = Math.max(0, input.unusedVacationPeriods || 0);
+  const completeVacationDays = 15 * completeVacationPeriods;
   const proportionalVacationDays = 15 * fractionDays / YEAR_DAYS;
-  const vacationDays = 15 * Math.max(0, input.unusedVacationPeriods || 0) + proportionalVacationDays;
-  const vacation = dailySalary * vacationDays * 1.30;
+  const vacationDays = completeVacationDays + proportionalVacationDays;
+  const completeVacation = round2(dailySalary * completeVacationDays * 1.30);
+  const proportionalVacation = round2(dailySalary * proportionalVacationDays * 1.30);
+  const vacation = completeVacation + proportionalVacation;
 
   const year = end.getUTCFullYear();
   // The 2025 reform moved the qualifying date and the article 202 payment window
@@ -278,12 +298,25 @@ export function calculateSettlement(input: {
   // Share of the year's bonus already earned, 0 to 1, kept separate from the
   // day scale so the Quincena 25 can reuse it without repeating the rules.
   let aguinaldoFraction = 0;
+  // Seniority at the LAST DAY WORKED, which is the scale this branch keeps for
+  // anyone who leaves before the cutoff. The asymmetry with the branch below is
+  // deliberate, not an oversight: 20 October is the date the article 198 scale
+  // is read at for someone still on the payroll, but a worker who left on the
+  // 5th never reached it, and crediting them the scale of a seniority they
+  // never completed would pay for time not worked. Nothing in the reform says
+  // which scale that early leaver takes, so the conservative reading is used
+  // for the figure and the alternative is surfaced separately — see
+  // `aguinaldoScaleAmbiguous` below and the aguinaldo entry in `faq.ts`.
   let fullAguinaldoDays = aguinaldoDays(service.completedYears);
+  const atCutoff = calendarService(start, cutoff);
   if (workStartThisYear <= end) {
     if (end < cutoff) {
       aguinaldoFraction = daysInclusive(workStartThisYear, end) / YEAR_DAYS;
     } else {
-      const atCutoff = calendarService(start, cutoff);
+      // Seniority at 20 OCTOBER. Past the cutoff the worker did reach the
+      // qualifying date, so the scale is read there and not at departure —
+      // the counterpart of the comment above, and the reason the two branches
+      // measure the same requirement on different days on purpose.
       fullAguinaldoDays = aguinaldoDays(atCutoff.completedYears);
       aguinaldoFraction = atCutoff.completedYears >= 1
         ? 1
@@ -291,6 +324,21 @@ export function calculateSettlement(input: {
     }
   }
   const earnedAguinaldoDays = input.aguinaldoPaid ? 0 : fullAguinaldoDays * Math.min(1, aguinaldoFraction);
+
+  // The window where the two readings disagree: the worker leaves before the
+  // cutoff and would have crossed an article 198 step (15 / 19 / 21) had they
+  // stayed to 20 October. Only then is there a second figure worth naming, and
+  // the interface names it without claiming either one is the right answer.
+  // Because the cutoff is later than the departure in this branch, seniority
+  // there is never lower, so the alternative is always the larger figure.
+  const alternativeAguinaldoDays = aguinaldoDays(atCutoff.completedYears);
+  const aguinaldoScaleAmbiguous = !input.aguinaldoPaid
+    && workStartThisYear <= end
+    && end < cutoff
+    && alternativeAguinaldoDays !== fullAguinaldoDays;
+  const aguinaldoAlternativeDays = aguinaldoScaleAmbiguous
+    ? alternativeAguinaldoDays * Math.min(1, aguinaldoFraction)
+    : 0;
   // The October 2025 package also exempted aguinaldo from income tax up to
   // $1,500, but as a transitory provision for the 2025 fiscal year only. It is
   // deliberately not modelled here; check for a 2026 equivalent before adding
@@ -333,8 +381,20 @@ export function calculateSettlement(input: {
     pendingSalary: round2(pendingSalary),
     vacationDays,
     vacation: round2(vacation),
+    completeVacationPeriods,
+    completeVacationDays,
+    completeVacation,
+    proportionalVacationDays,
+    proportionalVacation,
     aguinaldoDays: earnedAguinaldoDays,
     aguinaldo: round2(aguinaldo),
+    /** True only inside the window where the two readings of the scale differ. */
+    aguinaldoScaleAmbiguous,
+    /** Scale steps being compared, for the interface to quote them. */
+    aguinaldoScaleDays: fullAguinaldoDays,
+    aguinaldoAlternativeScaleDays: aguinaldoScaleAmbiguous ? alternativeAguinaldoDays : 0,
+    aguinaldoAlternativeDays,
+    aguinaldoAlternative: round2(dailySalary * aguinaldoAlternativeDays),
     total: round2(total),
     startDate: isoDate(start),
     endDate: isoDate(end),

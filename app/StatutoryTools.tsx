@@ -21,10 +21,16 @@ const copy = {
     sector: "Sector económico del empleador", pendingDays: "Días de salario pendientes",
     unusedVacation: "Períodos completos de vacaciones pendientes", aguinaldoPaid: "El aguinaldo de este año ya fue pagado",
     service: "Antigüedad estimada", year: "año", yearPlural: "años", month: "mes", monthPlural: "meses",
+    period: "período cumplido", periodPlural: "períodos cumplidos", daysLabel: "días",
+    completedPeriodsLead: "Llevás", completedPeriodsTail: "; ingresá solo los que no te hayan pagado.",
     total: "Total bruto estimado", indemnity: "Indemnización / prestación",
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
+    vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
     quincena25: "Quincena 25", quincena25Note: "D.L. 499 art. 3: procede en despido o terminación con responsabilidad patronal, proporcional al tiempo del ciclo. Obligatoria para el sector privado desde 2027.",
     wageOutOfRange: "La salida es anterior a la tabla de salarios mínimos más antigua que hemos verificado. El tope se calcula con esa tabla y puede no ser la que estaba vigente ese día.",
+    aguinaldoAmbiguousLead: "La salida cae antes del 20 de octubre y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
+    aguinaldoAmbiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del 20 de octubre serían",
+    aguinaldoAmbiguousTail: "días. La reforma no dice expresamente qué escala rige para quien terminó antes del corte; si la diferencia te importa, consultalo con el MTPS.",
     dailyBase: "Salario diario usado para la prestación", vacationDays: "Días de vacaciones incluidos",
     resignationOk: "La antigüedad cumple el mínimo de dos años. El derecho exige además preaviso y renuncia con las formalidades legales.",
     resignationNo: "No se alcanza el mínimo de dos años para la prestación por renuncia voluntaria.",
@@ -87,10 +93,16 @@ const copy = {
     sector: "Employer's economic sector", pendingDays: "Unpaid salary days",
     unusedVacation: "Complete unused vacation periods", aguinaldoPaid: "This year's year-end bonus was already paid",
     service: "Estimated service", year: "year", yearPlural: "years", month: "month", monthPlural: "months",
+    period: "completed period", periodPlural: "completed periods", daysLabel: "days",
+    completedPeriodsLead: "You have", completedPeriodsTail: "; enter only the ones you were never paid.",
     total: "Estimated gross total", indemnity: "Severance / benefit",
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
+    vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
     quincena25: "Quincena 25", quincena25Note: "Decree 499 art. 3: due on dismissal or termination with employer responsibility, prorated over the cycle. Mandatory for private employers from 2027.",
     wageOutOfRange: "The end date precedes the oldest minimum wage table we have verified. The cap uses that table, which may not be the one in force that day.",
+    aguinaldoAmbiguousLead: "The last day worked falls before 20 October, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
+    aguinaldoAmbiguousMid: "days, the reading that does not assume time that was not worked. On the 20 October scale it would be",
+    aguinaldoAmbiguousTail: "days. The reform does not expressly say which scale governs someone whose contract ended before the cutoff; if the difference matters to you, check it with the MTPS.",
     dailyBase: "Daily salary used for the benefit", vacationDays: "Vacation days included",
     resignationOk: "Service meets the two-year minimum. Entitlement also requires statutory notice and resignation formalities.",
     resignationNo: "Service does not meet the two-year minimum for the voluntary resignation benefit.",
@@ -158,6 +170,19 @@ function number(value: string) { const parsed = Number(value); return Number.isF
 // so much; the rest of the range comes from the calculation module.
 const LATEST_END_DATE = `${Number(todayIso().slice(0, 4)) + 1}-12-31`;
 
+/**
+ * How many complete vacation periods the dates already grant, said out loud
+ * beside the field. The number is deliberately not written into the input: only
+ * the worker knows which of those periods were actually paid, and defaulting to
+ * "all of them" would inflate the estimate by 15 days of salary a year. Naming
+ * it turns a zero into a decision instead of an oversight — leaving it at zero
+ * with years of service is what makes the vacation line look impossibly small.
+ */
+function completedPeriodsNote(completedYears: number, t: typeof copy.es | typeof copy.en) {
+  const label = completedYears === 1 ? t.period : t.periodPlural;
+  return `${t.completedPeriodsLead} ${completedYears} ${label}${t.completedPeriodsTail}`;
+}
+
 function serviceLabel(settlement: { completedYears: number; serviceMonths: number }, t: typeof copy.es | typeof copy.en) {
   const years = `${settlement.completedYears} ${settlement.completedYears === 1 ? t.year : t.yearPlural}`;
   if (settlement.serviceMonths === 0) return years;
@@ -223,7 +248,8 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
             <SelectField label={t.sector} lang={lang} value={sector} onChange={setSector} help={t.helpSector}
               options={(Object.keys(DAILY_MINIMUM_WAGE) as WageSector[]).map((item) => ({ value: item, label: sectorLabels[lang][item] }))} />
             <NumberField label={t.pendingDays} lang={lang} value={pendingDays} onChange={setPendingDays} max="31" help={t.helpPendingDays} />
-            <NumberField label={t.unusedVacation} lang={lang} value={unusedVacation} onChange={setUnusedVacation} max="50" help={t.helpUnusedVacation} />
+            <NumberField label={t.unusedVacation} lang={lang} value={unusedVacation} onChange={setUnusedVacation} max="50" help={t.helpUnusedVacation}
+              note={settlement.invalid ? undefined : completedPeriodsNote(settlement.completedYears, t)} />
           </div>
           <CheckField label={t.aguinaldoPaid} checked={aguinaldoPaid} onChange={setAguinaldoPaid} />
         </div>
@@ -231,9 +257,14 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <div className="results-kicker">{t.result}</div>
           {settlement.invalid ? <div className="warning">! {t.invalidDates}</div> : <>
             <div className="result-headline"><span>{t.total}</span><strong>{money.format(settlement.total)}</strong><small>{t.service}: {serviceLabel(settlement, t)}</small></div>
-            <div className="result-tiles"><div className="highlight"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacation}</span><b>{money.format(settlement.vacation)}</b></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
-            <div className="result-facts"><div><span>{t.dailyBase}</span><b>{money.format(settlement.indemnityBaseDaily)}</b></div><div><span>{t.vacationDays}</span><b>{settlement.vacationDays.toFixed(2)}</b></div></div>
+            <div className="result-tiles"><div className="highlight"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacationComplete}</span><b>{money.format(settlement.completeVacation)}</b><i>{settlement.completeVacationDays.toFixed(2)} {t.daysLabel}</i></div><div><span>{t.vacationFraction}</span><b>{money.format(settlement.proportionalVacation)}</b><i>{settlement.proportionalVacationDays.toFixed(2)} {t.daysLabel}</i></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
+            <div className="result-facts"><div><span>{t.dailyBase}</span><b>{money.format(settlement.indemnityBaseDaily)}</b></div><div><span>{t.vacationDays}</span><b>{settlement.vacationDays.toFixed(2)}</b><small>{t.vacation}: {money.format(settlement.vacation)}</small></div></div>
             {settlement.minimumWagePredatesTables && <div className="callout warn"><span>!</span><p>{t.wageOutOfRange}</p></div>}
+            {/* Only inside the window where the two readings of the article 198
+                scale disagree. It describes the discrepancy and names both
+                figures without asserting which one governs, because the reform
+                does not say — see the aguinaldo entry in faq.ts. */}
+            {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldo)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail}</p></div>}
             {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note}</p></div>}
             <div className={`callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
           </>}
