@@ -44,6 +44,19 @@ test("prerenders every page instead of shipping empty roots", async () => {
   assert.match(settlement, /Calcula lo que corresponde al terminar tu empleo/);
   assert.match(settlement, /Indemnización \/ prestación/);
   assert.match(withholding, /Decreto Ejecutivo 10\/2025/);
+
+  const aguinaldo = await pageHtml("es", "aguinaldo");
+  assert.match(aguinaldo, /Cuánto aguinaldo te toca este año/);
+  // The deadline is the one figure on that page a reader can act on, so it has
+  // to survive into the prerendered markup and not wait for JavaScript.
+  assert.match(aguinaldo, /de diciembre de \d{4}/);
+  assert.match(aguinaldo, /Código de Trabajo art\. 198/);
+  // The fiscal panel is written and switched off: the $1,500 exemption was
+  // transitory for 2025 and nothing published settles 2026. If this ships a
+  // figure, `AGUINALDO_TAX_PREVIEW` was flipped without deciding the question.
+  for (const label of [/Porción exenta/, /Base gravada/, /Retención estimada/]) {
+    assert.doesNotMatch(aguinaldo, label, "the year-end bonus page must claim no tax treatment");
+  }
   // The review date is the site's freshness claim; if the badge stops rendering,
   // the pages keep citing decrees with nothing saying when they were checked.
   for (const html of [settlement, withholding]) {

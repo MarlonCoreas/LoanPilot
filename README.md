@@ -12,12 +12,14 @@ Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
 - `/`: portada y directorio de herramientas.
 - `/prestamos/`: préstamos, amortización y abonos a capital.
 - `/finiquito/`: finiquito, indemnización y renuncia voluntaria.
+- `/aguinaldo/`: días según antigüedad, parte proporcional y fecha límite de pago.
 - `/horas-extras/`: horas extras, recargo nocturno, día de descanso y asueto.
 - `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención, y revisión de
   una boleta de pago contra ellas.
 
 Cada página existe en inglés bajo `/en/`: `/en/`, `/en/loans/`, `/en/settlement/`,
-`/en/overtime/` y `/en/withholding/`. El idioma lo determina la URL, no una preferencia
+`/en/year-end-bonus/`, `/en/overtime/` y `/en/withholding/`. El idioma lo determina
+la URL, no una preferencia
 guardada, así que cada traducción es indexable y se puede compartir. La tabla de
 rutas, sus metadatos y el `sitemap.xml` salen todos de `app/routes.ts`; el
 sitemap se genera en el build y por eso no vive en `public/`.
@@ -40,6 +42,11 @@ puede afirmar algo que la página no diga.
   del cálculo sale del dispositivo para generarlo.
 - Estimación de finiquito e indemnización por despido injustificado o renuncia
   voluntaria, incluyendo vacaciones, aguinaldo y salario pendiente.
+- Estimación de aguinaldo en su propia página, para quien sigue laborando y para
+  quien ya salió: escala del art. 198 según la antigüedad al 20 de octubre,
+  parte proporcional cuando no se alcanza el ciclo completo, y la ventana legal
+  de pago con su fecha límite. La lógica es la misma función que usa el
+  finiquito, así que las dos páginas no pueden dar cifras distintas.
 - Estimación de la hora extra diurna y nocturna, del recargo nocturno de la
   jornada ordinaria y del pago por trabajar en día de descanso o de asueto.
 - Estimación de AFP, ISSS e Impuesto sobre la Renta para pagos mensuales,

@@ -216,6 +216,44 @@ test("the Quincena 25 cites its own decree, not the one that shares its number",
     "pointing both at the same document is the bug this test exists for");
 });
 
+/**
+ * The codepoints jsPDF's built-in fonts can actually draw: WinAnsi, which is
+ * Latin-1 plus a block of punctuation borrowed into 0x80-0x9F. Anything outside
+ * it is not dropped — it is rendered as some OTHER character — so the document
+ * comes out wrong rather than incomplete, and nobody notices until it is on
+ * paper. U+2212 MINUS SIGN printed as a quotation mark in the payslip check
+ * this way, and U+2197 NORTH EAST ARROW prints as "!—".
+ */
+const WINANSI_HIGH = new Set([
+  0x20AC, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, 0x02C6, 0x2030, 0x0160,
+  0x2039, 0x0152, 0x017D, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+  0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x017E, 0x0178,
+]);
+const outsideWinAnsi = (text) => [...text].filter((char) => {
+  const code = char.codePointAt(0);
+  if (code < 0x7F) return false;
+  if (code >= 0xA0 && code <= 0xFF) return false;
+  return !WINANSI_HIGH.has(code);
+});
+
+test("every citation the exported PDFs print can actually be drawn on the page", () => {
+  // Norms and source addresses are the one part of a PDF that every calculator
+  // shares, so a character the font cannot draw here corrupts every document
+  // the site emits rather than one page's. Em dash, guillemets and the Spanish
+  // accents are all inside the encoding and are used freely; the arrows and the
+  // typographic minus that the interface uses on screen are not.
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const bad = outsideWinAnsi(version.norm);
+      assert.deepEqual(bad, [], `${rule.id} @ ${version.from}: norm carries ${bad.join(" ")}`);
+    }
+  }
+  for (const [key, url] of Object.entries(OFFICIAL)) {
+    const bad = outsideWinAnsi(url);
+    assert.deepEqual(bad, [], `OFFICIAL.${key} carries ${bad.join(" ")}`);
+  }
+});
+
 test("no rule claims to have been reviewed before it existed, or in the future", () => {
   const today = new Date().toISOString().slice(0, 10);
   for (const rule of ALL_RULES) {

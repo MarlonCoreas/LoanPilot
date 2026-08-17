@@ -1,10 +1,14 @@
+import { calculateAguinaldo } from "./aguinaldo.ts";
 import {
-  accrualYearDays, afpEmployeeRate, aguinaldoCutoff, aguinaldoCycleStart, aguinaldoScale,
-  currentValue, dailySalaryDivisor, fixedDeduction, fixedDeductionIncomeLimit,
+  calendarService, completedMonths, DAY_MS, daysInclusive, isoDate, round2, utcDate,
+} from "./dates.ts";
+import {
+  accrualYearDays, afpEmployeeRate, currentValue, dailySalaryDivisor,
+  fixedDeduction, fixedDeductionIncomeLimit,
   isssEmployeeRate, isssMonthlyCeiling, minimumWage, quincena25Exempt, quincena25MandatoryFrom,
-  quincena25Rate, quincena25SalaryCeiling, recalcMonths, recalcTables, resignationDaysPerYear,
-  resignationMinimumService, resignationWageCap, ruleAt, severanceDaysPerYear,
-  severanceMinimumDays, severanceWageCap, vacationDaysPerYear,
+  quincena25Rate, quincena25SalaryCeiling, quincena25Window, recalcMonths, recalcTables,
+  resignationDaysPerYear, resignationMinimumService, resignationWageCap, ruleAt,
+  severanceDaysPerYear, severanceMinimumDays, severanceWageCap, vacationDaysPerYear,
   vacationProportionalOnExit, vacationSurcharge, withholdingTables,
 } from "./rules.ts";
 import type {
@@ -85,9 +89,6 @@ const MONTHS_IN_A_YEAR = 12;
 const DAILY_DIVISOR = currentValue(dailySalaryDivisor);
 const VACATION_DAYS_PER_YEAR = currentValue(vacationDaysPerYear);
 const VACATION_SURCHARGE = currentValue(vacationSurcharge);
-const AGUINALDO_SCALE = currentValue(aguinaldoScale);
-const AGUINALDO_CUTOFF = currentValue(aguinaldoCutoff);
-const AGUINALDO_CYCLE_START = currentValue(aguinaldoCycleStart);
 
 // Both fields are free-text `<input type="date">`, so a typo like "0025-01-01"
 // is a value the browser happily submits. Anything outside this window is
@@ -95,63 +96,8 @@ const AGUINALDO_CYCLE_START = currentValue(aguinaldoCycleStart);
 export const EARLIEST_EMPLOYMENT_DATE = "1950-01-01";
 export const LATEST_EMPLOYMENT_DATE = "2100-12-31";
 
-const DAY_MS = 86_400_000;
-const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-
-function utcDate(value: string) {
-  const [year, month, day] = value.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function isoDate(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function addUtcYears(date: Date, years: number) {
-  const result = new Date(date.getTime());
-  result.setUTCFullYear(result.getUTCFullYear() + years);
-  // 29 February anniversaries fall on 28 February in non-leap years.
-  if (result.getUTCMonth() !== date.getUTCMonth()) result.setUTCDate(0);
-  return result;
-}
-
-function calendarService(start: Date, end: Date) {
-  if (end < start) return { years: 0, completedYears: 0, fraction: 0, anniversary: start };
-  let completedYears = end.getUTCFullYear() - start.getUTCFullYear();
-  if (addUtcYears(start, completedYears) > end) completedYears--;
-  completedYears = Math.max(0, completedYears);
-  const anniversary = addUtcYears(start, completedYears);
-  const nextAnniversary = addUtcYears(start, completedYears + 1);
-  const elapsed = Math.max(0, (end.getTime() - anniversary.getTime()) / DAY_MS);
-  const span = Math.max(1, (nextAnniversary.getTime() - anniversary.getTime()) / DAY_MS);
-  const fraction = Math.min(1, elapsed / span);
-  return { years: completedYears + fraction, completedYears, fraction, anniversary };
-}
-
-// Whole calendar months between two dates. Scaling the year fraction by 12
-// instead assumed months of 30.4 days, so the thirtieth day after an
-// anniversary still displayed as zero months.
-function completedMonths(from: Date, to: Date) {
-  const months = (to.getUTCFullYear() - from.getUTCFullYear()) * 12
-    + (to.getUTCMonth() - from.getUTCMonth())
-    - (to.getUTCDate() < from.getUTCDate() ? 1 : 0);
-  return Math.min(11, Math.max(0, months));
-}
-
-function daysInclusive(start: Date, end: Date) {
-  if (end < start) return 0;
-  return Math.floor((end.getTime() - start.getTime()) / DAY_MS) + 1;
-}
-
 const EARLIEST_DATE = utcDate(EARLIEST_EMPLOYMENT_DATE);
 const LATEST_DATE = utcDate(LATEST_EMPLOYMENT_DATE);
-
-// The article 198 scale, read at whatever date the caller decides. Takes
-// COMPLETED years: with service measured in days, 1,095 days divides into
-// exactly 3.0 while the third anniversary is still a day away.
-function aguinaldoDays(completedYears: number) {
-  return AGUINALDO_SCALE.find((step) => completedYears >= step.fromCompletedYears)!.days;
-}
 
 /** See the `accrualYearDays` rule: 365, inclusive of both first and last day. */
 const YEAR_DAYS = currentValue(accrualYearDays);
@@ -171,6 +117,7 @@ export const QUINCENA25 = {
   rate: currentValue(quincena25Rate),
   mandatoryFrom: currentValue(quincena25MandatoryFrom),
   exempt: currentValue(quincena25Exempt),
+  window: currentValue(quincena25Window),
 };
 
 export function calculateSettlement(input: {
@@ -268,64 +215,21 @@ export function calculateSettlement(input: {
   const proportionalVacation = round2(dailySalary * proportionalVacationDays * vacationRate);
   const vacation = completeVacation + proportionalVacation;
 
-  const year = end.getUTCFullYear();
-  // The date seniority is read at, and by which the bonus is fully earned: see
-  // the `aguinaldoCutoff` rule. The 2025 reform moved it, and the article 202
-  // payment window with it, from 12 December to 20 October.
-  const cutoff = new Date(Date.UTC(year, AGUINALDO_CUTOFF.month - 1, AGUINALDO_CUTOFF.day));
-  // Where the bonus year starts accruing. Declared rather than hardcoded — see
-  // the `aguinaldoCycleStart` rule, which records that no article settles it.
-  const yearStart = new Date(Date.UTC(year, AGUINALDO_CYCLE_START.month - 1, AGUINALDO_CYCLE_START.day));
-  const workStartThisYear = start > yearStart ? start : yearStart;
-  // Share of the year's bonus already earned, 0 to 1, kept separate from the
-  // day scale so the Quincena 25 can reuse it without repeating the rules.
-  let aguinaldoFraction = 0;
-  // Seniority at the LAST DAY WORKED, which is the scale this branch keeps for
-  // anyone who leaves before the cutoff. The asymmetry with the branch below is
-  // deliberate, not an oversight: 20 October is the date the article 198 scale
-  // is read at for someone still on the payroll, but a worker who left on the
-  // 5th never reached it, and crediting them the scale of a seniority they
-  // never completed would pay for time not worked. Nothing in the reform says
-  // which scale that early leaver takes, so the conservative reading is used
-  // for the figure and the alternative is surfaced separately — see
-  // `aguinaldoScaleAmbiguous` below and the aguinaldo entry in `faq.ts`.
-  let fullAguinaldoDays = aguinaldoDays(service.completedYears);
-  const atCutoff = calendarService(start, cutoff);
-  if (workStartThisYear <= end) {
-    if (end < cutoff) {
-      aguinaldoFraction = daysInclusive(workStartThisYear, end) / YEAR_DAYS;
-    } else {
-      // Seniority at 20 OCTOBER. Past the cutoff the worker did reach the
-      // qualifying date, so the scale is read there and not at departure —
-      // the counterpart of the comment above, and the reason the two branches
-      // measure the same requirement on different days on purpose.
-      fullAguinaldoDays = aguinaldoDays(atCutoff.completedYears);
-      aguinaldoFraction = atCutoff.completedYears >= 1
-        ? 1
-        : daysInclusive(workStartThisYear, cutoff) / YEAR_DAYS;
-    }
-  }
-  const earnedAguinaldoDays = input.aguinaldoPaid ? 0 : fullAguinaldoDays * Math.min(1, aguinaldoFraction);
-
-  // The window where the two readings disagree: the worker leaves before the
-  // cutoff and would have crossed an article 198 step (15 / 19 / 21) had they
-  // stayed to 20 October. Only then is there a second figure worth naming, and
-  // the interface names it without claiming either one is the right answer.
-  // Because the cutoff is later than the departure in this branch, seniority
-  // there is never lower, so the alternative is always the larger figure.
-  const alternativeAguinaldoDays = aguinaldoDays(atCutoff.completedYears);
-  const aguinaldoScaleAmbiguous = !input.aguinaldoPaid
-    && workStartThisYear <= end
-    && end < cutoff
-    && alternativeAguinaldoDays !== fullAguinaldoDays;
-  const aguinaldoAlternativeDays = aguinaldoScaleAmbiguous
-    ? alternativeAguinaldoDays * Math.min(1, aguinaldoFraction)
-    : 0;
-  // The October 2025 package also exempted aguinaldo from income tax up to
-  // $1,500, but as a transitory provision for the 2025 fiscal year only. It is
-  // deliberately not modelled here; check for a 2026 equivalent before adding
-  // it, and note this estimate is gross either way.
-  const aguinaldo = dailySalary * earnedAguinaldoDays;
+  // The bonus is `aguinaldo.ts` now, and the whole of it: the asymmetry between
+  // its two branches and the window where the article 198 scale is ambiguous
+  // moved there intact. `/aguinaldo/` calls the same function, so the two pages
+  // cannot drift on the cases that are actually hard.
+  //
+  // The October 2025 package also exempted the bonus from income tax up to
+  // $1,500, but transitorily and for the 2025 fiscal year alone. Nothing here
+  // models it: this line is gross, as the note under the results says.
+  const bonus = calculateAguinaldo({
+    startDate: input.startDate,
+    endDate: input.endDate,
+    monthlySalary: salary,
+    alreadyPaid: input.aguinaldoPaid,
+  });
+  const aguinaldo = bonus.unrounded;
 
   // Decree 499 article 3 grants the Quincena 25 when the contract ends with
   // employer responsibility or the worker is dismissed without legal cause,
@@ -339,26 +243,34 @@ export function calculateSettlement(input: {
   // employers, so nothing is owed as of right before the general regime opens.
   // The public date sits beside it in the rule and no case here reaches it.
   //
-  // ONE CLAUSE OF ARTICLE 3 IS NOT MODELLED, AND IT IS NOT A SMALL ONE. The
-  // article grants the benefit to a worker dismissed "antes del veinticinco de
-  // enero o en esa misma fecha" — the day article 1 makes the payment fall due.
-  // Read strictly, that is a protection against being let go days before payday
-  // and nothing more, and a dismissal in July would carry no line at all. Read
-  // as the sentence that follows it invites — "deberán aplicarse las
-  // disposiciones establecidas para el goce de la prima anual en concepto de
-  // aguinaldo […] o la parte proporcional, según corresponda" — it works like
-  // article 202 of the Labour Code and every dismissal takes its proportional
-  // share. This module applies the second reading, which is the one that pays
-  // the worker, and the interface says so; adopting the first would drop the
-  // line from most settlements on the strength of a reading of an ambiguous
-  // clause, which is a decision for a document and not for this file.
-  const quincena25Applies = input.termination === "dismissal"
+  // ARTICLE 3 IS READ RESTRICTIVELY, which is the opposite of what article 187
+  // gets a few lines above, and the asymmetry is the decision rather than an
+  // inconsistency. Article 187 has an MTPS statement paying the wide reading
+  // and reconciling to the cent; following the ministry there is following
+  // evidence. This law is from January 2026, its first cycle was voluntary for
+  // private employers, and there is no practice to follow. See the
+  // `quincena25Window` rule for the two readings in full.
+  //
+  // So the entitlement lives inside the window article 3 names — a termination
+  // on or before 25 January, the day article 1 makes the payment fall due — and
+  // outside it the line is zero. `quincena25OutsideWindow` is what the page and
+  // the PDF use to say so, and to name the reading that would have paid.
+  const quincena25Eligible = input.termination === "dismissal"
     && salary > 0
     && salary <= QUINCENA25.salaryCeiling
     && isoDate(end) >= QUINCENA25.mandatoryFrom.private;
-  const quincena25 = quincena25Applies
-    ? salary * QUINCENA25.rate * Math.min(1, daysInclusive(workStartThisYear, end) / YEAR_DAYS)
-    : 0;
+  // The window runs to `QUINCENA25.window` from the first of that same month:
+  // where it OPENS is this project's bound and not the decree's, so the test is
+  // written as one month rather than hidden inside a date comparison.
+  const withinQuincena25Window = end.getUTCMonth() + 1 === QUINCENA25.window.month
+    && end.getUTCDate() <= QUINCENA25.window.day;
+  const quincena25Applies = quincena25Eligible && withinQuincena25Window;
+  const quincena25OutsideWindow = quincena25Eligible && !withinQuincena25Window;
+  // The proportion still runs over the cycle the bonus uses, which is the only
+  // period this project has: article 2 keys the amount to the salary "al
+  // momento en que la prestación se materialice" and names no accrual period.
+  const quincena25Share = salary * QUINCENA25.rate * Math.min(1, bonus.cycleFraction);
+  const quincena25 = quincena25Applies ? quincena25Share : 0;
 
   const total = indemnity + pendingSalary + vacation + aguinaldo + quincena25;
 
@@ -388,12 +300,12 @@ export function calculateSettlement(input: {
     "vacationDaysPerYear", "vacationSurcharge",
     ...(proportionalVacationDays > 0 ? ["vacationProportionalOnExit"] as const : []),
     "vacationUnmodelled",
-    ...(earnedAguinaldoDays > 0
-      ? ["aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart"] as const
-      : []),
-    ...(quincena25Applies
+    // The bonus reports the rules its own arithmetic opened, so the settlement
+    // does not have to know which of them a given case reached.
+    ...bonus.appliedRules.filter((id) => id.startsWith("aguinaldo")),
+    ...(quincena25Applies || quincena25OutsideWindow
       ? ["quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt",
-        "quincena25MandatoryFrom"] as const
+        "quincena25Window", "quincena25MandatoryFrom"] as const
       : []),
   ];
 
@@ -414,6 +326,12 @@ export function calculateSettlement(input: {
     appliedRules,
     quincena25: round2(quincena25),
     quincena25Applies,
+    /** Qualified on every count except the date: what the note is shown for. */
+    quincena25OutsideWindow,
+    /** What the broad reading of article 3 would have paid, for that note. */
+    quincena25Alternative: round2(quincena25OutsideWindow ? quincena25Share : 0),
+    /** The last day of the window article 3 names, as the page prints it. */
+    quincena25WindowCloses: QUINCENA25.window,
     // Whole months past the last anniversary. Reported separately because
     // rounding the decimal year to two places shows "2.00" for someone who is
     // still days short of the two years the resignation benefit requires.
@@ -432,15 +350,15 @@ export function calculateSettlement(input: {
     proportionalVacation,
     /** True only where article 187 and the official service disagree. */
     proportionalVacationDisputed,
-    aguinaldoDays: earnedAguinaldoDays,
-    aguinaldo: round2(aguinaldo),
+    aguinaldoDays: bonus.days,
+    aguinaldo: bonus.amount,
     /** True only inside the window where the two readings of the scale differ. */
-    aguinaldoScaleAmbiguous,
+    aguinaldoScaleAmbiguous: bonus.scaleAmbiguous,
     /** Scale steps being compared, for the interface to quote them. */
-    aguinaldoScaleDays: fullAguinaldoDays,
-    aguinaldoAlternativeScaleDays: aguinaldoScaleAmbiguous ? alternativeAguinaldoDays : 0,
-    aguinaldoAlternativeDays,
-    aguinaldoAlternative: round2(dailySalary * aguinaldoAlternativeDays),
+    aguinaldoScaleDays: bonus.scaleDays,
+    aguinaldoAlternativeScaleDays: bonus.alternativeScaleDays,
+    aguinaldoAlternativeDays: bonus.alternativeDays,
+    aguinaldoAlternative: bonus.alternativeAmount,
     total: round2(total),
     startDate: isoDate(start),
     endDate: isoDate(end),

@@ -15,6 +15,7 @@ const copy = {
     chooseLead: "Cada calculadora vive en su propia página para que las reglas, resultados y fuentes sean fáciles de revisar.",
     loans: "Calculadora de préstamos", loansText: "Compara cuota, intereses, seguros, costo efectivo y el impacto de abonos a capital.", loansCta: "Calcular préstamo",
     settlement: "Finiquito e indemnización", settlementText: "Estima indemnización, vacaciones, aguinaldo y salario pendiente según la normativa laboral.", settlementCta: "Calcular finiquito",
+    aguinaldo: "Aguinaldo", aguinaldoText: "Calcula los días que gana tu antigüedad al 20 de octubre y hasta cuándo tienen para pagártelo.", aguinaldoCta: "Calcular aguinaldo",
     overtime: "Horas extras y recargos", overtimeText: "Calcula la hora extra diurna y nocturna, el recargo nocturno y los días de descanso y asueto.", overtimeCta: "Calcular horas extras",
     withholding: "Retenciones salariales", withholdingText: "Estima AFP, ISSS e ISR y consulta los tramos oficiales mensuales, quincenales y semanales.", withholdingCta: "Calcular retenciones",
     whyEyebrow: "POR QUÉ CONFIAR",
@@ -40,6 +41,7 @@ const copy = {
     chooseLead: "Each calculator has its own page, making its rules, results and sources easier to review.",
     loans: "Loan calculator", loansText: "Compare payments, interest, insurance, effective cost and the impact of extra principal payments.", loansCta: "Calculate a loan",
     settlement: "Settlement and severance", settlementText: "Estimate severance, vacation, year-end bonus and unpaid salary under employment rules.", settlementCta: "Estimate settlement",
+    aguinaldo: "Year-end bonus", aguinaldoText: "Work out the days your length of service earns at 20 October and the deadline to pay them.", aguinaldoCta: "Calculate the bonus",
     overtime: "Overtime and surcharges", overtimeText: "Work out daytime and night overtime, the night surcharge and rest days and public holidays.", overtimeCta: "Calculate overtime",
     withholding: "Payroll withholding", withholdingText: "Estimate pension, ISSS and income tax and inspect the official monthly, twice-monthly and weekly bands.", withholdingCta: "Estimate withholding",
     whyEyebrow: "WHY TRUST THIS",
@@ -79,6 +81,7 @@ export default function PlatformHome({ lang }: { lang: Lang }) {
   const tools = [
     { icon: "◎", title: t.loans, text: t.loansText, cta: t.loansCta, href: ROUTES[lang].loans, className: "loan" },
     { icon: "§", title: t.settlement, text: t.settlementText, cta: t.settlementCta, href: ROUTES[lang].settlement, className: "labor" },
+    { icon: "★", title: t.aguinaldo, text: t.aguinaldoText, cta: t.aguinaldoCta, href: ROUTES[lang].aguinaldo, className: "labor" },
     { icon: "◷", title: t.overtime, text: t.overtimeText, cta: t.overtimeCta, href: ROUTES[lang].overtime, className: "hours" },
     { icon: "%", title: t.withholding, text: t.withholdingText, cta: t.withholdingCta, href: ROUTES[lang].withholding, className: "tax" },
   ];

@@ -1,3 +1,4 @@
+import AguinaldoPage from "./AguinaldoPage";
 import LegalPage from "./LegalPage";
 import NotFound from "./NotFound";
 import OvertimePage from "./OvertimePage";
@@ -10,6 +11,7 @@ export default function App({ pathname }: { pathname: string }) {
   if (page === "notFound") return <NotFound lang={lang} />;
   if (page === "loans") return <LoanPage lang={lang} />;
   if (page === "settlement") return <LegalPage lang={lang} page="settlement" />;
+  if (page === "aguinaldo") return <AguinaldoPage lang={lang} />;
   if (page === "overtime") return <OvertimePage lang={lang} />;
   if (page === "withholding") return <LegalPage lang={lang} page="withholding" />;
   return <PlatformHome lang={lang} />;

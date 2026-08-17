@@ -1,8 +1,8 @@
 export type Lang = "es" | "en";
-export type Page = "home" | "loans" | "settlement" | "overtime" | "withholding";
+export type Page = "home" | "loans" | "settlement" | "aguinaldo" | "overtime" | "withholding";
 
 export const LANGS = ["es", "en"] as const;
-export const PAGES = ["home", "loans", "settlement", "overtime", "withholding"] as const;
+export const PAGES = ["home", "loans", "settlement", "aguinaldo", "overtime", "withholding"] as const;
 
 /**
  * The calculators, in the order they appear everywhere: the header, the footer,
@@ -17,8 +17,8 @@ export const TOOL_PAGES = PAGES.filter((page): page is Exclude<Page, "home"> => 
 // said Spanish: unshareable, and invisible to search engines. Switching
 // language now navigates, so every translation is a page a crawler can reach.
 export const ROUTES: Record<Lang, Record<Page, string>> = {
-  es: { home: "/", loans: "/prestamos/", settlement: "/finiquito/", overtime: "/horas-extras/", withholding: "/retenciones/" },
-  en: { home: "/en/", loans: "/en/loans/", settlement: "/en/settlement/", overtime: "/en/overtime/", withholding: "/en/withholding/" },
+  es: { home: "/", loans: "/prestamos/", settlement: "/finiquito/", aguinaldo: "/aguinaldo/", overtime: "/horas-extras/", withholding: "/retenciones/" },
+  en: { home: "/en/", loans: "/en/loans/", settlement: "/en/settlement/", aguinaldo: "/en/year-end-bonus/", overtime: "/en/overtime/", withholding: "/en/withholding/" },
 };
 
 export const SITE_ORIGIN = "https://loanpilot.marloncoreas.com";
@@ -29,8 +29,8 @@ export const OG_LOCALE: Record<Lang, string> = { es: "es_SV", en: "en_US" };
 // These names appeared verbatim in the header, the footer and the home
 // directory — three files, two languages, six chances to drift apart.
 export const PAGE_LABELS: Record<Lang, Record<Page, string>> = {
-  es: { home: "Inicio", loans: "Préstamos", settlement: "Finiquito", overtime: "Horas extras", withholding: "Retenciones" },
-  en: { home: "Home", loans: "Loans", settlement: "Settlement", overtime: "Overtime", withholding: "Withholding" },
+  es: { home: "Inicio", loans: "Préstamos", settlement: "Finiquito", aguinaldo: "Aguinaldo", overtime: "Horas extras", withholding: "Retenciones" },
+  en: { home: "Home", loans: "Loans", settlement: "Settlement", aguinaldo: "Year-end bonus", overtime: "Overtime", withholding: "Withholding" },
 };
 
 export const PAGE_META: Record<Lang, Record<Page, { title: string; description: string; ogTitle: string }>> = {
@@ -49,6 +49,11 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
       title: "Calculadora de finiquito e indemnización | LoanPilot",
       description: "Estima indemnización, vacaciones, aguinaldo y salarios pendientes conforme a las reglas laborales de El Salvador.",
       ogTitle: "LoanPilot | Finiquito e indemnización",
+    },
+    aguinaldo: {
+      title: "Calculadora de aguinaldo en El Salvador | LoanPilot",
+      description: "Calcula los días de aguinaldo que te tocan según tu antigüedad al 20 de octubre y hasta cuándo tiene el patrono para pagarlo.",
+      ogTitle: "LoanPilot | Aguinaldo",
     },
     overtime: {
       title: "Calculadora de horas extras en El Salvador | LoanPilot",
@@ -76,6 +81,11 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
       title: "Employment settlement and severance calculator | LoanPilot",
       description: "Estimate severance, vacation, year-end bonus and unpaid salary under the employment rules of El Salvador.",
       ogTitle: "LoanPilot | Settlement and severance",
+    },
+    aguinaldo: {
+      title: "Year-end bonus calculator for El Salvador | LoanPilot",
+      description: "Work out the days of year-end bonus your length of service earns at 20 October, and the deadline your employer has to pay it.",
+      ogTitle: "LoanPilot | Year-end bonus",
     },
     overtime: {
       title: "Overtime pay calculator for El Salvador | LoanPilot",
@@ -127,6 +137,13 @@ export const OG_CARD: Record<Lang, Record<Page, {
       alt: "LoanPilot: calculadora de finiquito e indemnización de El Salvador.",
       accent: "#ffd88a",
     },
+    aguinaldo: {
+      eyebrow: "AGUINALDO",
+      line1: "Los días que te tocan,", line2: "y hasta cuándo tienen para pagarlos.",
+      sub: "Antigüedad al 20 de octubre, escala del artículo 198 y la ventana legal de pago del Código de Trabajo.",
+      alt: "LoanPilot: calculadora de aguinaldo de El Salvador.",
+      accent: "#ffd88a",
+    },
     overtime: {
       eyebrow: "HORAS EXTRAS",
       line1: "Cada hora extra,", line2: "pagada como manda la ley.",
@@ -162,6 +179,13 @@ export const OG_CARD: Record<Lang, Record<Page, {
       line1: "What you are owed", line2: "when a job ends.",
       sub: "Severance, vacation, year-end bonus and unpaid salary under the Labour Code of El Salvador.",
       alt: "LoanPilot: employment settlement and severance calculator for El Salvador.",
+      accent: "#ffd88a",
+    },
+    aguinaldo: {
+      eyebrow: "YEAR-END BONUS",
+      line1: "The days you have earned,", line2: "and the deadline to pay them.",
+      sub: "Length of service at 20 October, the article 198 scale and the statutory payment window of the Labour Code.",
+      alt: "LoanPilot: year-end bonus calculator for El Salvador.",
       accent: "#ffd88a",
     },
     overtime: {

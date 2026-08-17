@@ -33,6 +33,10 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       answer: "Para quien sigue laborando, según la antigüedad alcanzada al 20 de octubre: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez años. Con menos de un año se paga la parte proporcional al tiempo trabajado. Si el contrato terminó antes del 20 de octubre, la norma no define expresamente qué escala rige: esa persona nunca llegó a la fecha del corte. Nuestra calculadora usa la antigüedad del último día trabajado, que es la lectura que no presupone tiempo no trabajado, y cuando las dos fechas caen en escalones distintos te muestra también la otra cifra para que la consultes con el MTPS.",
     },
     {
+      question: "¿Hasta cuándo tiene mi patrono para pagarme el aguinaldo?",
+      answer: "Desde la reforma de 2025 el pago va del 20 de octubre al 20 de diciembre de cada año, y esa última fecha es el límite: pasarla es incumplimiento y se puede denunciar en el MTPS. El 20 de octubre es además la fecha en que se lee tu antigüedad para saber qué escalón de días te toca. Antes de la reforma ambas cosas ocurrían el 12 de diciembre.",
+    },
+    {
       question: "¿Qué es la Quincena 25 y desde cuándo se paga?",
       answer: "Es un ingreso complementario equivalente al 50% del salario básico o nominal mensual, creado por la Ley Especial Quincena Veinticinco, Decreto Legislativo 499 del 14 de enero de 2026. Solo alcanza a quienes ganan $1,500 mensuales o menos, y se paga entre el 15 y el 25 de enero. El régimen general empieza en 2027; durante 2026 el sector público lo recibe de forma obligatoria y para el patrono privado es voluntario. La ley lo declara renta no gravable y prohíbe todo descuento sobre él —ni renta, ni ISSS, ni AFP—, lo hace inembargable y lo deja fuera de la base de cálculo de otras prestaciones, así que tampoco entra en tu finiquito ni en tu aguinaldo.",
     },
@@ -77,6 +81,10 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     {
       question: "How many days of year-end bonus apply?",
       answer: "For someone still employed, it depends on length of service at 20 October: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. Under a year, the proportional share is paid. If the contract ended before 20 October, the rule does not expressly say which scale governs: that person never reached the cutoff date. Our calculator uses length of service at the last day worked, the reading that does not assume time that was not worked, and when the two dates fall on different steps it also shows you the other figure so you can check it with the MTPS.",
+    },
+    {
+      question: "What is my employer's deadline to pay the year-end bonus?",
+      answer: "Since the 2025 reform payment runs from 20 October to 20 December each year, and that last date is the deadline: missing it is a breach and can be reported to the MTPS. 20 October is also the day your length of service is read at, which sets the step of days you are owed. Before the reform both happened on 12 December.",
     },
     {
       question: "What is the Quincena 25 and when is it paid?",

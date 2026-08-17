@@ -373,7 +373,7 @@ test("the minimum wage cap uses the table in force on the last day worked", () =
 
 test("the Quincena 25 follows Decree 499 and stays out of every other case", () => {
   const settle = (over) => calculateSettlement({
-    startDate: "2020-01-01", endDate: "2027-06-30", monthlySalary: 1200,
+    startDate: "2020-01-01", endDate: "2027-01-20", monthlySalary: 1200,
     sector: "commerce", termination: "dismissal", aguinaldoPaid: true, ...over,
   });
 
@@ -387,15 +387,60 @@ test("the Quincena 25 follows Decree 499 and stays out of every other case", () 
   assert.equal(settle({ monthlySalary: 1500.01 }).quincena25, 0);
 
   // Article 6 leaves 2026 voluntary for private employers, so nothing is owed
-  // as of right until the general regime starts.
-  assert.equal(settle({ endDate: "2026-12-31" }).quincena25, 0);
+  // as of right until the general regime starts. January 2026 is inside the
+  // article 3 window and still carries nothing, which is the two rules working
+  // independently rather than one standing in for the other.
+  assert.equal(settle({ endDate: "2026-01-20" }).quincena25, 0);
   assert.equal(settle({ endDate: "2027-01-01" }).quincena25Applies, true);
 
-  // Half a monthly salary, prorated over the calendar year the January payment
-  // closes: 181 days of 2027 worked out of 365.
-  assert.equal(settle({}).quincena25, round(1200 * 0.5 * 181 / 365));
-  // A full year in service takes the whole half salary, never more.
-  assert.equal(settle({ endDate: "2027-12-31" }).quincena25, 600);
+  // Half a monthly salary, prorated over the cycle worked: 20 days of 2027.
+  assert.equal(settle({}).quincena25, round(1200 * 0.5 * 20 / 365));
+});
+
+test("article 3 pays inside its window and names the reading that would pay outside", () => {
+  // The restrictive reading, decided against the broad one and against the
+  // direction article 187 was decided in. Article 3 grants the benefit to
+  // someone dismissed "antes del veinticinco de enero o en esa misma fecha",
+  // which is the day article 1 makes the payment fall due. See the
+  // `quincena25Window` rule for why the asymmetry with 187 is deliberate.
+  const settle = (endDate) => calculateSettlement({
+    startDate: "2020-01-01", endDate, monthlySalary: 1200,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
+  });
+
+  const inside = settle("2027-01-20");
+  assert.equal(inside.quincena25Applies, true);
+  assert.equal(inside.quincena25OutsideWindow, false);
+  assert.ok(inside.quincena25 > 0);
+  assert.equal(inside.quincena25Alternative, 0, "nothing to name: the line was paid");
+
+  // The exact edge. The 25th is inside — the article says "o en esa misma
+  // fecha" — and the 26th is not.
+  assert.equal(settle("2027-01-25").quincena25Applies, true);
+  assert.equal(settle("2027-01-26").quincena25Applies, false);
+  assert.equal(round(settle("2027-01-25").quincena25), round(1200 * 0.5 * 25 / 365));
+
+  // Outside, the line is zero and the page is told why, with the figure the
+  // broad reading would have produced so the note can name it.
+  const outside = settle("2027-06-30");
+  assert.equal(outside.quincena25Applies, false);
+  assert.equal(outside.quincena25, 0);
+  assert.equal(outside.quincena25OutsideWindow, true);
+  assert.equal(outside.quincena25Alternative, round(1200 * 0.5 * 181 / 365));
+  // A case that fails on something other than the date is not "outside the
+  // window": there is no alternative reading that would have paid it.
+  const resigned = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2027-06-30", monthlySalary: 1200,
+    sector: "commerce", termination: "resignation", aguinaldoPaid: true,
+  });
+  assert.equal(resigned.quincena25OutsideWindow, false);
+  assert.equal(resigned.quincena25Alternative, 0);
+
+  // The window is cited whenever it decided the answer, in either direction:
+  // a document that prints a zero without the article behind it is unarguable.
+  assert.ok(inside.appliedRules.includes("quincena25Window"));
+  assert.ok(outside.appliedRules.includes("quincena25Window"));
+  assert.equal(resigned.appliedRules.includes("quincena25Window"), false);
 });
 
 test("Decree 499 puts the two sectors on different timetables", () => {
@@ -437,7 +482,7 @@ test("the Quincena 25 carries no withholding and enters no other base", () => {
   // half a month's pay into the base would take that to $60 and move all of
   // them, so these four assertions fail the moment the benefit leaks into one.
   const settlement = calculateSettlement({
-    startDate: "2020-01-01", endDate: "2027-06-30", monthlySalary: 1200,
+    startDate: "2020-01-01", endDate: "2027-01-20", monthlySalary: 1200,
     sector: "commerce", termination: "dismissal", pendingSalaryDays: 10,
     unusedVacationPeriods: 1,
   });

@@ -63,6 +63,17 @@ export const OFFICIAL = {
   // archivo trae bytes basura antes del `%PDF` y hay que recortarlo para leerlo
   // con poppler; el contenido es texto real, no escaneo.
   quincena25: "https://www.asamblea.gob.sv/sites/default/files/documents/decretos/D72EB960-89D5-443E-AE2D-196F677CB0F2.pdf",
+  // El D.L. 432 del 15 de octubre de 2025 (D.O. 194, Tomo 449), que declaró el
+  // aguinaldo renta no gravable hasta $1,500 PARA EL EJERCICIO FISCAL 2025 y
+  // sólo para ése. Se cita como documento propio, y no dentro de `incomeTax`,
+  // porque no reforma la ley: la desplaza por un año. Su art. 1 abre con «No
+  // obstante lo dispuesto en el numeral 16) del artículo 4 de la Ley de
+  // Impuesto sobre la Renta», de modo que el numeral 16 nunca fue derogado.
+  //
+  // Su considerando II da además la referencia de ese numeral —D.L. 458 del 31
+  // de octubre de 2019, D.O. 215, Tomo 425— que coincide con el marcador (23)
+  // de la tabla de reformas del texto consolidado en `incomeTax`.
+  aguinaldoTax2025: "https://www.asamblea.gob.sv/sites/default/files/documents/decretos/C386EF17-94EA-44DD-9EA3-98360385F54D.pdf",
   // La explicación del MTPS sobre cómo opera el pago anticipado. Es publicación
   // institucional del ministerio que administra la regla, no prensa, y es la
   // que describe la práctica; el valor normativo lo lleva `aguinaldoDecree`.

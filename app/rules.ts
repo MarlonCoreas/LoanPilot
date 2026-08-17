@@ -133,6 +133,17 @@ export type AguinaldoStep = { fromCompletedYears: number; days: number };
 /** A day of the year that does not move with the calendar year. */
 export type YearDay = { month: number; day: number };
 
+/**
+ * How much of a year-end bonus escapes income tax: either a figure in dollars,
+ * which is what every transitory decree has used, or a multiple of the monthly
+ * minimum wage, which is what the standing article says. The two shapes are
+ * kept apart rather than reduced to a number, because reducing them would hide
+ * that one moves with the wage table and the other does not.
+ */
+export type AguinaldoExemption =
+  | { kind: "amount"; amount: number }
+  | { kind: "minimumWages"; multiple: number; sector: WageSector };
+
 export type ShiftLimit = { day: number; week: number; nocturnalFrom: number };
 
 // --- Employment settlement --------------------------------------------------
@@ -503,8 +514,90 @@ export const aguinaldoCycleStart = rule<YearDay>({
     norm: "Sin norma que lo fije: arts. 196-202 no definen el período de devengo",
     source: "laborCode",
     reviewed: "2026-08-16",
-    note: "DISPUTED. Two readings are in use and no text settles either: the calendar year, which the MTPS supports by treating an early payment as if made in December, and a 12 December cycle, which is the only reading that reconciles the MTPS statement in the tests. Practice also still mixes the 12 December and 20 October dates. The value stays on the calendar year until a source states the accrual period.",
+    note: "DISPUTED. Two readings are in use and no text settles either: the calendar year, which the MTPS supports by treating an early payment as if made in December, and a 12 December cycle, which is the only reading that reconciles the MTPS statement in the tests. Practice also still mixes the 12 December and 20 October dates. The value stays on the calendar year until a source states the accrual period. It is now passed into `calculateAguinaldo` explicitly rather than read from a 1 January buried in the arithmetic, so a reader can see which cycle produced a figure and a future decision can change it in one place.",
   }],
+});
+
+/**
+ * The window article 202 gives the employer to pay, which is not the same thing
+ * as the qualifying date the scale is read at.
+ *
+ * `aguinaldoCutoff` is when the bonus is EARNED; this is when it must be HANDED
+ * OVER. They were the same article before the 2025 reform moved both, and the
+ * calculator needs the second one on screen because it is the only figure here
+ * a reader can act on: a bonus not paid by 20 December is a complaint they can
+ * take to the MTPS, and no arithmetic tells them that.
+ */
+export const aguinaldoPaymentWindow = rule<{ opens: YearDay; closes: YearDay }>({
+  id: "aguinaldoPaymentWindow",
+  unit: "day-of-year",
+  versions: [
+    {
+      from: "2025-10-20",
+      value: { opens: { month: 10, day: 20 }, closes: { month: 12, day: 20 } },
+      norm: "D.L. 433 del 15 de octubre de 2025 (D.O. 194, Tomo 449), que reforma el art. 200 del Código de Trabajo",
+      source: "aguinaldoDecree",
+      reviewed: "2026-08-16",
+      note: "Cited through the fifth recital of D.L. 440, which states the window the reform opened in so many words: the payment falls \"entre el 20 de octubre y el 20 diciembre de cada año\". The Asamblea's consolidated Labour Code still carried the pre-reform article when this was last read.",
+    },
+    {
+      from: "1972-10-31",
+      value: { opens: { month: 12, day: 12 }, closes: { month: 12, day: 20 } },
+      norm: "Código de Trabajo art. 200, texto anterior a la reforma de 2025",
+      source: "laborCode",
+      reviewed: "2026-08-16",
+      note: "Recorded for the record only, the way the pre-reform cutoff is. Nothing prices a pre-2025 bonus with it.",
+    },
+  ],
+});
+
+// --- Income tax on the year-end bonus ---------------------------------------
+//
+// NOT APPLIED BY ANY PAGE, AND THAT IS THE FINDING. The two rules below are
+// declared, sourced and dated, and `RULE_USAGE` lists neither, because as of
+// 16 August 2026 nothing settles which of them governs the 2026 bonus. The
+// aguinaldo page keeps its fiscal panel behind `AGUINALDO_TAX_PREVIEW`, off.
+//
+// What the record shows. LISR article 4 numeral 16), added by D.L. 458 of
+// 31 October 2019, exempts the bonus up to two monthly minimum wages of the
+// commerce and services sector, and taxes the excess after deducting them. It
+// has never been repealed. But every year since at least 2009 the Assembly has
+// displaced it for that fiscal year with a flat figure, and the consolidated
+// text's own list of related provisions reads like a calendar: $1,100 for 2021
+// (D.L. 229), $1,500 for 2022 (D.L. 596), 2023 (D.L. 900), 2024 (D.L. 159) and
+// 2025 (D.L. 432).
+//
+// Those decrees are passed in November or December — 7 December 2021, 7 December
+// 2022, 29 November 2023, 26 November 2024 — and 2025's came on 15 October only
+// because the payment window had just moved. Today is 16 August 2026 and the
+// Assembly's 2026 list, decrees 495 to 633, contains no aguinaldo decree at all.
+//
+// So the absence of a 2026 figure is not evidence that the exemption lapsed; it
+// is evidence that the season has not arrived. Modelling either candidate now
+// would be a guess dressed as a citation, and the guess is worth roughly $150 to
+// a reader on the border. Check the 2026 decree list again from October.
+
+export const aguinaldoTaxExemption = rule<AguinaldoExemption>({
+  id: "aguinaldoTaxExemption",
+  unit: "usd/year",
+  versions: [
+    {
+      from: "2025-10-15",
+      value: { kind: "amount", amount: 1500 },
+      norm: "D.L. 432 del 15 de octubre de 2025 (D.O. 194, Tomo 449) art. 1",
+      source: "aguinaldoTax2025",
+      reviewed: "2026-08-16",
+      note: "TRANSITORY, and for the 2025 fiscal year alone: \"para el corriente ejercicio fiscal de dos mil veinticinco\". It does not carry into 2026 by itself, and nothing published as of 16 August 2026 extends it. The excess above the figure is withheld \"deduciendo el valor no gravable regulado en este artículo\", so the exemption is a deductible slice and not a cliff.",
+    },
+    {
+      from: "2019-11-14",
+      value: { kind: "minimumWages", multiple: 2, sector: "commerce" },
+      norm: "Ley de Impuesto sobre la Renta art. 4 numeral 16), incorporado por el D.L. 458 del 31 de octubre de 2019 (D.O. 215, Tomo 425)",
+      source: "incomeTax",
+      reviewed: "2026-08-16",
+      note: "The standing rule, never repealed: \"hasta un monto no mayor de dos salarios mínimos mensuales del sector comercio y servicios\", with the excess taxed \"deduciendo los dos salarios mínimos aludidos\". It carries marker (23) in the consolidated text's reform table, which is the D.L. 458 named here, and D.L. 432's second recital gives the same reference independently. The monthly minimum wage it multiplies is the daily rate times 365/12 — see the note on `minimumWage` — and that conversion has not been read back against the wage decree for this purpose.",
+    },
+  ],
 });
 
 // --- Quincena 25 ------------------------------------------------------------
@@ -601,6 +694,56 @@ export const quincena25Exempt = rule<{
  * because that is when the article 6 obligation for the 2026 fiscal year exists;
  * there is no separate commencement for it.
  */
+/**
+ * The day article 3 anchors a terminated worker's entitlement to, and the one
+ * decision on this page that moves real money.
+ *
+ * DISPUTED, and now resolved in the restrictive direction — the opposite of
+ * what `vacationProportionalOnExit` does with article 187, which is the point
+ * worth writing down. There the literal text is narrow and the official service
+ * pays wide, and an MTPS statement reconciles to the cent; following the
+ * ministry is following evidence. Here there is no evidence to follow. The law
+ * is from January 2026, its first cycle was voluntary for private employers,
+ * and no practice has formed. The two readings are:
+ *
+ *   RESTRICTIVE, applied. Article 3 grants the benefit to someone whose
+ *   contract ends "antes del veinticinco de enero o en esa misma fecha" — the
+ *   day article 1 makes the payment fall due. It is a protection against being
+ *   let go days before payday, and outside that window nothing is owed. It is
+ *   the same shape as article 202, which anchors the year-end bonus to its own
+ *   qualifying date rather than granting it all year round.
+ *
+ *   BROAD, named and not applied. The sentence that follows sends the reader to
+ *   "las disposiciones establecidas para el goce de la prima anual en concepto
+ *   de aguinaldo […] o la parte proporcional, según corresponda", which reads
+ *   like article 202 paying a proportional share on any dismissal.
+ *
+ * What settles it against the broad reading is that paying a proportion outside
+ * the window requires an accrual cycle, and the decree fixes none: article 2
+ * keys the amount to the salary "al momento en que la prestación se
+ * materialice", not to a period. And the error runs one way. Over-stating this
+ * line is hundreds of dollars in a figure somebody carries into a negotiation.
+ *
+ * UNSOURCED, the lower bound. The value below is the 25 January of article 3,
+ * which is in the text. Where the window OPENS is not: read literally, a
+ * termination in December is also "antes del veinticinco de enero". This
+ * project bounds it at the first of the same January, because the payment
+ * article 1 fixes is a January one and that is the month article 3 is about.
+ * A decree or a ministry criterion that states otherwise replaces this.
+ */
+export const quincena25Window = rule<YearDay>({
+  id: "quincena25Window",
+  unit: "day-of-year",
+  versions: [{
+    from: "2026-01-14",
+    value: { month: 1, day: 25 },
+    norm: "Ley Especial Quincena Veinticinco (D.L. 499 del 14 de enero de 2026) arts. 1 y 3",
+    source: "quincena25",
+    reviewed: "2026-08-16",
+    note: "DISPUTED, applied restrictively. The date is article 3's own \"antes del veinticinco de enero o en esa misma fecha\"; the window's opening day is this project's bound and carries no source. The broad reading — a proportional share on any dismissal — is named on screen and in the exported PDF rather than silently discarded.",
+  }],
+});
+
 export const quincena25MandatoryFrom = rule<Record<Quincena25Sector, string>>({
   id: "quincena25MandatoryFrom",
   unit: "date-by-sector",
@@ -873,8 +1016,10 @@ export const RULES = {
   resignationDaysPerYear, resignationWageCap, resignationMinimumService,
   dailySalaryDivisor, accrualYearDays,
   vacationDaysPerYear, vacationSurcharge, vacationProportionalOnExit, vacationUnmodelled,
-  aguinaldoScale, aguinaldoCutoff, aguinaldoCycleStart,
-  quincena25SalaryCeiling, quincena25Rate, quincena25Exempt, quincena25MandatoryFrom,
+  aguinaldoScale, aguinaldoCutoff, aguinaldoCycleStart, aguinaldoPaymentWindow,
+  aguinaldoTaxExemption,
+  quincena25SalaryCeiling, quincena25Rate, quincena25Exempt, quincena25Window,
+  quincena25MandatoryFrom,
   withholdingTables, recalcTables, recalcMonths,
   afpEmployeeRate, isssEmployeeRate, isssMonthlyCeiling,
   fixedDeduction, fixedDeductionIncomeLimit,
@@ -906,7 +1051,18 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "dailySalaryDivisor", "accrualYearDays",
     "vacationDaysPerYear", "vacationSurcharge", "vacationProportionalOnExit", "vacationUnmodelled",
     "aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart",
-    "quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt", "quincena25MandatoryFrom",
+    "quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt", "quincena25Window",
+    "quincena25MandatoryFrom",
+  ],
+  // `aguinaldoTaxExemption` is deliberately absent. Nothing published settles
+  // which of its two versions governs the 2026 bonus, so the page keeps its
+  // fiscal panel behind `AGUINALDO_TAX_PREVIEW` and makes no claim about it.
+  // Listing the rule here would put its review date into a freshness badge for
+  // a figure the page does not show. Add it in the same commit that turns the
+  // flag on, and not before.
+  aguinaldo: [
+    "dailySalaryDivisor", "accrualYearDays",
+    "aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart", "aguinaldoPaymentWindow",
   ],
   overtime: [
     "dailySalaryDivisor", "nightWindow", "shiftLimits", "minorOvertimeLimit", "overtimeFactors",
