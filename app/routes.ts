@@ -1,15 +1,24 @@
 export type Lang = "es" | "en";
-export type Page = "home" | "loans" | "settlement" | "aguinaldo" | "overtime" | "withholding";
+export type Page =
+  | "home" | "loans" | "settlement" | "aguinaldo" | "overtime" | "withholding" | "disputed";
 
 export const LANGS = ["es", "en"] as const;
-export const PAGES = ["home", "loans", "settlement", "aguinaldo", "overtime", "withholding"] as const;
+export const PAGES = [
+  "home", "loans", "settlement", "aguinaldo", "overtime", "withholding", "disputed",
+] as const;
 
 /**
  * The calculators, in the order they appear everywhere: the header, the footer,
  * the home directory and the error page each used to carry their own copy of
  * this list, which is four places to forget when a tool is added.
+ *
+ * `disputed` is a page and not a tool. It computes nothing, it belongs in a
+ * different part of the footer, and putting it in the calculator nav would
+ * promise a reader a sixth calculator.
  */
-export const TOOL_PAGES = PAGES.filter((page): page is Exclude<Page, "home"> => page !== "home");
+export type ToolPage = Exclude<Page, "home" | "disputed">;
+export const TOOL_PAGES = PAGES.filter(
+  (page): page is ToolPage => page !== "home" && page !== "disputed");
 
 // The URL is the only source of truth for language. The toggle used to flip
 // client state and remember it in localStorage, which left an English reader on
@@ -17,8 +26,8 @@ export const TOOL_PAGES = PAGES.filter((page): page is Exclude<Page, "home"> => 
 // said Spanish: unshareable, and invisible to search engines. Switching
 // language now navigates, so every translation is a page a crawler can reach.
 export const ROUTES: Record<Lang, Record<Page, string>> = {
-  es: { home: "/", loans: "/prestamos/", settlement: "/finiquito/", aguinaldo: "/aguinaldo/", overtime: "/horas-extras/", withholding: "/retenciones/" },
-  en: { home: "/en/", loans: "/en/loans/", settlement: "/en/settlement/", aguinaldo: "/en/year-end-bonus/", overtime: "/en/overtime/", withholding: "/en/withholding/" },
+  es: { home: "/", loans: "/prestamos/", settlement: "/finiquito/", aguinaldo: "/aguinaldo/", overtime: "/horas-extras/", withholding: "/retenciones/", disputed: "/reglas-en-disputa/" },
+  en: { home: "/en/", loans: "/en/loans/", settlement: "/en/settlement/", aguinaldo: "/en/year-end-bonus/", overtime: "/en/overtime/", withholding: "/en/withholding/", disputed: "/en/disputed-rules/" },
 };
 
 export const SITE_ORIGIN = "https://loanpilot.marloncoreas.com";
@@ -29,8 +38,8 @@ export const OG_LOCALE: Record<Lang, string> = { es: "es_SV", en: "en_US" };
 // These names appeared verbatim in the header, the footer and the home
 // directory — three files, two languages, six chances to drift apart.
 export const PAGE_LABELS: Record<Lang, Record<Page, string>> = {
-  es: { home: "Inicio", loans: "Préstamos", settlement: "Finiquito", aguinaldo: "Aguinaldo", overtime: "Horas extras", withholding: "Retenciones" },
-  en: { home: "Home", loans: "Loans", settlement: "Settlement", aguinaldo: "Year-end bonus", overtime: "Overtime", withholding: "Withholding" },
+  es: { home: "Inicio", loans: "Préstamos", settlement: "Finiquito", aguinaldo: "Aguinaldo", overtime: "Horas extras", withholding: "Retenciones", disputed: "Reglas en disputa" },
+  en: { home: "Home", loans: "Loans", settlement: "Settlement", aguinaldo: "Year-end bonus", overtime: "Overtime", withholding: "Withholding", disputed: "Disputed rules" },
 };
 
 export const PAGE_META: Record<Lang, Record<Page, { title: string; description: string; ogTitle: string }>> = {
@@ -65,6 +74,11 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
       description: "Estima AFP, ISSS e ISR con las tablas oficiales de El Salvador, o revisá tu boleta de pago renglón por renglón.",
       ogTitle: "LoanPilot | Retenciones salariales",
     },
+    disputed: {
+      title: "Reglas laborales en disputa en El Salvador | LoanPilot",
+      description: "Las reglas donde la ley, la práctica oficial o el silencio del texto admiten más de una lectura, con la que aplica LoanPilot y por qué.",
+      ogTitle: "LoanPilot | Reglas en disputa",
+    },
   },
   en: {
     home: {
@@ -96,6 +110,11 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
       title: "Payroll withholding calculator | LoanPilot",
       description: "Estimate pension, ISSS and income tax with El Salvador's official withholding tables, or check your payslip line by line.",
       ogTitle: "LoanPilot | Payroll withholding",
+    },
+    disputed: {
+      title: "Contested employment rules in El Salvador | LoanPilot",
+      description: "The rules where the law, official practice or the silence of the text allow more than one reading, with the one LoanPilot applies and why.",
+      ogTitle: "LoanPilot | Disputed rules",
     },
   },
 };
@@ -158,6 +177,13 @@ export const OG_CARD: Record<Lang, Record<Page, {
       alt: "LoanPilot: calculadora de retenciones de AFP, ISSS e ISR de El Salvador.",
       accent: "#a9f4cf",
     },
+    disputed: {
+      eyebrow: "REGLAS EN DISPUTA",
+      line1: "Donde la ley", line2: "admite dos lecturas.",
+      sub: "Las reglas que no están resueltas, la que aplica cada cálculo del sitio y la que no. Escritas, no escondidas.",
+      alt: "LoanPilot: reglas laborales y fiscales de El Salvador que admiten más de una lectura.",
+      accent: "#ffb4a2",
+    },
   },
   en: {
     home: {
@@ -201,6 +227,13 @@ export const OG_CARD: Record<Lang, Record<Page, {
       sub: "Pension, ISSS and income tax using the official withholding tables in force in El Salvador.",
       alt: "LoanPilot: pension, ISSS and income tax withholding calculator for El Salvador.",
       accent: "#a9f4cf",
+    },
+    disputed: {
+      eyebrow: "DISPUTED RULES",
+      line1: "Where the law", line2: "allows two readings.",
+      sub: "The rules that are not settled, the one every calculation here applies and the one it does not. Written down, not hidden.",
+      alt: "LoanPilot: employment and tax rules of El Salvador that allow more than one reading.",
+      accent: "#ffb4a2",
     },
   },
 };

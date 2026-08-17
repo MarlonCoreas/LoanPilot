@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { DISPUTES, disputeFor, pagesApplying } from "../app/disputes.ts";
 import {
-  ALL_RULES, citationsFor, oldestReviewed, reviewedFor, ruleAt, RULES, RULE_USAGE,
-  RULES_REVIEWED,
+  ALL_RULES, citationsFor, disputedVersions, oldestReviewed, reviewedFor, ruleAt, RULES,
+  RULE_USAGE, RULES_REVIEWED,
 } from "../app/rules.ts";
-import { PAGES } from "../app/routes.ts";
+import { LANGS, PAGES } from "../app/routes.ts";
 import { OFFICIAL } from "../app/sources.ts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -100,8 +101,8 @@ test("every page's rules exist, and only the loan page applies none", () => {
   assert.deepEqual(RULE_USAGE.loans, [],
     "loan arithmetic depends on no Salvadoran rule; claiming one would be a claim it cannot back");
   assert.equal(reviewedFor("loans"), undefined);
-  for (const page of ["settlement", "overtime", "withholding"]) {
-    assert.ok(RULE_USAGE[page].length > 0, `${page} is a statutory calculator with no rules listed`);
+  for (const page of ["settlement", "aguinaldo", "overtime", "withholding", "disputed"]) {
+    assert.ok(RULE_USAGE[page].length > 0, `${page} rests on statutory rules and lists none`);
     assert.match(reviewedFor(page), ISO_DATE, page);
   }
 
@@ -252,6 +253,113 @@ test("every citation the exported PDFs print can actually be drawn on the page",
     const bad = outsideWinAnsi(url);
     assert.deepEqual(bad, [], `OFFICIAL.${key} carries ${bad.join(" ")}`);
   }
+});
+
+// --- What a note shouts, and what the page has to say back ------------------
+
+const SHOUTS = ["DISPUTED", "UNSOURCED", "NOT MODELLED"];
+
+test("the word a note shouts and the status it carries cannot drift apart", () => {
+  // The convention came first: a note that is not a plain reading of a text
+  // opens with one of three words in capitals. `status` is that same word as a
+  // field, and the page is built from the field — so a note that shouts and a
+  // rule that does not declare it would be a dispute the site never publishes,
+  // which is the exact failure /reglas-en-disputa/ exists to make impossible.
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const at = `${rule.id} @ ${version.from}`;
+      const shouted = SHOUTS.find((word) => version.note?.startsWith(word));
+
+      if (version.status === undefined) {
+        assert.equal(shouted, undefined,
+          `${at}: the note shouts ${shouted} and the version declares no status`);
+        continue;
+      }
+
+      assert.ok(Array.isArray(version.status) && version.status.length > 0, at);
+      for (const flag of version.status) {
+        assert.ok(SHOUTS.includes(flag), `${at}: "${flag}" is not one of ${SHOUTS.join(", ")}`);
+      }
+      assert.deepEqual([...new Set(version.status)], version.status, `${at}: repeated status`);
+      assert.ok(version.note, `${at}: a status with no note explains nothing`);
+      assert.equal(version.status[0], shouted,
+        `${at}: the note opens with "${version.note.slice(0, 20)}…" and status says ${version.status[0]}`);
+      // Every other flag has to appear somewhere in the note too: the Quincena
+      // 25 window is DISPUTED and UNSOURCED, and a reader who is told only the
+      // first of those has been told half of what is wrong with the figure.
+      for (const flag of version.status.slice(1)) {
+        assert.ok(version.note.includes(flag), `${at}: the note never mentions ${flag}`);
+      }
+    }
+  }
+});
+
+test("every contested rule is published, in both languages", () => {
+  // THE TEST THE PAGE EXISTS FOR. A rule marked DISPUTED or UNSOURCED with no
+  // entry in `disputes.ts` would render as nothing at all on the page that is
+  // supposed to carry it — contested in the code and settled on screen, which
+  // is worse than never having claimed the transparency in the first place.
+  const contested = disputedVersions();
+  assert.ok(contested.length > 0, "an empty list would make every check below vacuous");
+
+  for (const { rule, version } of contested) {
+    const dispute = disputeFor(rule.id);
+    assert.ok(dispute, `${rule.id} is marked ${version.status.join(" + ")} and is on no page`);
+
+    for (const lang of LANGS) {
+      assert.ok(dispute.question[lang]?.length > 20, `${rule.id}: no question in ${lang}`);
+      assert.ok(dispute.stakes[lang]?.length > 20, `${rule.id}: no stakes in ${lang}`);
+      assert.ok(dispute.why[lang]?.length > 40, `${rule.id}: no reasoning in ${lang}`);
+      for (const reading of dispute.readings) {
+        assert.ok(reading.label[lang]?.length > 0, `${rule.id}: unlabelled reading in ${lang}`);
+        assert.ok(reading.text[lang]?.length > 40, `${rule.id}: empty reading in ${lang}`);
+      }
+    }
+
+    // Two readings, exactly one of them applied. A dispute with no applied
+    // reading describes nothing this site does; one with two claims the
+    // calculator produces both figures at once.
+    assert.equal(dispute.readings.length, 2, rule.id);
+    assert.equal(dispute.readings.filter((reading) => reading.applied).length, 1, rule.id);
+    for (const reading of dispute.readings) {
+      assert.ok(["text", "practice", "none"].includes(reading.backing),
+        `${rule.id}: "${reading.backing}" is not something a reading can rest on`);
+    }
+
+    // The link out has to resolve, because a dispute with an unopenable source
+    // is a claim the reader cannot check.
+    assert.ok(version.source in OFFICIAL, `${rule.id}: ${version.source}`);
+  }
+
+  // And nothing the other way: an entry for a rule nobody marked would print a
+  // dispute the registry does not have.
+  for (const dispute of DISPUTES) {
+    assert.ok(dispute.rule in RULES, `${dispute.rule} is not a rule`);
+    assert.ok(contested.some(({ rule }) => rule.id === dispute.rule),
+      `${dispute.rule} has an entry but is marked neither DISPUTED nor UNSOURCED`);
+  }
+});
+
+test("the disputed page claims exactly the rules it publishes", () => {
+  const ids = [...new Set(disputedVersions().map(({ rule }) => rule.id))];
+  assert.deepEqual([...RULE_USAGE.disputed].sort(), ids.sort(),
+    "its freshness badge is the oldest review among the rules it shows, and nothing else");
+
+  // Each one is reachable from the calculator that applies it, which is what
+  // the callouts link into. A dispute nothing applies would be trivia.
+  for (const id of ids) {
+    assert.ok(pagesApplying(id).length > 0, `${id} is contested and applied by no calculator`);
+  }
+});
+
+test("the four known disputes are the four on the page", () => {
+  // Named rather than counted. A fifth is welcome and this line is where it is
+  // acknowledged; what this catches is one QUIETLY DISAPPEARING — a status
+  // dropped in a refactor takes the entry off the page with it, and nothing
+  // else here would notice.
+  assert.deepEqual(
+    disputedVersions().map(({ rule }) => rule.id).sort(),
+    ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"]);
 });
 
 test("no rule claims to have been reviewed before it existed, or in the future", () => {

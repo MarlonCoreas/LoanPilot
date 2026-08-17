@@ -770,6 +770,64 @@ export function verifyPayslip(input: {
  * second employer withholds, are excluded from the accumulation by the decree
  * and so must be left out of `accumulatedTaxable` by the caller.
  */
+/**
+ * The two accumulated figures the recalculation needs, worked out from a
+ * monthly salary that never changed.
+ *
+ * MOST PEOPLE DO NOT HAVE THESE NUMBERS. The decree's procedure starts from
+ * "remuneraciones gravadas acumuladas" and the withholding already made, and
+ * both live on a payroll system the worker cannot see; asking for them and
+ * nothing else made the panel unusable for exactly the readers it was for. So
+ * the interface offers the other direction: a salary, and the same months the
+ * period covers.
+ *
+ * IT IS AN ESTIMATE, AND ITS ASSUMPTION IS THE INTERESTING PART. It multiplies
+ * one identical month by six or twelve, so it holds only for a salary that did
+ * not move, with no bonus, no year-end pay, no change of employer and no month
+ * out. Every one of those is a reason two people on the same monthly salary end
+ * the year with different accumulated figures — which is why the recalculation
+ * exists at all, and why anybody whose year was not flat should read the two
+ * figures off their payslips and type them in instead.
+ */
+export function estimateAccumulated(input: {
+  period: RecalcPeriod;
+  monthlySalary: number;
+  includeAfp?: boolean;
+  includeIsss?: boolean;
+  applyFixedDeduction?: boolean;
+}) {
+  const months = RECALC_MONTHS[input.period];
+  const monthly = calculatePayrollWithholding({
+    gross: Math.max(0, input.monthlySalary || 0),
+    frequency: "monthly",
+    includeAfp: input.includeAfp,
+    includeIsss: input.includeIsss,
+    applyFixedDeduction: input.applyFixedDeduction,
+  });
+  // THE TWO SPANS ARE NOT THE SAME, and this is the easy thing to get wrong.
+  // The base accumulates the whole period — January to June, January to
+  // December — but the withholding already made runs to the month BEFORE,
+  // because the month being recalculated has not withheld yet: its withholding
+  // is the difference this whole procedure produces. Six months on both sides
+  // would net out to a couple of cents and tell a reader on a flat salary that
+  // June withholds nothing.
+  const withheldMonths = months - 1;
+  return {
+    months,
+    withheldMonths,
+    /** One month of it, so the interface can show what is being multiplied. */
+    monthlyTaxable: monthly.taxableBeforeFixedDeduction,
+    monthlyWithholding: monthly.isr,
+    // The base BEFORE the fixed deduction, because the recalculation applies
+    // that deduction itself against the period table. Accumulating the
+    // post-deduction base would subtract it twice.
+    accumulatedTaxable: round2(monthly.taxableBeforeFixedDeduction * months),
+    accumulatedWithheld: round2(monthly.isr * withheldMonths),
+    /** What the $9,100 test should be measured against for this salary. */
+    annualGross: round2(monthly.gross * MONTHS_IN_A_YEAR),
+  };
+}
+
 export function calculateRecalculation(input: {
   period: RecalcPeriod;
   /** Taxable remuneration accumulated over the period, net of contributions. */

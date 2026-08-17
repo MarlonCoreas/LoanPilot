@@ -14,11 +14,14 @@ Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
 - `/finiquito/`: finiquito, indemnización y renuncia voluntaria.
 - `/aguinaldo/`: días según antigüedad, parte proporcional y fecha límite de pago.
 - `/horas-extras/`: horas extras, recargo nocturno, día de descanso y asueto.
-- `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención, y revisión de
-  una boleta de pago contra ellas.
+- `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención, el recálculo
+  acumulado de junio y diciembre, y revisión de una boleta de pago contra ellas.
+- `/reglas-en-disputa/`: las reglas que el sitio aplica sin poder afirmar que su
+  lectura sea la única defendible. No es una calculadora: es la página que
+  publica cada desacuerdo con sus dos lecturas, la que se aplica y por qué.
 
 Cada página existe en inglés bajo `/en/`: `/en/`, `/en/loans/`, `/en/settlement/`,
-`/en/year-end-bonus/`, `/en/overtime/` y `/en/withholding/`. El idioma lo determina
+`/en/year-end-bonus/`, `/en/overtime/`, `/en/withholding/` y `/en/disputed-rules/`. El idioma lo determina
 la URL, no una preferencia
 guardada, así que cada traducción es indexable y se puede compartir. La tabla de
 rutas, sus metadatos y el `sitemap.xml` salen todos de `app/routes.ts`; el
@@ -26,8 +29,9 @@ sitemap se genera en el build y por eso no vive en `public/`.
 
 Cada página se publica además con datos estructurados JSON-LD (`app/seo.ts`):
 las calculadoras se declaran como `WebApplication` gratuita con su ruta de
-navegación, y la portada como `FAQPage` construido a partir de las mismas
-preguntas que muestra (`app/faq.ts`), de modo que el resultado enriquecido no
+navegación, la portada como `FAQPage` construido a partir de las mismas
+preguntas que muestra (`app/faq.ts`), y `/reglas-en-disputa/` como `WebPage`,
+porque no recibe datos ni devuelve una cifra. Así el resultado enriquecido no
 puede afirmar algo que la página no diga.
 
 ## Funciones
@@ -53,9 +57,18 @@ puede afirmar algo que la página no diga.
   quincenales y semanales.
 - Tablas oficiales de retención y recálculo de junio y diciembre, con enlaces a
   las normas vigentes.
-- Recálculo acumulado de junio y diciembre: liquida el impuesto del período
-  sobre las remuneraciones gravadas acumuladas, resta lo ya retenido e indica
-  si queda diferencia a retener o retención en exceso.
+- Recálculo acumulado de junio y diciembre, como tercer modo de `/retenciones/`:
+  liquida el impuesto del período sobre las remuneraciones gravadas acumuladas,
+  resta lo ya retenido e indica si queda diferencia a retener o retención en
+  exceso —la resta se muestra desglosada, y el saldo a favor se explica en vez
+  de esconderse—. Los acumulados se pueden ingresar o estimar de un salario
+  mensual que no cambió en el período, con la advertencia de qué supone esa
+  estimación.
+- Página de reglas en disputa, generada desde el registro: toda regla marcada
+  `DISPUTED` o `UNSOURCED` en `app/rules.ts` aparece automáticamente con sus dos
+  lecturas, la que aplica el sitio, el porqué y el enlace a la fuente cuando
+  existe. Cada callout que nombra una de esas reglas enlaza a su ficha, y la
+  suite falla si una regla marcada no llega al HTML publicado.
 - Revisión de boleta de pago: compara AFP, ISSS, renta y neto declarados contra
   las tablas, renglón por renglón y con un centavo de tolerancia. Cada campo es
   opcional y el que se deja vacío no se compara. Donde hay diferencia se nombra
@@ -182,17 +195,29 @@ regla: toda fuente citada por una regla vive en un dominio `.gob.sv`.
 
 ### Lo que las fuentes no resuelven
 
-Cuatro cosas que el registro declara como decisiones del proyecto y no como
-lecturas de la ley, cada una anotada en su regla. Las notas lo dicen en su
-primera palabra: `UNSOURCED` cuando ningún documento la fija, `DISPUTED` cuando
-las fuentes —o un texto y la práctica oficial— no coinciden, y `NOT MODELLED`
-cuando la regla existe y no se aplica:
+Lo que el registro declara como decisión del proyecto y no como lectura de la
+ley, anotado en su regla. Las notas lo dicen en su primera palabra: `UNSOURCED`
+cuando ningún documento la fija, `DISPUTED` cuando las fuentes —o un texto y la
+práctica oficial— no coinciden, y `NOT MODELLED` cuando la regla existe y no se
+aplica.
+
+Esa primera palabra es además un campo, `status`, y de él sale
+`/reglas-en-disputa/`: toda versión marcada `DISPUTED` o `UNSOURCED` aparece en
+esa página automáticamente, con las dos lecturas que escribe `app/disputes.ts`
+en los dos idiomas. Marcar una regla es lo único que hace falta para
+publicarla; `tests/rules.test.mjs` falla si el campo y la palabra se separan, y
+`tests/build-output.test.mjs` falla si una regla marcada no llega al HTML. El
+`NOT MODELLED` no va a esa página: no es un desacuerdo sobre lo que dice la ley,
+sino un hueco en lo que este proyecto calcula.
 
 - **`dailySalaryDivisor`.** El divisor 30 no sale de ningún texto. El art. 183
   fija la base y el art. 142 define el salario diario en la dirección contraria
   —hora pactada por horas de la jornada—, pero ninguno fija el divisor. El 30
   está anclado empíricamente a la constancia del MTPS: con 30.42 el cálculo deja
-  de coincidir con el ministerio.
+  de coincidir con el ministerio. Es el único de esta lista que no lleva
+  `status` y por eso no sale en `/reglas-en-disputa/`: no hay dos lecturas que
+  contraponer, hay un texto que calla y una práctica oficial que sí fija la
+  cifra. Marcarlo es una decisión pendiente, no un olvido.
 - **`aguinaldoCycleStart`.** Los arts. 196 a 202 fijan la fecha de corte y la
   ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado»,
   pero ninguno dice sobre qué período corre esa proporción. Ya no es sólo una
@@ -211,6 +236,21 @@ cuando la regla existe y no se aplica:
   y 15 días por año— y trae la vacación proporcional en su propia línea. El
   módulo sigue al servicio oficial, y lo dice: en pantalla, en el PDF y en la
   FAQ. Aplicar la lectura literal rompería la reconciliación.
+- **`aguinaldoScaleOnExit`.** Ningún artículo del capítulo VII dice a qué día se
+  lee la escala del art. 198 para un contrato que terminó antes de la fecha de
+  corte: el 197 mide la antigüedad en esa fecha y el 202 concede la parte
+  «proporcional al tiempo trabajado» sin decir de qué escala. Se aplica la
+  antigüedad del último día trabajado, que es la lectura que no presupone
+  tiempo no trabajado, y la otra —siempre la mayor de las dos— se muestra al
+  lado, en pantalla y en el PDF.
+- **`quincena25Window`.** El art. 3 del D.L. 499 nombra a quien termina «antes
+  del veinticinco de enero o en esa misma fecha» y la frase siguiente remite a
+  las reglas del aguinaldo «o la parte proporcional, según corresponda». Se
+  aplica la lectura restrictiva —la ventana de enero— y no la amplia, que es la
+  decisión contraria a la del art. 187: allá hay una constancia oficial que
+  seguir y aquí no hay práctica formada. Además, el día en que ABRE la ventana
+  no está en ningún texto: se acota al 1 de enero del mismo mes, y cualquier
+  otro límite inferior sería igual de inventado. Del artículo sólo viene el 25.
 - **`vacationUnmodelled`.** El art. 180 exige 200 días trabajados en el año para
   tener derecho a vacaciones y el art. 184 añade un 25% por alojamiento y otro
   por alimentación. Ninguno se modela —el formulario no pregunta ni una cosa ni

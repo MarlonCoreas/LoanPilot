@@ -2,9 +2,22 @@ import assert from "node:assert/strict";
 import { access, readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
+import { disputeFor, disputesForPage } from "../app/disputes.ts";
 import { FAQ } from "../app/faq.ts";
 import { absoluteUrl, LANGS, OG_CARD, ogImagePath, PAGES, PAGE_META, ROUTES } from "../app/routes.ts";
+import { disputedVersions } from "../app/rules.ts";
+import { OFFICIAL } from "../app/sources.ts";
 import { RULES_REVIEWED } from "../app/statutory.ts";
+
+/**
+ * What React does to the copy on its way into the markup. Comparing raw
+ * Spanish and English prose against rendered HTML fails on the apostrophes and
+ * quotation marks the legal quotations are full of, and the failure looks like
+ * a missing string rather than an encoding difference.
+ */
+const escapeHtml = (text) => text
+  .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;").replaceAll("'", "&#x27;");
 
 const outputRoot = new URL("../dist/", import.meta.url);
 const indexHtml = () => readFile(new URL("index.html", outputRoot), "utf8");
@@ -51,12 +64,18 @@ test("prerenders every page instead of shipping empty roots", async () => {
   // to survive into the prerendered markup and not wait for JavaScript.
   assert.match(aguinaldo, /de diciembre de \d{4}/);
   assert.match(aguinaldo, /Código de Trabajo art\. 198/);
-  // The fiscal panel is written and switched off: the $1,500 exemption was
-  // transitory for 2025 and nothing published settles 2026. If this ships a
-  // figure, `AGUINALDO_TAX_PREVIEW` was flipped without deciding the question.
-  for (const label of [/Porción exenta/, /Base gravada/, /Retención estimada/]) {
-    assert.doesNotMatch(aguinaldo, label, "the year-end bonus page must claim no tax treatment");
+  // The fiscal panel goes as far as the taxable base and stops there. The
+  // exempt slice is sourced — numeral 16) is permanent and governs any year no
+  // decree displaces — so it is shown; the withholding on the excess is named
+  // by no text, so a figure for it must never appear.
+  for (const label of [/Porción exenta/, /Base gravada/]) {
+    assert.match(aguinaldo, label, "the exempt slice is sourced and belongs on the page");
   }
+  assert.doesNotMatch(aguinaldo, /Retención estimada/,
+    "no text names the table that withholds on a bonus; printing one would invent it");
+  // The claim that a decree may still arrive, and roughly when, is the note
+  // that keeps the permanent floor from reading as a settled answer.
+  assert.match(aguinaldo, /finales de octubre y principios de diciembre/);
   // The review date is the site's freshness claim; if the badge stops rendering,
   // the pages keep citing decrees with nothing saying when they were checked.
   for (const html of [settlement, withholding]) {
@@ -197,11 +216,21 @@ test("describes every page to search engines with structured data", async () => 
       types,
       page === "home"
         ? ["Organization", "WebSite", "FAQPage"]
-        : ["Organization", "WebSite", "WebApplication", "BreadcrumbList"],
+        // The disputed-rules page takes no input and returns no figure, so it
+        // is a document and not an application. Describing it with the
+        // calculator vocabulary would promise a crawler a sixth calculator.
+        : page === "disputed"
+          ? ["Organization", "WebSite", "WebPage", "BreadcrumbList"]
+          : ["Organization", "WebSite", "WebApplication", "BreadcrumbList"],
       where,
     );
 
-    if (page === "home") {
+    if (page === "disputed") {
+      const document = graph[2];
+      assert.equal(document.url, absoluteUrl(lang, page), where);
+      assert.equal(document.inLanguage, lang, where);
+      assert.equal(document.offers, undefined, `${where} must not price itself like a tool`);
+    } else if (page === "home") {
       // The rich result has to answer what the page answers, not more.
       const questions = graph[2].mainEntity.map((entry) => entry.name);
       assert.deepEqual(questions, FAQ[lang].map((entry) => entry.question), where);
@@ -218,6 +247,68 @@ test("describes every page to search engines with structured data", async () => 
       // every title keeps the "<page> | LoanPilot" shape.
       assert.equal(app.name, PAGE_META[lang][page].title.replace(" | LoanPilot", ""), where);
       assert.doesNotMatch(app.name, /LoanPilot/, where);
+    }
+  }
+});
+
+test("publishes every contested rule on the page that exists to carry them", async () => {
+  // THE ONE THAT FAILS WHEN A DISPUTE GOES QUIET. Not a check that the file
+  // compiles or that the copy exists — a check that the rendered HTML somebody
+  // will actually read names each rule the registry marks as contested, in
+  // both languages, with its article and both readings. Marking a rule
+  // DISPUTED in `rules.ts` and shipping a page that does not mention it is the
+  // failure this whole page is a defence against.
+  const contested = disputedVersions();
+  assert.ok(contested.length > 0);
+
+  for (const lang of LANGS) {
+    const html = await pageHtml(lang, "disputed");
+    for (const { rule, version } of contested) {
+      const dispute = disputeFor(rule.id);
+      const where = `${lang} ${rule.id}`;
+
+      // The anchor every callout across the site links into.
+      assert.ok(html.includes(`id="${rule.id}"`), `${where}: no anchor to link a callout at`);
+      assert.ok(html.includes(escapeHtml(dispute.question[lang])), `${where}: the question is missing`);
+      assert.ok(html.includes(escapeHtml(version.norm)), `${where}: the article is missing`);
+      assert.ok(html.includes(OFFICIAL[version.source]), `${where}: nothing to open and check`);
+      for (const reading of dispute.readings) {
+        assert.ok(html.includes(escapeHtml(reading.label[lang])), `${where}: a reading is missing`);
+      }
+      // Every flag the registry raises has to be visible, not just the first.
+      for (const flag of version.status) {
+        const label = flag === "DISPUTED" ? { es: "EN DISPUTA", en: "DISPUTED" }
+          : flag === "UNSOURCED" ? { es: "SIN FUENTE", en: "UNSOURCED" }
+            : { es: "NO MODELADA", en: "NOT MODELLED" };
+        assert.ok(html.includes(label[lang]), `${where}: ${flag} is not shown`);
+      }
+    }
+  }
+});
+
+test("each calculator names the contested rules it applies, before being asked", async () => {
+  // The deep-linked callouts are conditional by nature — the article 187
+  // divergence only appears on a resignation carrying a part-year of vacation —
+  // so a reader whose dates miss all of them would never learn that any of this
+  // is unsettled. The panel is the unconditional half, and it is generated from
+  // `RULE_USAGE`, so this also catches an anchor that stops matching after a
+  // rule is renamed.
+  for (const lang of LANGS) {
+    const disputedPath = ROUTES[lang].disputed;
+    for (const page of PAGES) {
+      if (page === "home" || page === "disputed") continue;
+      const html = await pageHtml(lang, page);
+      const expected = disputesForPage(page);
+      for (const dispute of expected) {
+        assert.ok(html.includes(`${disputedPath}#${dispute.rule}`),
+          `${lang} ${page} applies ${dispute.rule} and links to no explanation of it`);
+        assert.ok(html.includes(escapeHtml(dispute.question[lang])), `${lang} ${page}: ${dispute.rule}`);
+      }
+      // A calculator that applies none says nothing rather than reassuring the
+      // reader with an empty list.
+      if (expected.length === 0) {
+        assert.doesNotMatch(html, new RegExp(`${disputedPath}#`), `${lang} ${page}`);
+      }
     }
   }
 });

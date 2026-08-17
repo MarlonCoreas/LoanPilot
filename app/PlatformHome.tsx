@@ -28,6 +28,10 @@ const copy = {
       ["Fórmulas abiertas", "El proyecto es de código abierto: cualquiera puede revisar el cálculo o reportar una diferencia.", "↗"],
     ],
     verified: (date: string) => `Fuentes verificadas el ${date}`,
+    disputedEyebrow: "LO QUE NADIE MÁS PUBLICA",
+    disputedTitle: "Las reglas que no están resueltas",
+    disputedText: "Hay cifras de la normativa salvadoreña que admiten más de una lectura: el texto dice una cosa y el ministerio hace otra, o ningún artículo fija el dato. Este sitio las aplica igual, porque hay que dar una cifra, pero las nombra una por una: las dos lecturas, la que se usa aquí y por qué.",
+    disputedCta: "Ver las reglas en disputa",
     faqEyebrow: "PREGUNTAS FRECUENTES",
     faqTitle: "Dudas comunes sobre salarios, finiquitos y préstamos",
     faqLead: "Respuestas cortas con la regla y la cifra que aplica en El Salvador. Cada calculadora explica el detalle en su propia página.",
@@ -54,6 +58,10 @@ const copy = {
       ["Open formulas", "The project is open source: anyone can review the calculation or report a difference.", "↗"],
     ],
     verified: (date: string) => `Sources verified on ${date}`,
+    disputedEyebrow: "WHAT NOBODY ELSE PUBLISHES",
+    disputedTitle: "The rules that are not settled",
+    disputedText: "Some figures in Salvadoran law allow more than one reading: the text says one thing and the ministry does another, or no article fixes the figure at all. This site applies one anyway, because a number has to come out, but it names every such case: both readings, the one used here and why.",
+    disputedCta: "See the disputed rules",
     faqEyebrow: "FREQUENTLY ASKED",
     faqTitle: "Common questions about pay, settlements and loans",
     faqLead: "Short answers with the rule and the figure that applies in El Salvador. Each calculator explains the detail on its own page.",
@@ -116,6 +124,18 @@ export default function PlatformHome({ lang }: { lang: Lang }) {
         <div>{sourceLinks[lang].map(([label, href]) =>
           <a href={href} target="_blank" rel="noreferrer" key={href}>{label}<span>↗</span></a>)}</div>
       </div>
+    </section>
+    {/* The claim the rest of the section makes — that these figures can be
+        audited — is only worth anything if the places where the law itself does
+        not settle the answer are published too. That is the page this points
+        at, and it earns a band rather than a link in a list. */}
+    <section className="disputed-band">
+      <div>
+        <p>{t.disputedEyebrow}</p>
+        <h2>{t.disputedTitle}</h2>
+        <span>{t.disputedText}</span>
+      </div>
+      <a href={ROUTES[lang].disputed}>{t.disputedCta}<i aria-hidden="true">→</i></a>
     </section>
     <section className="home-faq">
       <div className="directory-head"><div><p>{t.faqEyebrow}</p><h2>{t.faqTitle}</h2></div><span>{t.faqLead}</span></div>

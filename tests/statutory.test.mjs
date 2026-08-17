@@ -9,7 +9,7 @@ import {
 import { OFFICIAL } from "../app/sources.ts";
 import {
   calculatePayrollWithholding, calculateRecalculation, calculateSettlement,
-  DAILY_MINIMUM_WAGE, DECEMBER_RECALC_TABLE, JUNE_RECALC_TABLE,
+  DAILY_MINIMUM_WAGE, DECEMBER_RECALC_TABLE, estimateAccumulated, JUNE_RECALC_TABLE,
   MINIMUM_WAGE_TABLES, PAYSLIP_TOLERANCE, QUINCENA25, RULES_REVIEWED,
   verifyPayslip, withholdingForTaxable,
 } from "../app/statutory.ts";
@@ -255,6 +255,81 @@ test("a negative difference withholds nothing and is not paid back through payro
   assert.equal(overWithheld.settledTax, 919.21);
   assert.equal(overWithheld.withholding, 0);
   assert.equal(overWithheld.excess, 80.79);
+});
+
+test("estimating the accumulated figures reproduces the same year, month by month", () => {
+  // The interface offers this because almost nobody has the two figures the
+  // decree names to hand. It must be the same arithmetic the calculate mode
+  // does, multiplied — an estimate that quietly used a different base would
+  // disagree with the panel above it on the reader's own salary.
+  const monthly = calculatePayrollWithholding({ gross: 1500, frequency: "monthly" });
+
+  const june = estimateAccumulated({ period: "june", monthlySalary: 1500 });
+  assert.equal(june.months, 6);
+  assert.equal(june.monthlyTaxable, monthly.taxableBeforeFixedDeduction);
+  assert.equal(june.monthlyWithholding, monthly.isr);
+  assert.equal(june.accumulatedTaxable, round(monthly.taxableBeforeFixedDeduction * 6));
+  // FIVE months of withholding against SIX of base. The month being
+  // recalculated has not withheld yet — its withholding is the difference the
+  // procedure produces — and accumulating six on both sides would report that
+  // June withholds nothing from a worker whose salary never moved.
+  assert.equal(june.withheldMonths, 5);
+  assert.equal(june.accumulatedWithheld, round(monthly.isr * 5));
+  assert.equal(june.annualGross, 18000);
+
+  const december = estimateAccumulated({ period: "december", monthlySalary: 1500 });
+  assert.equal(december.months, 12);
+  assert.equal(december.withheldMonths, 11);
+  assert.equal(december.accumulatedTaxable, round(monthly.taxableBeforeFixedDeduction * 12));
+
+  // A flat year recalculates to one more ordinary period, not to a correction:
+  // this is the same case the hand-written test above pins, reached through the
+  // estimate instead of through two typed figures.
+  const settled = calculateRecalculation({
+    period: "june",
+    accumulatedTaxable: june.accumulatedTaxable,
+    accumulatedWithheld: june.accumulatedWithheld,
+    annualGross: june.annualGross,
+  });
+  assert.equal(settled.excess, 0);
+  assert.ok(Math.abs(settled.withholding - monthly.isr) <= 0.05,
+    `a flat year withholds one ordinary month in June, not ${settled.withholding}`);
+
+  // Switching a contribution off moves the estimate the same way it moves one
+  // month, so the two panels cannot drift apart on the same checkbox.
+  const noAfp = estimateAccumulated({ period: "june", monthlySalary: 1500, includeAfp: false });
+  assert.ok(noAfp.accumulatedTaxable > june.accumulatedTaxable);
+});
+
+test("an estimated year can also land on a saldo a favor, and says so", () => {
+  // The case a reader is most likely to arrive with and least likely to be
+  // told about: withholding stopped mid-year — a raise reversed, a bonus in
+  // one month, an employer applying the pre-2025 reading of the deduction —
+  // and the accumulated tax comes out below what was already taken. The panel
+  // has to report that as an excess and never as a payment.
+  const estimated = estimateAccumulated({ period: "december", monthlySalary: 1200 });
+  const flat = calculateRecalculation({
+    period: "december",
+    accumulatedTaxable: estimated.accumulatedTaxable,
+    accumulatedWithheld: estimated.accumulatedWithheld,
+    annualGross: estimated.annualGross,
+  });
+  // A flat year still owes December its own month, so the estimate on its own
+  // is not the case: the excess needs a year where payroll took more than the
+  // annual table asks for.
+  assert.ok(flat.withholding > 0 && flat.excess === 0);
+
+  const overWithheld = calculateRecalculation({
+    period: "december",
+    accumulatedTaxable: estimated.accumulatedTaxable,
+    accumulatedWithheld: round(flat.settledTax + 250),
+    annualGross: estimated.annualGross,
+  });
+  assert.equal(overWithheld.settledTax, flat.settledTax, "the base did not move");
+  assert.equal(overWithheld.withholding, 0, "a negative difference withholds nothing");
+  // The excess is the DIFFERENCE and not the settled tax: reporting the latter
+  // would tell the reader they are owed a year of withholding back.
+  assert.equal(overWithheld.excess, 250);
 });
 
 test("the recalculation accumulates remuneration that was never withheld on", () => {

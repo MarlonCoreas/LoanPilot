@@ -1,4 +1,5 @@
 import AguinaldoPage from "./AguinaldoPage";
+import DisputedRulesPage from "./DisputedRulesPage";
 import LegalPage from "./LegalPage";
 import NotFound from "./NotFound";
 import OvertimePage from "./OvertimePage";
@@ -14,5 +15,6 @@ export default function App({ pathname }: { pathname: string }) {
   if (page === "aguinaldo") return <AguinaldoPage lang={lang} />;
   if (page === "overtime") return <OvertimePage lang={lang} />;
   if (page === "withholding") return <LegalPage lang={lang} page="withholding" />;
+  if (page === "disputed") return <DisputedRulesPage lang={lang} />;
   return <PlatformHome lang={lang} />;
 }

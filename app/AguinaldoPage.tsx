@@ -3,17 +3,21 @@ import {
   aguinaldoCutoffFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
   calculateAguinaldo,
 } from "./aguinaldo";
+import DisputePanel from "./DisputePanel";
 import { CheckField, DateField, MoneyField, SegmentedField } from "./fields";
 import { isoAfterMonths, todayIso } from "./loan";
 import { downloadPdf } from "./pdf";
 import { reviewedLineFor } from "./reviewed";
-import { citationsFor, currentValue, aguinaldoScale, reviewedFor, RULE_USAGE } from "./rules";
+import {
+  aguinaldoExemptionFor, aguinaldoScale, AGUINALDO_EXEMPTION_HISTORY, citationsFor, currentValue,
+  reviewedFor, RULE_USAGE, type RuleId,
+} from "./rules";
 import type { Lang } from "./routes";
 import { ROUTES } from "./routes";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { OFFICIAL } from "./sources";
-import { EARLIEST_EMPLOYMENT_DATE, withholdingForTaxable } from "./statutory";
+import { EARLIEST_EMPLOYMENT_DATE } from "./statutory";
 import UtilityHero from "./UtilityHero";
 
 /** Whether the reader is still on the payroll, which decides what day they are measured at. */
@@ -49,8 +53,9 @@ const copy = {
     ambiguousTail: "días. La reforma no dice expresamente qué escala rige para quien terminó antes del corte; si la diferencia te importa, consultalo con el MTPS.",
     notYet: "Con esa fecha de ingreso todavía no se genera aguinaldo para este ciclo: la estimación se hace sobre el corte del año siguiente.",
     paidNote: "Marcaste que ya te lo pagaron, así que la estimación queda en cero. Desmarcá la casilla para ver lo que correspondía.",
-    grossNote: "Es una estimación bruta. El aguinaldo tiene un tratamiento de renta propio que esta página todavía no calcula, y el resultado no incluye ningún descuento.",
+    grossNote: "Es una estimación bruta: la cifra de arriba no lleva ningún descuento. Abajo se calcula la porción exenta de renta y la base gravada; la retención sobre esa base no, porque ningún texto dice con qué tabla se hace.",
     invalid: "Revisá las fechas: el último día de trabajo debe ser posterior al ingreso y ambas deben caer entre 1950 y 2100.",
+    disputeLink: "Ver las dos lecturas de esta regla",
     sources: "Fuentes y reglas aplicadas",
     related: "Seguí con", relatedSettlement: "Finiquito completo", relatedSettlementText: "Si ya terminó la relación, el aguinaldo es una línea de un cálculo más grande: indemnización, vacaciones y salario pendiente.",
     relatedWithholding: "Retenciones de tu salario", relatedWithholdingText: "AFP, ISSS y renta del pago ordinario, con las tablas oficiales y la revisión de tu boleta.",
@@ -73,7 +78,16 @@ const copy = {
     helpEnd: "El último día que trabajaste, no el día que te avisaron ni el día que te pagaron. Se cuenta como día trabajado.",
     helpSalary: "El salario mensual ordinario, antes de descuentos. Si tenés comisiones habituales, promedialas y sumalas; no incluyas viáticos.",
     taxTitle: "Tratamiento de renta", taxGross: "Aguinaldo bruto", taxExempt: "Porción exenta",
-    taxBase: "Base gravada", taxWithheld: "Retención estimada", taxNet: "Neto estimado",
+    taxBase: "Base gravada",
+    taxSubtitle: "Qué parte del aguinaldo queda fuera del impuesto",
+    taxRuleLabel: "Regla que fija el monto exento",
+    taxByDecree: (year: number) => `Decreto transitorio del ejercicio ${year}`,
+    taxByStanding: "Base permanente de la Ley de Impuesto sobre la Renta",
+    taxStandingNote: "Sin decreto vigente para este ejercicio rige el numeral 16) del artículo 4 de la Ley de Impuesto sobre la Renta: exime el aguinaldo hasta dos salarios mínimos mensuales del sector comercio y servicios, y grava solo el excedente, deduciendo esa porción. Es norma permanente y nunca fue derogada, así que no hay vacío: los decretos anuales la desplazan por un año y expiran, y al expirar vuelve a aplicarse.",
+    taxDecreeNote: "En cada uno de los últimos cinco años la Asamblea aprobó un decreto transitorio que subió el monto exento solo para ese ejercicio, el último a $1,500 para 2025. Esos decretos se aprueban al cierre del año, y el de 2026 —si se aprueba— se esperaría entre finales de octubre y principios de diciembre. Mientras no exista, la cifra de arriba es la del piso permanente.",
+    taxHistoryTitle: "Decretos transitorios anteriores", taxHistoryYear: "Ejercicio", taxHistoryAmount: "Monto exento", taxHistoryNorm: "Decreto",
+    taxOpenTitle: "Lo que esta página no calcula",
+    taxOpenNote: "Cuánto se retiene sobre la base gravada. Ni el numeral 16) ni los decretos transitorios dicen con qué tabla se retiene el excedente del aguinaldo, y un aguinaldo no es un período de pago: aplicarle la tabla mensual sería una lectura nuestra, no una cita. Por eso la porción exenta y la base gravada sí aparecen, y la retención no.",
   },
   en: {
     heroTitle: "How much year-end bonus you are owed.",
@@ -104,8 +118,9 @@ const copy = {
     ambiguousTail: "days. The reform does not expressly say which scale governs someone whose contract ended before the cutoff; if the difference matters to you, check it with the MTPS.",
     notYet: "With that start date no bonus accrues for this cycle yet, so the estimate is made against the following year's cutoff.",
     paidNote: "You ticked that it has already been paid, so the estimate stays at zero. Untick the box to see what was due.",
-    grossNote: "This is a gross estimate. The year-end bonus has an income-tax treatment of its own that this page does not yet work out, and the result carries no deductions.",
+    grossNote: "This is a gross estimate: the figure above carries no deductions. The exempt portion and the taxable base are worked out below; the withholding on that base is not, because no text says which table applies to it.",
     invalid: "Check the dates: the last day worked must be after the start date and both must fall between 1950 and 2100.",
+    disputeLink: "See both readings of this rule",
     sources: "Sources and rules applied",
     related: "Carry on with", relatedSettlement: "The full settlement", relatedSettlementText: "Where the job has ended, the bonus is one line of a bigger calculation: severance, vacation and unpaid salary.",
     relatedWithholding: "Deductions from your pay", relatedWithholdingText: "Pension, ISSS and income tax on ordinary pay, with the official tables and a payslip check.",
@@ -128,7 +143,16 @@ const copy = {
     helpEnd: "The last day you actually worked — not the day you were told, nor the day you were paid. It counts as a worked day.",
     helpSalary: "The ordinary monthly salary before deductions. Average any recurring commissions and add them; leave out travel allowances.",
     taxTitle: "Income-tax treatment", taxGross: "Gross bonus", taxExempt: "Exempt portion",
-    taxBase: "Taxable base", taxWithheld: "Estimated withholding", taxNet: "Estimated net",
+    taxBase: "Taxable base",
+    taxSubtitle: "Which part of the bonus stays outside the tax",
+    taxRuleLabel: "The rule that sets the exempt amount",
+    taxByDecree: (year: number) => `Transitory decree for the ${year} tax year`,
+    taxByStanding: "The standing base of the Income Tax Law",
+    taxStandingNote: "With no decree in force for this tax year, numeral 16) of article 4 of the Income Tax Law governs: it exempts the bonus up to two monthly minimum wages of the commerce and services sector and taxes only the excess, after deducting that portion. It is permanent and was never repealed, so there is no vacuum: the annual decrees displace it for one year and expire, and when they expire it applies again.",
+    taxDecreeNote: "In each of the last five years the Assembly passed a transitory decree raising the exempt amount for that year alone, the last of them to $1,500 for 2025. Those decrees are passed at the close of the year, and a 2026 one — if it comes — would be expected between late October and early December. Until one exists, the figure above is the permanent floor.",
+    taxHistoryTitle: "Earlier transitory decrees", taxHistoryYear: "Tax year", taxHistoryAmount: "Exempt amount", taxHistoryNorm: "Decree",
+    taxOpenTitle: "What this page does not calculate",
+    taxOpenNote: "How much is withheld on the taxable base. Neither numeral 16) nor the transitory decrees say which table withholds on the excess of a bonus, and a bonus is not a pay period: applying the monthly table to it would be our reading, not a citation. That is why the exempt portion and the taxable base appear here and the withholding does not.",
   },
 } as const;
 
@@ -179,6 +203,9 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
 
   const payment = useMemo(() => aguinaldoPaymentDates(bonus.year), [bonus.year]);
   const scale = currentValue(aguinaldoScale);
+  /** See the note on the same component in `StatutoryTools`. */
+  const DisputeLink = ({ rule }: { rule: RuleId }) =>
+    <a className="dispute-link" href={`${ROUTES[lang].disputed}#${rule}`}>{t.disputeLink} →</a>;
   const citations = useMemo(() => citationsFor(RULE_USAGE.aguinaldo, bonus.measuredTo), [bonus.measuredTo]);
   const proportional = bonus.fraction > 0 && bonus.fraction < 1;
 
@@ -246,17 +273,19 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
   };
 
   /**
-   * The fiscal panel, which is written and switched off. See
-   * `AGUINALDO_TAX_PREVIEW`: the $1,500 exemption was transitory for the 2025
-   * fiscal year and nothing published as of August 2026 says what replaces it.
-   * Showing a figure here would be the one thing this site cannot afford.
+   * The fiscal panel, as far as the taxable base and no further.
+   *
+   * The exemption is resolved for the year the bonus belongs to, not for today:
+   * a transitory decree governs its own fiscal year, and with none in force the
+   * permanent floor of numeral 16) applies. `withhold` is deliberately not
+   * passed — see `AGUINALDO_TAX_PREVIEW`. No text names the table that withholds
+   * on the excess, so the page prints the slice it can source and says, in the
+   * panel, what it cannot.
    */
+  const exercise = Number(bonus.cutoffDate.slice(0, 4));
+  const exemptionRule = aguinaldoExemptionFor(exercise);
   const tax = AGUINALDO_TAX_PREVIEW
-    ? aguinaldoTax({
-      bonus: bonus.amount,
-      exemption: { kind: "amount", amount: 1500 },
-      withhold: (taxable) => withholdingForTaxable(taxable, "monthly").amount,
-    })
+    ? aguinaldoTax({ bonus: bonus.amount, exemption: exemptionRule.version.value })
     : undefined;
 
   return <main className="legal-page">
@@ -312,25 +341,51 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
               <div><span>{t.dailySalary}</span><b>{money.format(bonus.dailySalary)}</b></div>
               <div><span>{t.proportion}</span><b>{(bonus.fraction * 100).toFixed(1)}%</b><i>{t.cycleFrom} {date(bonus.cycleStartDate)}</i></div>
             </div>
-            {tax && <div className="tax-base-flow">
-              <span>{t.taxGross}<b>{money.format(tax.gross)}</b></span><i>−</i>
-              <span>{t.taxExempt}<b>{money.format(tax.exempt)}</b></span><i>=</i>
-              <span>{t.taxBase}<b>{money.format(tax.taxable)}</b></span><i>→</i>
-              <span>{t.taxNet}<b>{money.format(tax.net)}</b><small>{t.taxWithheld}: {money.format(tax.withheld)}</small></span>
-            </div>}
             {alreadyPaid && <div className="callout"><span>i</span><p>{t.paidNote}</p></div>}
             {bonus.notYet && <div className="callout warn"><span>!</span><p>{t.notYet}</p></div>}
-            {bonus.scaleAmbiguous && <div className="callout"><span>?</span><p>{t.ambiguousLead} ({bonus.scaleDays} {t.daysLabel}): <b>{money.format(bonus.amount)}</b> {t.ambiguousMid} ({bonus.alternativeScaleDays} {t.daysLabel}): <b>{money.format(bonus.alternativeAmount)}</b> {t.ambiguousTail}</p></div>}
+            {bonus.scaleAmbiguous && <div className="callout"><span>?</span><p>{t.ambiguousLead} ({bonus.scaleDays} {t.daysLabel}): <b>{money.format(bonus.amount)}</b> {t.ambiguousMid} ({bonus.alternativeScaleDays} {t.daysLabel}): <b>{money.format(bonus.alternativeAmount)}</b> {t.ambiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
             {proportional && <><div className="callout"><span>§</span><p>{t.proportionalNote}</p></div>
-              <div className="callout"><span>?</span><p>{t.cycleNote}</p></div></>}
+              <div className="callout"><span>?</span><p>{t.cycleNote} <DisputeLink rule="aguinaldoCycleStart" /></p></div></>}
           </>}
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>
+      {/* The fiscal band. It is a band and not a strip in the results panel
+          because most of what it has to say is not arithmetic: which rule set
+          the exempt slice, why a permanent article is governing a year no
+          decree has spoken for yet, and where the calculation stops. */}
+      {tax && !bonus.invalid && <section className="recalc-band tax-band">
+        <div className="section-title"><span>03</span><div><h2>{t.taxTitle}</h2><p>{t.taxSubtitle}</p></div></div>
+        <div className="recalc-outcome">
+          <div><span>{t.taxGross}</span><b>{money.format(tax.gross)}</b><small>{bonus.days.toFixed(2)} {t.daysLabel}</small></div>
+          <i aria-hidden="true">−</i>
+          <div><span>{t.taxExempt}</span><b>{money.format(tax.exempt)}</b><small>{exemptionRule.byDecree ? t.taxByDecree(exercise) : t.taxByStanding}</small></div>
+          <i aria-hidden="true">=</i>
+          <div className="recalc-result"><span>{t.taxBase}</span><strong>{money.format(tax.taxable)}</strong><small>{exemptionRule.version.norm}</small></div>
+        </div>
+        <div className="recalc-notes">
+          <div className="callout"><span>§</span><p><b>{t.taxRuleLabel}:</b> {exemptionRule.version.norm}. {exemptionRule.byDecree ? "" : t.taxStandingNote}</p></div>
+          {/* The claim that a 2026 decree is likely, and roughly when, is made
+              of the five entries below rather than of an adjective. */}
+          <div className="callout"><span>◷</span><p>{t.taxDecreeNote}</p></div>
+          <div className="callout warn"><span>?</span><p><b>{t.taxOpenTitle}:</b> {t.taxOpenNote}</p></div>
+        </div>
+        <details className="tax-history">
+          <summary>{t.taxHistoryTitle}</summary>
+          <div className="law-table-wrap"><table className="law-table">
+            <thead><tr><th>{t.taxHistoryYear}</th><th>{t.taxHistoryAmount}</th><th>{t.taxHistoryNorm}</th></tr></thead>
+            <tbody>{AGUINALDO_EXEMPTION_HISTORY.map((version) => <tr key={version.exercise}>
+              <td>{version.exercise}</td>
+              <td>{version.value.kind === "amount" ? money.format(version.value.amount) : "—"}</td>
+              <td>{version.norm}</td>
+            </tr>)}</tbody>
+          </table></div>
+        </details>
+      </section>}
       {/* The deadline is the one figure on this page a reader can act on, so it
           gets a band of its own rather than a line in a results tile. */}
       <section className="recalc-band">
-        <div className="section-title"><span>03</span><div><h2>{t.windowTitle}</h2><p>{t.windowSubtitle}</p></div></div>
+        <div className="section-title"><span>{tax && !bonus.invalid ? "04" : "03"}</span><div><h2>{t.windowTitle}</h2><p>{t.windowSubtitle}</p></div></div>
         <div className="recalc-outcome">
           <div><span>{t.cutoffLabel}</span><b>{date(bonus.cutoffDate)}</b></div>
           <i aria-hidden="true">→</i>
@@ -347,6 +402,7 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
           <b>{String(index + 1).padStart(2, "0")}</b>{citation.norm}<span>↗</span>
         </a>)}
       </div></div>
+      <DisputePanel lang={lang} page="aguinaldo" />
       <div className="source-panel related-panel"><h2>{t.related}</h2><div className="source-links">
         <a href={ROUTES[lang].settlement}><b>→</b>{t.relatedSettlement}: {t.relatedSettlementText}<span /></a>
         <a href={ROUTES[lang].withholding}><b>→</b>{t.relatedWithholding}: {t.relatedWithholdingText}<span /></a>

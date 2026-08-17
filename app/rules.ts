@@ -39,6 +39,13 @@ import type { OFFICIAL } from "./sources";
  *   UNSOURCED     no document fixes it; the value is this project's own choice
  *   DISPUTED      the sources conflict, or a text and the official practice do
  *   NOT MODELLED  the rule exists and this project does not apply it
+ *
+ * That first word is now also a field. `status` carries the same shout in a
+ * form code can read, because /reglas-en-disputa/ is BUILT FROM IT: every
+ * version marked DISPUTED or UNSOURCED appears on that page automatically, and
+ * a test fails when one does not. A shout that lived only in English prose
+ * could not do that — the page is bilingual, and the reader's half of each
+ * disagreement is in `disputes.ts`, keyed by the rule id.
  */
 
 export type SourceKey = keyof typeof OFFICIAL;
@@ -58,10 +65,20 @@ export type RuleUnit =
   | "usd-bands" | "days-by-seniority"
   /** Which ways of ending a contract a line is paid on. */
   | "terminations"
+  /** Which day a scale is measured at, where two days are defensible. */
+  | "seniority-reading"
   /** What a payment is kept out of: withholdings, bases, attachment. */
   | "exclusions"
   /** Not applied by any calculation: recorded so the gap stays under review. */
   | "not-modelled";
+
+/**
+ * The words a note shouts, as values. They are spelled the way the note spells
+ * them so that the two cannot drift: `tests/rules.test.mjs` asserts that a
+ * version carrying a status opens its note with the first one, and that a note
+ * opening with one of these words carries the matching status.
+ */
+export type RuleStatus = "DISPUTED" | "UNSOURCED" | "NOT MODELLED";
 
 export type RuleVersion<T> = {
   /** First day this version applies, inclusive. */
@@ -75,6 +92,24 @@ export type RuleVersion<T> = {
   reviewed: string;
   /** What the source does not settle, when it does not settle it. */
   note?: string;
+  /**
+   * What this version claims beyond a reading of its text, in the order the
+   * note says it. More than one applies where more than one is true: the
+   * Quincena 25 window is DISPUTED in which terminations it covers AND
+   * UNSOURCED in where it opens, and collapsing that to one word would hide
+   * half of what a reader has to know before trusting the line.
+   */
+  status?: [RuleStatus, ...RuleStatus[]];
+  /**
+   * The single fiscal year a transitory provision governs, when it governs one.
+   *
+   * A version with no `exercise` is permanent and applies until something
+   * replaces it; a version with one displaces the permanent rule for that year
+   * and then expires on its own terms, which is not something `from` alone can
+   * express. See `aguinaldoTaxExemption`, where a decade of one-year decrees
+   * sits above a standing article that none of them repealed.
+   */
+  exercise?: number;
 };
 
 export type Rule<T> = {
@@ -99,13 +134,28 @@ const rule = <T>(spec: Rule<T>): Rule<T> => spec;
  * stand-in pass for the rate of the day.
  */
 export function ruleAt<T>(subject: Rule<T>, isoDate: string) {
-  const version = subject.versions.find((item) => isoDate >= item.from);
+  const year = Number(isoDate.slice(0, 4));
+  const version = subject.versions.find((item) =>
+    isoDate >= item.from
+    // A transitory version governs its own fiscal year and no other. Without
+    // this the newest one would keep applying for ever, which is the exact
+    // mistake a year-by-year exemption invites: the 2025 decree would still be
+    // exempting bonuses in 2027 because nothing told the lookup it had expired.
+    && (item.exercise === undefined || item.exercise === year));
   return { version: version ?? subject.versions.at(-1)!, predatesRule: !version };
 }
 
-/** The newest version's value: what "in force today" means for a live page. */
+/**
+ * The standing value: what a live page shows when no date is in play.
+ *
+ * Transitory versions are skipped, because "current" cannot mean a provision
+ * that expired with its fiscal year. For a rule whose versions are all
+ * permanent — every rule here but one — this is the newest version, unchanged.
+ * Where a transitory version might govern the day being priced, the caller
+ * wants `ruleAt` and the date, not this.
+ */
 export function currentValue<T>(subject: Rule<T>): T {
-  return subject.versions[0].value;
+  return (subject.versions.find((item) => item.exercise === undefined) ?? subject.versions[0]).value;
 }
 
 // --- Shapes the rules carry ------------------------------------------------
@@ -375,6 +425,7 @@ export const vacationProportionalOnExit = rule<{
     norm: "Código de Trabajo art. 187",
     source: "laborService",
     reviewed: "2026-08-16",
+    status: ["DISPUTED"],
     note: "DISPUTED. Article 187 reads as dismissal only; the MTPS calculator pays the fraction on resignation too, and that statement is what this module reconciles against. Applying the literal text would drop the $90.16 line from the reconciliation and change the answer for every resignation on the site.",
   }],
 });
@@ -396,6 +447,7 @@ export const vacationUnmodelled = rule<{ qualifyingDaysWorked: number; boardAndL
     norm: "Código de Trabajo arts. 180 y 184",
     source: "vacation",
     reviewed: "2026-08-16",
+    status: ["NOT MODELLED"],
     note: "NOT MODELLED. Article 180 requires 200 days worked in the year to earn vacation at all, and this calculator never asks how many days were actually worked. Article 184 adds 25% for each of lodging and board provided by the employer, which the form has no field for. Both make the vacation line an over-estimate for the workers they touch.",
   }],
 });
@@ -514,7 +566,50 @@ export const aguinaldoCycleStart = rule<YearDay>({
     norm: "Sin norma que lo fije: arts. 196-202 no definen el período de devengo",
     source: "laborCode",
     reviewed: "2026-08-16",
-    note: "DISPUTED. Two readings are in use and no text settles either: the calendar year, which the MTPS supports by treating an early payment as if made in December, and a 12 December cycle, which is the only reading that reconciles the MTPS statement in the tests. Practice also still mixes the 12 December and 20 October dates. The value stays on the calendar year until a source states the accrual period. It is now passed into `calculateAguinaldo` explicitly rather than read from a 1 January buried in the arithmetic, so a reader can see which cycle produced a figure and a future decision can change it in one place.",
+    status: ["DISPUTED"],
+    note: "DISPUTED. Two readings are in use and no text settles either: the calendar year, which the MTPS supports by treating an early payment as if made in December, and a 12 December cycle, which is the only reading that reconciles the MTPS statement in the tests. Practice also still mixes the 12 December and 20 October dates. The value stays on the calendar year until a source states the accrual period. Both readings are now EXPRESSIBLE: the cycle opens on the most recent occurrence of this day on or before the last day read, so a 12 December start resolves into the previous calendar year the way that reading requires. A rule whose alternative the code cannot produce is not really in dispute — it is a decision with a footnote.",
+  }],
+});
+
+/**
+ * Which day an early leaver's seniority is read at, and therefore which step of
+ * the article 198 scale they take.
+ *
+ * DISPUTED. The scale itself is not: `aguinaldoScale` is 15/19/21 days and the
+ * 2025 reform did not touch it. What no text settles is the day it is measured
+ * at for someone whose contract ends BEFORE the qualifying date and who would
+ * have crossed a step by reaching it. Article 197 reads seniority at the
+ * qualifying date; article 202 grants the leaver a part "proporcional al tiempo
+ * trabajado" and says nothing about which scale that proportion is a proportion
+ * of. Both are readings of the same two articles:
+ *
+ *   LAST DAY WORKED, applied. The step the worker had actually completed. It
+ *   never pays for a seniority step nobody reached, which is the reading that
+ *   cannot over-state the line.
+ *
+ *   QUALIFYING DATE, named. The step they would have held on 20 October. It is
+ *   always the larger of the two — the cutoff is later than the departure in
+ *   every case this touches, so seniority there is never lower.
+ *
+ * Declared rather than computed, like `vacationProportionalOnExit`: nothing
+ * multiplies this value. `calculateAguinaldo` applies the first reading and
+ * returns the second beside it whenever the two differ, and the rule is here so
+ * the divergence has a norm, a source and a review date like every other figure.
+ */
+export const aguinaldoScaleOnExit = rule<{
+  appliedAt: "lastDayWorked";
+  alternativeAt: "cutoff";
+}>({
+  id: "aguinaldoScaleOnExit",
+  unit: "seniority-reading",
+  versions: [{
+    from: "1972-10-31",
+    value: { appliedAt: "lastDayWorked", alternativeAt: "cutoff" },
+    norm: "Código de Trabajo arts. 197, 198 y 202",
+    source: "laborCode",
+    reviewed: "2026-08-16",
+    status: ["DISPUTED"],
+    note: "DISPUTED. Nothing in chapter VII says which day the scale is read at for a contract that ends before the qualifying date. The conservative reading is the figure and the other one is shown beside it on screen and in the exported PDF, with neither claimed to govern.",
   }],
 });
 
@@ -553,29 +648,32 @@ export const aguinaldoPaymentWindow = rule<{ opens: YearDay; closes: YearDay }>(
 
 // --- Income tax on the year-end bonus ---------------------------------------
 //
-// NOT APPLIED BY ANY PAGE, AND THAT IS THE FINDING. The two rules below are
-// declared, sourced and dated, and `RULE_USAGE` lists neither, because as of
-// 16 August 2026 nothing settles which of them governs the 2026 bonus. The
-// aguinaldo page keeps its fiscal panel behind `AGUINALDO_TAX_PREVIEW`, off.
+// A PERMANENT FLOOR WITH A DECADE OF ONE-YEAR DECREES STACKED ON TOP OF IT, and
+// the shape is the whole point. This was read for a while as two candidates with
+// nothing to choose between them, and that reading was wrong: it treated a
+// standing article and an expired transitory decree as equals.
 //
-// What the record shows. LISR article 4 numeral 16), added by D.L. 458 of
-// 31 October 2019, exempts the bonus up to two monthly minimum wages of the
-// commerce and services sector, and taxes the excess after deducting them. It
-// has never been repealed. But every year since at least 2009 the Assembly has
-// displaced it for that fiscal year with a flat figure, and the consolidated
-// text's own list of related provisions reads like a calendar: $1,100 for 2021
-// (D.L. 229), $1,500 for 2022 (D.L. 596), 2023 (D.L. 900), 2024 (D.L. 159) and
-// 2025 (D.L. 432).
+// LISR article 4 numeral 16), added by D.L. 458 of 31 October 2019, exempts the
+// bonus up to two monthly minimum wages of the commerce and services sector and
+// taxes the excess after deducting them. It has never been repealed. D.L. 432
+// opens by saying so in as many words — "No obstante lo dispuesto en el numeral
+// 16) del artículo 4 de la Ley de Impuesto sobre la Renta" — which is the
+// grammar of a provision that DISPLACES another for a year, not one that
+// replaces it. Each such decree names its own fiscal year and expires with it.
 //
-// Those decrees are passed in November or December — 7 December 2021, 7 December
-// 2022, 29 November 2023, 26 November 2024 — and 2025's came on 15 October only
-// because the payment window had just moved. Today is 16 August 2026 and the
-// Assembly's 2026 list, decrees 495 to 633, contains no aguinaldo decree at all.
+// So there is no vacuum. With no decree in force for an exercise, the floor is
+// what governs it, and the floor is sourced, dated and never repealed. That is
+// why the fiscal panel of /aguinaldo/ is now on.
 //
-// So the absence of a 2026 figure is not evidence that the exemption lapsed; it
-// is evidence that the season has not arrived. Modelling either candidate now
-// would be a guess dressed as a citation, and the guess is worth roughly $150 to
-// a reader on the border. Check the 2026 decree list again from October.
+// WHAT IS STILL COMING. In each of the last five years a transitory decree
+// raised the figure, the last of them to $1,500 for 2025, and they are passed in
+// the closing weeks of the year: 7 December 2021, 7 December 2022, 29 November
+// 2023, 26 November 2024, and 15 October 2025 only because the payment window
+// had just moved. As of 16 August 2026 the Assembly's 2026 list carries none, so
+// a 2026 decree — if it comes — would be expected between late October and early
+// December. Adding it is one entry in `versions` with its own `exercise`, and no
+// code changes: that is what the field is for. Check the decree list from
+// October.
 
 export const aguinaldoTaxExemption = rule<AguinaldoExemption>({
   id: "aguinaldoTaxExemption",
@@ -583,11 +681,54 @@ export const aguinaldoTaxExemption = rule<AguinaldoExemption>({
   versions: [
     {
       from: "2025-10-15",
+      exercise: 2025,
       value: { kind: "amount", amount: 1500 },
       norm: "D.L. 432 del 15 de octubre de 2025 (D.O. 194, Tomo 449) art. 1",
       source: "aguinaldoTax2025",
       reviewed: "2026-08-16",
-      note: "TRANSITORY, and for the 2025 fiscal year alone: \"para el corriente ejercicio fiscal de dos mil veinticinco\". It does not carry into 2026 by itself, and nothing published as of 16 August 2026 extends it. The excess above the figure is withheld \"deduciendo el valor no gravable regulado en este artículo\", so the exemption is a deductible slice and not a cliff.",
+      note: "TRANSITORY, for the 2025 fiscal year alone: \"para el corriente ejercicio fiscal de dos mil veinticinco\". It expired with that year and does not reach 2026. The excess above the figure is withheld \"deduciendo el valor no gravable regulado en este artículo\", so the exemption is a deductible slice and not a cliff.",
+    },
+    // The four before it. They govern nothing anybody can still calculate here
+    // and they are not read from their own decrees — they are the consolidated
+    // text's own list of related provisions, which is why they share its source
+    // and its review date. They are in the registry because the pattern IS the
+    // finding: /aguinaldo/ tells a reader that a 2026 decree is likely and
+    // roughly when, and that claim has to be made of data rather than of prose.
+    {
+      from: "2024-11-26",
+      exercise: 2024,
+      value: { kind: "amount", amount: 1500 },
+      norm: "D.L. 159 del 26 de noviembre de 2024",
+      source: "incomeTax",
+      reviewed: "2026-08-16",
+      note: "TRANSITORY, for the 2024 fiscal year. Read from the list of related provisions of the consolidated Income Tax Law, not from the decree itself.",
+    },
+    {
+      from: "2023-11-29",
+      exercise: 2023,
+      value: { kind: "amount", amount: 1500 },
+      norm: "D.L. 900 del 29 de noviembre de 2023",
+      source: "incomeTax",
+      reviewed: "2026-08-16",
+      note: "TRANSITORY, for the 2023 fiscal year. Read from the consolidated text's list of related provisions.",
+    },
+    {
+      from: "2022-12-07",
+      exercise: 2022,
+      value: { kind: "amount", amount: 1500 },
+      norm: "D.L. 596 del 7 de diciembre de 2022",
+      source: "incomeTax",
+      reviewed: "2026-08-16",
+      note: "TRANSITORY, for the 2022 fiscal year. Read from the consolidated text's list of related provisions.",
+    },
+    {
+      from: "2021-12-07",
+      exercise: 2021,
+      value: { kind: "amount", amount: 1100 },
+      norm: "D.L. 229 del 7 de diciembre de 2021",
+      source: "incomeTax",
+      reviewed: "2026-08-16",
+      note: "TRANSITORY, for the 2021 fiscal year, and the last one at a figure other than $1,500. Read from the consolidated text's list of related provisions.",
     },
     {
       from: "2019-11-14",
@@ -595,10 +736,29 @@ export const aguinaldoTaxExemption = rule<AguinaldoExemption>({
       norm: "Ley de Impuesto sobre la Renta art. 4 numeral 16), incorporado por el D.L. 458 del 31 de octubre de 2019 (D.O. 215, Tomo 425)",
       source: "incomeTax",
       reviewed: "2026-08-16",
-      note: "The standing rule, never repealed: \"hasta un monto no mayor de dos salarios mínimos mensuales del sector comercio y servicios\", with the excess taxed \"deduciendo los dos salarios mínimos aludidos\". It carries marker (23) in the consolidated text's reform table, which is the D.L. 458 named here, and D.L. 432's second recital gives the same reference independently. The monthly minimum wage it multiplies is the daily rate times 365/12 — see the note on `minimumWage` — and that conversion has not been read back against the wage decree for this purpose.",
+      note: "The standing rule, never repealed, and the one that governs any exercise no decree displaces: \"hasta un monto no mayor de dos salarios mínimos mensuales del sector comercio y servicios\", with the excess taxed \"deduciendo los dos salarios mínimos aludidos\". It carries marker (23) in the consolidated text's reform table, which is the D.L. 458 named here, and D.L. 432's second recital gives the same reference independently. The monthly minimum wage it multiplies is the daily rate times 365/12 — see the note on `minimumWage`.",
     },
   ],
 });
+
+/**
+ * The exemption that governs a fiscal year, and whether a decree set it.
+ *
+ * The page needs both halves. A figure alone would let the standing floor and a
+ * one-year decree print identically, and the difference is the reader's whole
+ * risk: a decree for the year is settled, while the floor is what applies
+ * BECAUSE NOBODY HAS LEGISLATED YET, and one may still arrive in November and
+ * change the answer.
+ */
+export function aguinaldoExemptionFor(year: number) {
+  const transitory = aguinaldoTaxExemption.versions.find((item) => item.exercise === year);
+  const standing = aguinaldoTaxExemption.versions.find((item) => item.exercise === undefined)!;
+  return { version: transitory ?? standing, byDecree: transitory !== undefined };
+}
+
+/** Every year a transitory decree has raised the figure, newest first. */
+export const AGUINALDO_EXEMPTION_HISTORY = aguinaldoTaxExemption.versions
+  .filter((version) => version.exercise !== undefined);
 
 // --- Quincena 25 ------------------------------------------------------------
 //
@@ -724,12 +884,16 @@ export const quincena25Exempt = rule<{
  * materialice", not to a period. And the error runs one way. Over-stating this
  * line is hundreds of dollars in a figure somebody carries into a negotiation.
  *
- * UNSOURCED, the lower bound. The value below is the 25 January of article 3,
- * which is in the text. Where the window OPENS is not: read literally, a
- * termination in December is also "antes del veinticinco de enero". This
- * project bounds it at the first of the same January, because the payment
- * article 1 fixes is a January one and that is the month article 3 is about.
- * A decree or a ministry criterion that states otherwise replaces this.
+ * UNSOURCED, the lower bound, and this is the half to be honest about. The
+ * value below is the 25 January of article 3, which is in the text. ANY LOWER
+ * BOUND IS THIS PROJECT'S INVENTION, INCLUDING THE ONE IT USES: read literally,
+ * a termination in December is also "antes del veinticinco de enero", and so is
+ * one in March of the year before. The window is bounded at the first of the
+ * same January because the payment article 1 fixes is a January payment and
+ * that is the month article 3 is about — a reading, not a citation. Only the
+ * 25th comes from the text. A decree or a ministry criterion that states
+ * otherwise replaces this, and until one does the bound is named on
+ * /reglas-en-disputa/ rather than presented as part of the law.
  */
 export const quincena25Window = rule<YearDay>({
   id: "quincena25Window",
@@ -740,7 +904,8 @@ export const quincena25Window = rule<YearDay>({
     norm: "Ley Especial Quincena Veinticinco (D.L. 499 del 14 de enero de 2026) arts. 1 y 3",
     source: "quincena25",
     reviewed: "2026-08-16",
-    note: "DISPUTED, applied restrictively. The date is article 3's own \"antes del veinticinco de enero o en esa misma fecha\"; the window's opening day is this project's bound and carries no source. The broad reading — a proportional share on any dismissal — is named on screen and in the exported PDF rather than silently discarded.",
+    status: ["DISPUTED", "UNSOURCED"],
+    note: "DISPUTED, applied restrictively, and UNSOURCED at the other end. The 25th is article 3's own \"antes del veinticinco de enero o en esa misma fecha\". The day the window OPENS is not in any text: the first of that same January is this project's bound, and so would be any other lower bound anybody proposed. The broad reading — a proportional share on any dismissal — is named on screen and in the exported PDF rather than silently discarded.",
   }],
 });
 
@@ -1016,8 +1181,8 @@ export const RULES = {
   resignationDaysPerYear, resignationWageCap, resignationMinimumService,
   dailySalaryDivisor, accrualYearDays,
   vacationDaysPerYear, vacationSurcharge, vacationProportionalOnExit, vacationUnmodelled,
-  aguinaldoScale, aguinaldoCutoff, aguinaldoCycleStart, aguinaldoPaymentWindow,
-  aguinaldoTaxExemption,
+  aguinaldoScale, aguinaldoScaleOnExit, aguinaldoCutoff, aguinaldoCycleStart,
+  aguinaldoPaymentWindow, aguinaldoTaxExemption,
   quincena25SalaryCeiling, quincena25Rate, quincena25Exempt, quincena25Window,
   quincena25MandatoryFrom,
   withholdingTables, recalcTables, recalcMonths,
@@ -1050,19 +1215,17 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "resignationDaysPerYear", "resignationWageCap", "resignationMinimumService",
     "dailySalaryDivisor", "accrualYearDays",
     "vacationDaysPerYear", "vacationSurcharge", "vacationProportionalOnExit", "vacationUnmodelled",
-    "aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart",
+    "aguinaldoScale", "aguinaldoScaleOnExit", "aguinaldoCutoff", "aguinaldoCycleStart",
     "quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt", "quincena25Window",
     "quincena25MandatoryFrom",
   ],
-  // `aguinaldoTaxExemption` is deliberately absent. Nothing published settles
-  // which of its two versions governs the 2026 bonus, so the page keeps its
-  // fiscal panel behind `AGUINALDO_TAX_PREVIEW` and makes no claim about it.
-  // Listing the rule here would put its review date into a freshness badge for
-  // a figure the page does not show. Add it in the same commit that turns the
-  // flag on, and not before.
+  // `aguinaldoTaxExemption` is listed now that the page shows the exempt slice.
+  // It was absent while the fiscal panel was off, because a review date in a
+  // freshness badge has to be about a figure the page actually prints.
   aguinaldo: [
     "dailySalaryDivisor", "accrualYearDays",
-    "aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart", "aguinaldoPaymentWindow",
+    "aguinaldoScale", "aguinaldoScaleOnExit", "aguinaldoCutoff", "aguinaldoCycleStart",
+    "aguinaldoPaymentWindow", "aguinaldoTaxExemption",
   ],
   overtime: [
     "dailySalaryDivisor", "nightWindow", "shiftLimits", "minorOvertimeLimit", "overtimeFactors",
@@ -1076,6 +1239,10 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "afpEmployeeRate", "isssEmployeeRate", "isssMonthlyCeiling",
     "fixedDeduction", "fixedDeductionIncomeLimit", "quincena25Exempt",
   ],
+  // Whatever is in dispute, and nothing else. Written as a derivation rather
+  // than a list because the page is one too: a rule marked DISPUTED that this
+  // entry forgot would be published with somebody else's review date under it.
+  disputed: [...new Set(disputedVersions().map(({ rule }) => rule.id as RuleId))],
 };
 
 /**
@@ -1095,6 +1262,31 @@ export function oldestReviewed(rules: AnyRule[]): string | undefined {
 /** The review date a page is entitled to show, or undefined if it cites none. */
 export function reviewedFor(page: Page): string | undefined {
   return oldestReviewed(RULE_USAGE[page].map((id) => RULES[id]));
+}
+
+/**
+ * Every version of every rule that claims something beyond a reading of its
+ * text, in registry order.
+ *
+ * This is what /reglas-en-disputa/ is built from. Marking a rule DISPUTED is
+ * therefore the only step needed to publish it: there is no second list to
+ * remember, which is exactly the failure this replaces — a divergence recorded
+ * in a comment nobody outside the repository will ever read.
+ *
+ * `NOT MODELLED` is not a disagreement about what the law says; it is a gap in
+ * what this project computes, and it belongs in the limitations a calculator
+ * states rather than on a page about contested readings.
+ */
+export function disputedVersions() {
+  const contested: { rule: AnyRule; version: RuleVersion<unknown> }[] = [];
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      if (version.status?.some((flag) => flag === "DISPUTED" || flag === "UNSOURCED")) {
+        contested.push({ rule, version });
+      }
+    }
+  }
+  return contested;
 }
 
 export type Citation = { norm: string; source: SourceKey };
@@ -1124,7 +1316,7 @@ export function citationsFor(ids: RuleId[], isoDate: string): Citation[] {
     // Widened to `AnyRule`: only the metadata is read here, and the value types
     // across the registry have nothing in common to unify on.
     const { version } = ruleAt(RULES[id] as AnyRule, isoDate);
-    const key = `${version.norm} ${version.source}`;
+    const key = `${version.norm}\u0000${version.source}`;
     if (seen.has(key)) continue;
     seen.add(key);
     citations.push({ norm: version.norm, source: version.source });

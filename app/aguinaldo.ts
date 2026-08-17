@@ -93,13 +93,17 @@ export function calculateAguinaldo(input: {
   /**
    * Where the accrual cycle starts. DISPUTED — passed, never implied.
    *
-   * A LIMIT WORTH KNOWING BEFORE RELYING ON IT: the day is resolved inside the
-   * calendar year of `endDate`, so a cycle that OPENS IN THE PREVIOUS YEAR
-   * cannot be expressed here. That rules out the 12 December reading, which is
-   * the live alternative — it would need the cycle to run from 12 December of
-   * the year before. Making the parameter explicit was the point of this pass;
-   * supporting a cycle that straddles the year is a second one, and it belongs
-   * with whatever document finally settles which cycle applies.
+   * BOTH READINGS ARE EXPRESSIBLE, which they were not. The day used to be
+   * resolved inside the calendar year of `endDate`, so a cycle that opens in
+   * the PREVIOUS year could not be written down at all — and that rules out the
+   * 12 December reading, which is the live alternative. A rule whose
+   * alternative the code cannot produce is not in dispute in any way that
+   * matters; it is a decision with a footnote attached.
+   *
+   * It now resolves to the most recent occurrence of this day on or before
+   * `endDate`, which is simply "the cycle that contains the last day read".
+   * For 1 January that is the same date it always was — the last day read is
+   * never earlier than the January of its own year — so no figure moves.
    */
   cycleStart?: YearDay;
   /** The day seniority is read at and by which the bonus is fully earned. */
@@ -114,7 +118,15 @@ export function calculateAguinaldo(input: {
   const cycleDay = input.cycleStart ?? CYCLE_START;
   const year = end.getUTCFullYear();
   const cutoff = new Date(Date.UTC(year, cutoffDay.month - 1, cutoffDay.day));
-  const cycleOpens = new Date(Date.UTC(year, cycleDay.month - 1, cycleDay.day));
+  // The cycle that CONTAINS the last day read: the most recent occurrence of
+  // the cycle day on or before it, which steps back a year when that day has
+  // not come round yet. A 1 January cycle never steps back; a 12 December one
+  // does for most of the year, and that is the whole point of writing it this
+  // way rather than pinning the cycle to the calendar year of `endDate`.
+  const cycleThisYear = new Date(Date.UTC(year, cycleDay.month - 1, cycleDay.day));
+  const cycleOpens = cycleThisYear <= end
+    ? cycleThisYear
+    : new Date(Date.UTC(year - 1, cycleDay.month - 1, cycleDay.day));
   const workStart = start > cycleOpens ? start : cycleOpens;
 
   const service = calendarService(start, end);
@@ -162,6 +174,10 @@ export function calculateAguinaldo(input: {
   const appliedRules: RuleId[] = [
     "dailySalaryDivisor", "accrualYearDays",
     ...(days > 0 ? ["aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart"] as const : []),
+    // Only where the two readings actually differ. Citing the divergence on a
+    // case it does not touch would put an article in a document as grounds for
+    // a figure it had no part in.
+    ...(scaleAmbiguous ? ["aguinaldoScaleOnExit"] as const : []),
   ];
 
   return {
@@ -194,31 +210,31 @@ export function calculateAguinaldo(input: {
   };
 }
 
-// --- Income tax, which this site does not yet publish -----------------------
+// --- Income tax on the bonus ------------------------------------------------
 
 /**
- * Whether the fiscal panel of `/aguinaldo/` is shown. It is not.
+ * Whether the fiscal panel of `/aguinaldo/` is shown. It is, and only as far as
+ * the taxable base.
  *
- * The exemption that applied to the 2025 bonus — $1,500 under D.L. 432 — was
- * transitory for that fiscal year and says so in its own title. The standing
- * article it displaced, LISR article 4 numeral 16), exempts two monthly minimum
- * wages of the commerce sector and was never repealed. Which of the two governs
- * the 2026 bonus is not knowable today: the Assembly has passed one of these
- * decrees every year for over a decade, always in November or December, and as
- * of 16 August 2026 its 2026 list carries none.
+ * WHAT CHANGED. This was off on the reasoning that the $1,500 of D.L. 432 and
+ * the standing article were two candidates with nothing to choose between them.
+ * They are not equals. Numeral 16) of article 4 is permanent and was never
+ * repealed; D.L. 432 opens by displacing it — "No obstante lo dispuesto en el
+ * numeral 16)" — for one named fiscal year, and expires with it. With no decree
+ * in force for an exercise, the permanent floor governs it. That is not a
+ * vacuum, and treating it as one meant withholding a sourced figure from
+ * readers because an unsourced one might arrive later.
  *
- * So the arithmetic below is written, tested and switched off. Turning it on is
- * three edits — this constant, the exemption passed by the page, and adding
- * `aguinaldoTaxExemption` to `RULE_USAGE.aguinaldo` — and it must not happen
- * before a document names the 2026 figure.
- *
- * ALSO UNRESOLVED, and blocking on its own: which table withholds on the
- * excess. Article 1 of D.L. 432 and numeral 16) both say the surplus is subject
- * to withholding "deduciendo" the exempt slice, and neither names a table. A
- * bonus is not a pay period, so applying the monthly one — as `aguinaldoTax`
- * does below — is this project's reading and not a citation.
+ * WHAT IS STILL OFF, and it is not a detail: WHICH TABLE WITHHOLDS ON THE
+ * EXCESS. Article 1 of D.L. 432 and numeral 16) both say the surplus is
+ * withheld "deduciendo" the exempt slice, and neither names a table. A bonus is
+ * not a pay period, so reaching for the monthly one is a reading and not a
+ * citation. `aguinaldoTax` will apply whatever table a caller hands it and
+ * returns nothing when a caller hands it none, which is what the page does: it
+ * prints the gross, the exempt slice and the taxable base, and says plainly
+ * that the withholding on that base is not something this project can source.
  */
-export const AGUINALDO_TAX_PREVIEW = false;
+export const AGUINALDO_TAX_PREVIEW = true;
 
 /** The exempt slice in dollars, for whichever shape the governing rule takes. */
 export function exemptAmount(exemption: AguinaldoExemption) {
@@ -239,12 +255,18 @@ export function exemptAmount(exemption: AguinaldoExemption) {
 export function aguinaldoTax(input: {
   bonus: number;
   exemption: AguinaldoExemption;
-  /** The withholding the caller's table gives for a base. See the flag's note. */
-  withhold: (taxable: number) => number;
+  /**
+   * The withholding the caller's table gives for a base. OPTIONAL, and the page
+   * omits it: no text names the table that applies to a bonus, so `withheld`
+   * and `net` come back null rather than as a figure with no citation behind
+   * it. A caller that passes one is stating which table it chose.
+   */
+  withhold?: (taxable: number) => number;
 }) {
   const gross = round2(Math.max(0, input.bonus || 0));
   const exempt = round2(Math.min(gross, exemptAmount(input.exemption)));
   const taxable = round2(Math.max(0, gross - exempt));
+  if (!input.withhold) return { gross, exempt, taxable, withheld: null, net: null };
   const withheld = taxable > 0 ? round2(input.withhold(taxable)) : 0;
   return { gross, exempt, taxable, withheld, net: round2(gross - withheld) };
 }

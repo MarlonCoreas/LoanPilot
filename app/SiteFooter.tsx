@@ -7,6 +7,7 @@ const copy = {
     private: "Privado por diseño", privateText: "Sin cuentas ni seguimiento. Tus datos permanecen en tu dispositivo.",
     tools: "Herramientas",
     sources: "Fuentes oficiales", ssf: "Tasas y cargos · SSF", mtps: "Cálculo laboral · MTPS", treasury: "Tablas de renta · Hacienda",
+    transparency: "Transparencia", disputed: "Reglas en disputa", disputedHint: "Dónde la ley admite más de una lectura",
     independent: "Proyecto independiente de", disclaimer: "Estimaciones educativas; no sustituyen asesoría financiera, contable o legal.",
     report: "Reportar una diferencia de cálculo",
   },
@@ -15,6 +16,7 @@ const copy = {
     private: "Private by design", privateText: "No accounts or tracking. Your data stays on your device.",
     tools: "Tools",
     sources: "Official sources", ssf: "Rates and charges · SSF", mtps: "Employment calculation · MTPS", treasury: "Tax tables · Treasury",
+    transparency: "Transparency", disputed: "Disputed rules", disputedHint: "Where the law allows more than one reading",
     independent: "An independent project by", disclaimer: "Educational estimates; not a substitute for financial, accounting or legal advice.",
     report: "Report a calculation difference",
   },
@@ -33,6 +35,15 @@ export default function SiteFooter({ lang }: { lang: Lang }) {
         <h2>{t.tools}</h2>
         {TOOL_PAGES.map((page) =>
           <a key={page} href={ROUTES[lang][page]}>{PAGE_LABELS[lang][page]}<span>→</span></a>)}
+      </nav>
+      {/* Its own column, and not a line under "Herramientas": the page is the
+          strongest thing the site has to say about itself, and filing it with
+          the calculators would read as a sixth calculator. */}
+      <nav className="footer-column" aria-label={t.transparency}>
+        <h2>{t.transparency}</h2>
+        <a className="footer-feature" href={ROUTES[lang].disputed}>
+          {t.disputed}<small>{t.disputedHint}</small><span>→</span>
+        </a>
       </nav>
       <nav className="footer-column" aria-label={t.sources}>
         <h2>{t.sources}</h2>

@@ -5,7 +5,10 @@ import {
   aguinaldoCutoffFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
   calculateAguinaldo, exemptAmount,
 } from "../app/aguinaldo.ts";
-import { citationsFor, currentValue, RULES, RULE_USAGE } from "../app/rules.ts";
+import {
+  aguinaldoExemptionFor, AGUINALDO_EXEMPTION_HISTORY, citationsFor, currentValue, ruleAt,
+  RULES, RULE_USAGE,
+} from "../app/rules.ts";
 import { OFFICIAL } from "../app/sources.ts";
 import { calculateSettlement, withholdingForTaxable } from "../app/statutory.ts";
 
@@ -117,6 +120,39 @@ test("the accrual cycle is a parameter, not a 1 January buried in the arithmetic
   assert.equal(oldCutoff.reachedCutoff, true);
 });
 
+test("both readings of the accrual cycle are expressible, including the one that straddles the year", () => {
+  // The rule is marked DISPUTED and the live alternative is a cycle that opens
+  // on 12 December of the PREVIOUS year. While the cycle day was resolved
+  // inside the calendar year of the last day read, that alternative could not
+  // be written down at all — the parameter existed and could only ever produce
+  // the reading it already applied. This is that gap closed.
+  const december = calculateAguinaldo({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    cycleStart: { month: 12, day: 12 },
+  });
+  assert.equal(december.cycleStartDate, "2025-12-12",
+    "the cycle containing 30 June 2026 opened in December 2025");
+
+  // Past the cycle day of its own year, the same parameter resolves forward
+  // rather than sticking a year behind: 20 December is inside the cycle that
+  // opened eight days earlier.
+  const afterTheDay = calculateAguinaldo({
+    startDate: "2020-01-01", endDate: "2026-12-20", monthlySalary: 900,
+    cycleStart: { month: 12, day: 12 },
+  });
+  assert.equal(afterTheDay.cycleStartDate, "2026-12-12");
+
+  // And the applied reading is untouched, which is the point of pinning it: a
+  // 1 January cycle never steps back, because no last day read is earlier than
+  // the January of its own year.
+  for (const endDate of ["2026-01-01", "2026-06-30", "2026-12-31"]) {
+    const calendar = calculateAguinaldo({
+      startDate: "2020-01-01", endDate, monthlySalary: 900,
+    });
+    assert.equal(calendar.cycleStartDate, `${endDate.slice(0, 4)}-01-01`, endDate);
+  }
+});
+
 test("the settlement and the bonus page give the same figure for the same case", () => {
   // The reason the module exists. These were forty lines inside
   // `calculateSettlement`; two copies would have disagreed on exactly the cases
@@ -160,15 +196,70 @@ test("the bonus page cites the rules it applies, and every one of them resolves"
 
 // --- Income tax, which is written and switched off --------------------------
 
-test("the fiscal panel is off, because nothing settles the 2026 exemption", () => {
-  // The $1,500 of D.L. 432 was transitory for the 2025 fiscal year and says so
-  // in its own title; LISR article 4 numeral 16) exempts two monthly minimum
-  // wages and was never repealed. Which governs 2026 is not knowable today, so
-  // the page shows neither. This assertion is the flag's tripwire: flipping it
-  // without deciding the question fails the build.
-  assert.equal(AGUINALDO_TAX_PREVIEW, false);
-  assert.equal(RULE_USAGE.aguinaldo.includes("aguinaldoTaxExemption"), false,
-    "a page that shows no fiscal figure must not claim to have checked one");
+test("the fiscal panel is on, and the page claims the rule it now shows", () => {
+  // It was off while the $1,500 of D.L. 432 and the standing article were read
+  // as two equal candidates. They are not equals: numeral 16) is permanent and
+  // was never repealed, and each decree displaces it for one named fiscal year
+  // and expires. With no decree for an exercise the floor governs it, so there
+  // is a sourced figure to show and it is shown.
+  assert.equal(AGUINALDO_TAX_PREVIEW, true);
+  assert.equal(RULE_USAGE.aguinaldo.includes("aguinaldoTaxExemption"), true,
+    "a page that prints the exempt slice has to carry that rule's review date");
+});
+
+test("a transitory decree governs its own year and expires with it", () => {
+  // The failure this guards against is the expensive one: the 2025 decree
+  // still exempting $1,500 of a 2027 bonus because nothing told the lookup it
+  // had run out. Adding the next decree is one entry with its own `exercise`.
+  const rule = RULES.aguinaldoTaxExemption;
+
+  const inside = ruleAt(rule, "2025-12-01");
+  assert.deepEqual(inside.version.value, { kind: "amount", amount: 1500 });
+  assert.match(inside.version.norm, /D\.L\. 432/);
+
+  for (const date of ["2026-08-17", "2027-01-01", "2030-06-30"]) {
+    const after = ruleAt(rule, date);
+    assert.equal(after.version.value.kind, "minimumWages", date);
+    assert.match(after.version.norm, /numeral 16\)/, date);
+  }
+
+  // And the standing floor is what "current" means for a rule like this, which
+  // is the half `currentValue` would get wrong by taking versions[0].
+  assert.deepEqual(currentValue(rule), { kind: "minimumWages", multiple: 2, sector: "commerce" });
+});
+
+test("the exemption resolves by fiscal year, and says whether a decree set it", () => {
+  const decreed = aguinaldoExemptionFor(2025);
+  assert.equal(decreed.byDecree, true);
+  assert.deepEqual(decreed.version.value, { kind: "amount", amount: 1500 });
+
+  const floor = aguinaldoExemptionFor(2026);
+  assert.equal(floor.byDecree, false, "no 2026 decree exists as of this writing");
+  assert.equal(floor.version.value.kind, "minimumWages");
+
+  // The five-year history the page shows is data, not an adjective in a
+  // sentence: every entry names a year, a figure and the decree behind it.
+  assert.ok(AGUINALDO_EXEMPTION_HISTORY.length >= 5);
+  for (const version of AGUINALDO_EXEMPTION_HISTORY) {
+    assert.equal(typeof version.exercise, "number");
+    assert.equal(version.value.kind, "amount");
+    assert.match(version.norm, /D\.L\. \d+/);
+    assert.equal(version.from.slice(0, 4), String(version.exercise),
+      "a decree for a fiscal year is passed inside it");
+  }
+  assert.deepEqual(
+    AGUINALDO_EXEMPTION_HISTORY.map((version) => version.exercise),
+    [2025, 2024, 2023, 2022, 2021]);
+});
+
+test("the withholding on the excess is left uncalculated, on purpose", () => {
+  // The second blocker did not move: no text names the table that withholds on
+  // a bonus. Called without one, the function reports the base it can source
+  // and null where a figure would be a reading dressed as a citation.
+  const open = aguinaldoTax({ bonus: 2500, exemption: { kind: "amount", amount: 1500 } });
+  assert.equal(open.taxable, 1000);
+  assert.equal(open.withheld, null);
+  assert.equal(open.net, null);
 });
 
 test("both shapes of the exemption resolve to a figure in dollars", () => {

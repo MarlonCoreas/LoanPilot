@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
+import DisputePanel from "./DisputePanel";
 import { CheckField, DateField, FieldGroup, MoneyField, NumberField, SegmentedField, SelectField } from "./fields";
 import { isoAfterMonths, todayIso } from "./loan";
 import { downloadPdf } from "./pdf";
-import { citationsFor, reviewedFor } from "./rules";
-import type { Lang } from "./routes";
+import { citationsFor, reviewedFor, type RuleId } from "./rules";
+import { ROUTES, type Lang } from "./routes";
 import { OFFICIAL } from "./sources";
 import {
   calculatePayrollWithholding, calculateRecalculation, calculateSettlement, DAILY_MINIMUM_WAGE,
-  DECEMBER_RECALC_TABLE, EARLIEST_EMPLOYMENT_DATE, JUNE_RECALC_TABLE, verifyPayslip,
-  WITHHOLDING_TABLES, withholdingForTaxable,
+  DECEMBER_RECALC_TABLE, EARLIEST_EMPLOYMENT_DATE, estimateAccumulated, JUNE_RECALC_TABLE,
+  verifyPayslip, WITHHOLDING_TABLES, withholdingForTaxable,
   type EmploymentEnd, type PayFrequency, type PayslipCause, type PayslipCauseId,
   type PayslipConcept, type PayslipStatus, type RecalcPeriod, type WageSector,
   type WithholdingBand,
@@ -16,11 +17,20 @@ import {
 
 type Tool = "settlement" | "withholding";
 /**
- * The two questions the withholding page answers. They share every input about
- * the pay itself — the gross, the frequency, which contributions apply — so
- * switching modes carries that state across instead of asking for it twice.
+ * The three questions the withholding page answers. They share every input
+ * about the pay itself — the gross, the frequency, which contributions apply —
+ * so switching modes carries that state across instead of asking for it twice.
+ *
+ * The recalculation was a band under the calculate mode, which put a panel
+ * about the whole year's accumulated pay directly beneath one about a single
+ * pay period, sharing a column of numbers with it. They answer different
+ * questions on different spans, and a reader who came for June had to scroll
+ * past a calculation they had not asked for.
  */
-type PayrollMode = "calculate" | "verify";
+type PayrollMode = "calculate" | "verify" | "recalc";
+
+/** Whether the accumulated figures are typed in or worked out from a salary. */
+type AccumulatedSource = "entered" | "estimated";
 
 
 const copy = {
@@ -36,7 +46,10 @@ const copy = {
     total: "Total bruto estimado", indemnity: "Indemnización / prestación",
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
     vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
-    quincena25: "Quincena 25", quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499) art. 3: procede cuando la terminación es con responsabilidad patronal o hay despido de hecho sin causa legal, y remite a las reglas del aguinaldo «o la parte proporcional, según corresponda». Obligatoria para el patrono privado desde 2027. El mismo artículo nombra a quien sale «antes del veinticinco de enero o en esa misma fecha», que es el día del pago: leído estrictamente, solo cubriría los despidos de enero. Aquí se paga la parte proporcional en cualquier despido del ciclo, que es la lectura de la remisión al aguinaldo; la diferencia está descrita, no resuelta.",
+    quincena25: "Quincena 25",
+    quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499): el art. 2 la fija en el 50% del salario mensual y solo para quien gana $1,500 o menos, y el art. 1 manda pagarla íntegra, sin retención ni descuento de ninguna clase. Es obligatoria para el patrono privado desde 2027. Se incluye en este cálculo porque la terminación cae dentro de la ventana del art. 3: «antes del veinticinco de enero o en esa misma fecha».",
+    quincena25OutsideLead: "Cumplís todo lo demás para la Quincena 25 —despido, salario dentro del tope y fecha dentro del régimen— pero la terminación queda fuera de la ventana del art. 3, que nombra a quien sale «antes del veinticinco de enero o en esa misma fecha». Aquí se aplica esa lectura estricta y la línea es cero. La lectura amplia, la que remite a las reglas del aguinaldo, habría pagado",
+    quincena25OutsideTail: "por la parte proporcional del ciclo.",
     wageOutOfRange: "La salida es anterior a la tabla de salarios mínimos más antigua que hemos verificado. El tope se calcula con esa tabla y puede no ser la que estaba vigente ese día.",
     aguinaldoAmbiguousLead: "La salida cae antes del 20 de octubre y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
     aguinaldoAmbiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del 20 de octubre serían",
@@ -47,6 +60,7 @@ const copy = {
     resignationRule: "La prestación se estima sobre años completos: a diferencia del artículo 58, el artículo 8 no reconoce fracciones de año.",
     dismissalNote: "El artículo 58 reconoce 30 días por año y fracciones, con mínimo de 15 días y tope de cuatro salarios mínimos diarios.",
     grossNote: "Es una estimación bruta. Salario y vacaciones pueden llevar descuentos de planilla; la indemnización legal y la prestación por renuncia están exentas de renta. Convenios o contratos pueden mejorar estos mínimos.",
+    disputeLink: "Ver las dos lecturas de esta regla",
     sources: "Fuentes y reglas aplicadas", code: "Código de Trabajo: arts. 58, 140, 177, 187 y 196-202",
     officialCalc: "Servicio oficial de cálculo del MTPS", resignationLaw: "Ley de Renuncia Voluntaria: arts. 2, 5, 7-9",
     wageDecree: "D.E. 12/2025: tabla de salarios mínimos vigente desde junio 2025",
@@ -79,6 +93,19 @@ const copy = {
     excessNote: "La diferencia negativa no se retiene, pero tampoco se devuelve por planilla: el literal i) deja al trabajador la declaración anual o la solicitud de devolución.",
     recalcDeductionNote: "El decreto extiende la deducción de $1,600 al Tramo II de estas tablas. Aquí se prorratea a los meses que cubre cada recálculo — $800 en junio y $1,600 en diciembre — porque es lo que mantiene la continuidad con las retenciones mensuales.",
     recalcEmployerNote: "Si hubo cambio de patrono, el recálculo lo hace el último del período y los acumulados deben incluir lo del anterior, según su constancia de retención.",
+    modeRecalc: "Estimar junio o diciembre", modeRecalcSub: "El ajuste acumulado del año",
+    recalcWhyTitle: "Por qué existe este recálculo", recalcWhySubtitle: "Y por qué dos personas con el mismo salario pueden terminar distinto",
+    recalcWhyText: "La retención mensual es un anticipo: cada período se calcula por separado, como si el año entero fuera igual a ese mes. En junio y en diciembre el patrono deja de mirar el mes y mira el acumulado —lo gravado de todo el período contra la tabla del período— y le resta lo que ya te retuvo. La diferencia es la retención de ese mes. Es el mecanismo que corrige, de una sola vez, todo lo que los meses sueltos no pudieron ver.",
+    recalcWhyDiffText: "Por eso dos personas con el mismo salario mensual pueden terminar con retenciones distintas: una recibió aguinaldo o una bonificación gravada y la otra no; una tuvo aumento a mitad de año; una empezó en marzo y acumuló menos meses; una cambió de patrono y el último del período tiene que sumar lo del anterior; una cruzó del Tramo II al III y dejó de llevar la deducción de $1,600 en el mes. El acumulado ve todo eso; el mes suelto, no.",
+    recalcSourceLabel: "De dónde salen los acumulados",
+    recalcEnter: "Los tengo", recalcEstimate: "Estimarlos",
+    recalcEnterHint: "Tomados de tus boletas o de la constancia de retención.",
+    recalcEstimateHint: "Calculados de un salario mensual que no cambió en el período.",
+    recalcSalary: "Salario mensual bruto", recalcSalaryHint: "El mismo todos los meses del período, antes de descuentos.",
+    recalcEstimateNote: (months: string, withheldMonths: string, taxable: string, withheld: string) =>
+      `Estimado con ${months} meses iguales de ${taxable} de base gravada, y ${withheldMonths} meses de ${withheld} de retención: el mes que se recalcula todavía no ha retenido, porque su retención es justamente la diferencia de abajo. Si tu año no fue plano —aguinaldo, bonos, aumento, un mes sin trabajar, cambio de patrono— el acumulado real es otro y conviene leerlo de las boletas.`,
+    recalcEstimateFrom: "Estimado del salario",
+    recalcExplainNegative: "Sale negativo cuando lo que ya te retuvieron supera el impuesto del acumulado. No es un error del cálculo: es lo que pasa cuando los meses sueltos retuvieron de más, y el decreto no lo devuelve por planilla.",
     taxDecree: "Decreto Ejecutivo 10/2025: tablas de retención", taxLaw: "Ley de Impuesto sobre la Renta: arts. 29, 37 y 65",
     isssSource: "ISSS: tasa laboral y techo de cotización", pensionSource: "SSF: Ley Integral del Sistema de Pensiones",
     payrollModeLabel: "Qué querés hacer",
@@ -151,7 +178,10 @@ const copy = {
     total: "Estimated gross total", indemnity: "Severance / benefit",
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
     vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
-    quincena25: "Quincena 25", quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499) art. 3: due where termination carries employer responsibility or the worker is dismissed de facto without legal cause, referring to the year-end bonus rules \"o la parte proporcional, según corresponda\". Mandatory for private employers from 2027. The same article names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\", which is the payment day: read strictly, it would cover January dismissals alone. The proportional share is paid here on any dismissal in the cycle, which is the reading the reference to the year-end bonus invites; the difference is described, not resolved.",
+    quincena25: "Quincena 25",
+    quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499): article 2 sets it at 50% of the monthly salary and only for those earning $1,500 or less, and article 1 requires it to be paid in full, with no withholding or deduction of any kind. It is mandatory for private employers from 2027. It is included in this calculation because the termination falls inside the window of article 3: \"antes del veinticinco de enero o en esa misma fecha\".",
+    quincena25OutsideLead: "You meet everything else for the Quincena 25 — dismissal, salary within the ceiling, a date inside the regime — but the termination falls outside the window of article 3, which names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\". That strict reading is the one applied here, and the line is zero. The broad reading, the one referring to the year-end bonus rules, would have paid",
+    quincena25OutsideTail: "for the proportional share of the cycle.",
     wageOutOfRange: "The end date precedes the oldest minimum wage table we have verified. The cap uses that table, which may not be the one in force that day.",
     aguinaldoAmbiguousLead: "The last day worked falls before 20 October, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
     aguinaldoAmbiguousMid: "days, the reading that does not assume time that was not worked. On the 20 October scale it would be",
@@ -162,6 +192,7 @@ const copy = {
     resignationRule: "The benefit is estimated on complete years: unlike article 58, article 8 does not recognise fractions of a year.",
     dismissalNote: "Article 58 grants 30 days per year and fractions, with a 15-day minimum and a cap of four daily minimum wages.",
     grossNote: "This is a gross estimate. Salary and vacation may have payroll deductions; statutory dismissal and resignation benefits are income-tax exempt. Agreements may improve these minimums.",
+    disputeLink: "See both readings of this rule",
     sources: "Sources and rules applied", code: "Labor Code: articles 58, 140, 177, 187 and 196-202",
     officialCalc: "MTPS official calculation service", resignationLaw: "Voluntary Resignation Law: articles 2, 5 and 7-9",
     wageDecree: "Executive Decree 12/2025: minimum wage table in force since June 2025",
@@ -194,6 +225,19 @@ const copy = {
     excessNote: "A negative difference withholds nothing, but payroll does not refund it either: literal i) leaves the worker the annual return or a refund request.",
     recalcDeductionNote: "The decree extends the $1,600 deduction to band II of these tables. It is prorated here to the months each recalculation covers — $800 in June and $1,600 in December — because that is what keeps it continuous with the monthly withholding.",
     recalcEmployerNote: "After a change of employer the last one in the period runs the recalculation, and the cumulative figures must include the previous employer's, per its withholding certificate.",
+    modeRecalc: "Estimate June or December", modeRecalcSub: "The year's cumulative adjustment",
+    recalcWhyTitle: "Why this recalculation exists", recalcWhySubtitle: "And why two people on the same salary can end up different",
+    recalcWhyText: "Monthly withholding is an advance payment: each period is worked out on its own, as though the whole year looked like that one month. In June and in December the employer stops looking at the month and looks at the cumulative figure — everything taxable in the period against the period's table — and subtracts what has already been withheld from you. The difference is that month's withholding. It is the mechanism that corrects, in one go, everything the separate months could not see.",
+    recalcWhyDiffText: "That is why two people on the same monthly salary can end up with different withholding: one received a year-end bonus or a taxable bonus and the other did not; one got a mid-year raise; one started in March and accumulated fewer months; one changed employers, and the last one in the period has to add in the earlier one's figures; one crossed from band II to band III and stopped carrying the $1,600 deduction in the month. The cumulative figure sees all of that. A single month does not.",
+    recalcSourceLabel: "Where the cumulative figures come from",
+    recalcEnter: "I have them", recalcEstimate: "Estimate them",
+    recalcEnterHint: "Taken from your payslips or from the withholding certificate.",
+    recalcEstimateHint: "Worked out from a monthly salary that did not change in the period.",
+    recalcSalary: "Gross monthly salary", recalcSalaryHint: "The same every month of the period, before deductions.",
+    recalcEstimateNote: (months: string, withheldMonths: string, taxable: string, withheld: string) =>
+      `Estimated from ${months} identical months of ${taxable} of taxable base, and ${withheldMonths} months of ${withheld} of withholding: the month being recalculated has not withheld yet, because its withholding is precisely the difference below. If your year was not flat — a year-end bonus, bonuses, a raise, a month not worked, a change of employer — the real cumulative figure is a different one, and it is worth reading off the payslips.`,
+    recalcEstimateFrom: "Estimated from salary",
+    recalcExplainNegative: "It comes out negative when what has already been withheld from you exceeds the tax on the cumulative base. That is not a fault in the calculation: it is what happens when the separate months withheld too much, and the decree does not refund it through payroll.",
     taxDecree: "Executive Decree 10/2025: withholding tables", taxLaw: "Income Tax Law: articles 29, 37 and 65",
     isssSource: "ISSS: employee rate and contribution ceiling", pensionSource: "SSF: Integral Pension System Law",
     payrollModeLabel: "What you want to do",
@@ -383,6 +427,8 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const [applyFixedDeduction, setApplyFixedDeduction] = useState(true);
   const [annualGross, setAnnualGross] = useState("");
   const [recalcPeriod, setRecalcPeriod] = useState<RecalcPeriod>("june");
+  const [accSource, setAccSource] = useState<AccumulatedSource>("estimated");
+  const [accSalary, setAccSalary] = useState("900");
   const [accTaxable, setAccTaxable] = useState("5400");
   const [accWithheld, setAccWithheld] = useState("400");
   const [payrollMode, setPayrollMode] = useState<PayrollMode>("calculate");
@@ -406,12 +452,26 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const withoutFixedDeduction = useMemo(
     () => withholdingForTaxable(payroll.taxableBeforeFixedDeduction, frequency).amount,
     [frequency, payroll.taxableBeforeFixedDeduction]);
-  // The annual figure feeds the same $9,100 test in both panels, so the field
-  // the payroll form already asks for is reused rather than duplicated.
+  // Six or twelve identical months of a salary, for the reader who does not
+  // have the accumulated figures to hand — which is most of them. Computed
+  // whichever source is selected, because it is what the estimate mode shows
+  // in the fields themselves.
+  const estimate = useMemo(() => estimateAccumulated({
+    period: recalcPeriod, monthlySalary: number(accSalary),
+    includeAfp, includeIsss, applyFixedDeduction,
+  }), [accSalary, applyFixedDeduction, includeAfp, includeIsss, recalcPeriod]);
+  const estimating = accSource === "estimated";
+  // The annual figure feeds the same $9,100 test in both panels. Typed in, the
+  // payroll form's field is reused rather than duplicated; estimated, the
+  // salary already implies it, and asking again would invite the two to
+  // disagree about the same year.
   const recalc = useMemo(() => calculateRecalculation({
-    period: recalcPeriod, accumulatedTaxable: number(accTaxable),
-    accumulatedWithheld: number(accWithheld), applyFixedDeduction, annualGross: number(annualGross),
-  }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, recalcPeriod]);
+    period: recalcPeriod,
+    accumulatedTaxable: estimating ? estimate.accumulatedTaxable : number(accTaxable),
+    accumulatedWithheld: estimating ? estimate.accumulatedWithheld : number(accWithheld),
+    applyFixedDeduction,
+    annualGross: estimating ? estimate.annualGross : number(annualGross),
+  }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, estimate, estimating, recalcPeriod]);
   // The same pay run the panel above already priced, read against what the
   // payslip says. It reuses every input of the calculate mode, so a reader who
   // set up their pay there and then switches has nothing to type again.
@@ -444,6 +504,18 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
    */
   const signed = (value: number, minus = "−") =>
     `${value > 0 ? "+" : value < 0 ? minus : ""}${money.format(Math.abs(value))}`;
+  /**
+   * The way out of a callout that says a rule is contested.
+   *
+   * A note that names two readings and stops there leaves the reader holding a
+   * doubt with nowhere to take it. Every one of these anchors into the entry
+   * for that exact rule on /reglas-en-disputa/, which is generated from the
+   * same registry the callout's figure came from — so the link cannot point at
+   * a dispute the page does not carry.
+   */
+  const DisputeLink = ({ rule }: { rule: RuleId }) =>
+    <a className="dispute-link" href={`${ROUTES[lang].disputed}#${rule}`}>{t.disputeLink} →</a>;
+
   const causeText = (id: PayslipCauseId, amount: number | undefined) =>
     causeCopy[lang][id](amount ?? 0, money);
   /** The article behind a cause, so the reader can open the document it is in. */
@@ -505,6 +577,12 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
       notes.push(`${t.aguinaldoAmbiguousLead} (${settlement.aguinaldoScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldo)} ${t.aguinaldoAmbiguousMid} (${settlement.aguinaldoAlternativeScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldoAlternative)} ${t.aguinaldoAmbiguousTail}`);
     }
     if (settlement.quincena25Applies) notes.push(t.quincena25Note);
+    // The zero the restrictive reading produced, and what the broad one would
+    // have paid. A document that simply omits the line lets the reader believe
+    // the benefit was never in play for them.
+    if (settlement.quincena25OutsideWindow) {
+      notes.push(`${t.quincena25OutsideLead} ${money.format(settlement.quincena25Alternative)} ${t.quincena25OutsideTail}`);
+    }
     if (settlement.minimumWagePredatesTables) notes.push(t.wageOutOfRange);
 
     return downloadPdf({
@@ -652,21 +730,28 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
             {/* El art. 187 y el servicio oficial no dicen lo mismo sobre la
                 vacación proporcional en renuncia. Se describe la diferencia y
                 se nombra la lectura aplicada, sin afirmar cuál rige. */}
-            {settlement.proportionalVacationDisputed && <div className="callout"><span>?</span><p>{t.pdfDisputedVacation}</p></div>}
-            {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldo)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail}</p></div>}
-            {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note}</p></div>}
+            {settlement.proportionalVacationDisputed && <div className="callout"><span>?</span><p>{t.pdfDisputedVacation} <DisputeLink rule="vacationProportionalOnExit" /></p></div>}
+            {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldo)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
+            {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note} <DisputeLink rule="quincena25Window" /></p></div>}
+            {/* Qualified on every count except the date. The rule's own note has
+                promised since it was written that the broad reading is named on
+                screen; until now `quincena25OutsideWindow` was computed and
+                never rendered, so the promise was kept only in the PDF. */}
+            {settlement.quincena25OutsideWindow && <div className="callout"><span>?</span><p>{t.quincena25OutsideLead} <b>{money.format(settlement.quincena25Alternative)}</b> {t.quincena25OutsideTail} <DisputeLink rule="quincena25Window" /></p></div>}
             <div className={`callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
           </>}
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>
       <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.laborCode} target="_blank" rel="noreferrer"><b>01</b>{t.code}<span>↗</span></a><a href={OFFICIAL.laborService} target="_blank" rel="noreferrer"><b>02</b>{t.officialCalc}<span>↗</span></a><a href={OFFICIAL.resignation} target="_blank" rel="noreferrer"><b>03</b>{t.resignationLaw}<span>↗</span></a><a href={OFFICIAL.minimumWage} target="_blank" rel="noreferrer"><b>04</b>{t.wageDecree}<span>↗</span></a><a href={OFFICIAL.aguinaldoReform} target="_blank" rel="noreferrer"><b>05</b>{t.aguinaldoReform}<span>↗</span></a><a href={OFFICIAL.vacation} target="_blank" rel="noreferrer"><b>06</b>{t.vacationSource}<span>↗</span></a></div></div>
+      <DisputePanel lang={lang} page="settlement" />
     </> : <>
-      {/* El mismo conmutador de /prestamos/: dos tarjetas con ícono, título y
-          subtítulo. La página responde ahora a dos preguntas distintas —cuánto
-          debería descontarme y si lo que me descontaron está bien— y son dos
-          modos, no dos secciones, porque comparten todos los datos del pago. */}
-      <div className="mode-switch" role="group" aria-label={t.payrollModeLabel}>
+      {/* El mismo conmutador de /prestamos/: tarjetas con ícono, título y
+          subtítulo. La página responde a tres preguntas distintas —cuánto
+          debería descontarme, si lo que me descontaron está bien, y qué me
+          ajustan en junio o diciembre— y son tres modos, no tres secciones,
+          porque comparten los datos del pago. */}
+      <div className="mode-switch three" role="group" aria-label={t.payrollModeLabel}>
         <button type="button" className={payrollMode === "calculate" ? "selected" : ""}
           onClick={() => setPayrollMode("calculate")} aria-pressed={payrollMode === "calculate"}>
           <span className="mode-icon">◎</span><span><b>{t.modeCalc}</b><small>{t.modeCalcSub}</small></span>
@@ -674,6 +759,10 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
         <button type="button" className={payrollMode === "verify" ? "selected" : ""}
           onClick={() => setPayrollMode("verify")} aria-pressed={payrollMode === "verify"}>
           <span className="mode-icon">⇄</span><span><b>{t.modeCheck}</b><small>{t.modeCheckSub}</small></span>
+        </button>
+        <button type="button" className={payrollMode === "recalc" ? "selected" : ""}
+          onClick={() => setPayrollMode("recalc")} aria-pressed={payrollMode === "recalc"}>
+          <span className="mode-icon">Σ</span><span><b>{t.modeRecalc}</b><small>{t.modeRecalcSub}</small></span>
         </button>
       </div>
       {payrollMode === "calculate" ? <>
@@ -705,6 +794,17 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           {withoutFixedDeduction > payroll.isr && <div className="callout"><span>≠</span><p>{t.differsLead} <b>{money.format(withoutFixedDeduction)}</b> {t.differsTail}</p></div>}
         </div>
       </div>
+      </> : payrollMode === "recalc" ? <>
+      {/* El porqué antes del cálculo, y no debajo. Quien llega a este modo
+          suele venir de una retención de junio que no entendió, y la respuesta
+          a esa pregunta es un párrafo, no una cifra. */}
+      <section className="recalc-why">
+        <div className="section-title"><span>01</span><div><h2>{t.recalcWhyTitle}</h2><p>{t.recalcWhySubtitle}</p></div></div>
+        <div className="recalc-why-body">
+          <p>{t.recalcWhyText}</p>
+          <p>{t.recalcWhyDiffText}</p>
+        </div>
+      </section>
       <section className="recalc-band">
         <div className="section-title"><span>02</span><div><h2>{t.recalcTitle}</h2><p>{t.recalcSubtitle}</p></div></div>
         <div className="recalc-controls">
@@ -714,9 +814,25 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
               The grouping is kept for assistive tech with role and label. */}
           <SegmentedField label={t.recalcPeriodLabel} lang={lang} value={recalcPeriod} onChange={setRecalcPeriod}
             options={[{ value: "june", label: t.juneOption }, { value: "december", label: t.decemberOption }] as const} />
-          <MoneyField label={t.accTaxable} lang={lang} value={accTaxable} onChange={setAccTaxable} note={recalcPeriod === "june" ? t.accTaxableJune : t.accTaxableDecember} help={t.helpAccTaxable} />
-          <MoneyField label={t.accWithheld} lang={lang} value={accWithheld} onChange={setAccWithheld} note={recalcPeriod === "june" ? t.accWithheldJune : t.accWithheldDecember} help={t.helpAccWithheld} />
+          <SegmentedField label={t.recalcSourceLabel} lang={lang} value={accSource} onChange={setAccSource}
+            note={estimating ? t.recalcEstimateHint : t.recalcEnterHint}
+            options={[{ value: "estimated", label: t.recalcEstimate }, { value: "entered", label: t.recalcEnter }] as const} />
+          {estimating
+            ? <MoneyField label={t.recalcSalary} lang={lang} value={accSalary} onChange={setAccSalary}
+              note={t.recalcSalaryHint} help={t.helpGross} />
+            : <>
+              <MoneyField label={t.accTaxable} lang={lang} value={accTaxable} onChange={setAccTaxable} note={recalcPeriod === "june" ? t.accTaxableJune : t.accTaxableDecember} help={t.helpAccTaxable} />
+              <MoneyField label={t.accWithheld} lang={lang} value={accWithheld} onChange={setAccWithheld} note={recalcPeriod === "june" ? t.accWithheldJune : t.accWithheldDecember} help={t.helpAccWithheld} />
+            </>}
         </div>
+        {/* Estimating, the two figures the decree actually names are derived
+            rather than typed, so they are printed back: a reader has to be able
+            to see the numbers the subtraction below is made of, and to check
+            them against a payslip. */}
+        {estimating && <div className="recalc-derived">
+          <div><span>{t.accTaxable}</span><b>{money.format(recalc.accumulatedTaxable)}</b><small>{t.recalcEstimateFrom}</small></div>
+          <div><span>{t.alreadyWithheld}</span><b>{money.format(recalc.accumulatedWithheld)}</b><small>{t.recalcEstimateFrom}</small></div>
+        </div>}
         {/* The settled tax, what was already withheld, and the difference, read
             as one sentence. The difference is the only place the headline
             figure appears: showing it again above the chain repeated the same
@@ -730,8 +846,12 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
         </div>
         <div className="recalc-notes">
           <p className="field-note">{t.recalcExclusions}</p>
+          {estimating && <div className="callout"><span>≈</span><p>{t.recalcEstimateNote(String(estimate.months), String(estimate.withheldMonths), money.format(estimate.monthlyTaxable), money.format(estimate.monthlyWithholding))}</p></div>}
           {recalc.fixedDeduction > 0 && <div className="callout"><span>§</span><p>{t.recalcDeductionNote}</p></div>}
-          {recalc.excess > 0 && <div className="callout warn"><span>!</span><p>{t.excessNote}</p></div>}
+          {/* Negative is a result, not an error state, so it is explained
+              whether or not it happened: a reader who never sees a saldo a
+              favor should still learn that the arithmetic can produce one. */}
+          <div className={recalc.excess > 0 ? "callout warn" : "callout"}><span>{recalc.excess > 0 ? "!" : "−"}</span><p>{recalc.excess > 0 ? t.excessNote : t.recalcExplainNegative}</p></div>
           <div className="callout"><span>i</span><p>{t.recalcEmployerNote}</p></div>
         </div>
       </section>
@@ -807,6 +927,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
         <details><summary>{t.differsSummary}</summary><p>{t.differsBody}</p></details>
       </div>
       <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.withholding} target="_blank" rel="noreferrer"><b>01</b>{t.taxDecree}<span>↗</span></a><a href={OFFICIAL.incomeTax} target="_blank" rel="noreferrer"><b>02</b>{t.taxLaw}<span>↗</span></a><a href={OFFICIAL.isss} target="_blank" rel="noreferrer"><b>03</b>{t.isssSource}<span>↗</span></a><a href={OFFICIAL.pensions} target="_blank" rel="noreferrer"><b>04</b>{t.pensionSource}<span>↗</span></a></div></div>
+      <DisputePanel lang={lang} page="withholding" />
     </>}
   </section>;
 }
