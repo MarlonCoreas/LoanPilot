@@ -7,12 +7,20 @@ import type { Lang } from "./routes";
 import { OFFICIAL } from "./sources";
 import {
   calculatePayrollWithholding, calculateRecalculation, calculateSettlement, DAILY_MINIMUM_WAGE,
-  DECEMBER_RECALC_TABLE, EARLIEST_EMPLOYMENT_DATE, JUNE_RECALC_TABLE, WITHHOLDING_TABLES,
-  withholdingForTaxable,
-  type EmploymentEnd, type PayFrequency, type RecalcPeriod, type WageSector, type WithholdingBand,
+  DECEMBER_RECALC_TABLE, EARLIEST_EMPLOYMENT_DATE, JUNE_RECALC_TABLE, verifyPayslip,
+  WITHHOLDING_TABLES, withholdingForTaxable,
+  type EmploymentEnd, type PayFrequency, type PayslipCause, type PayslipCauseId,
+  type PayslipConcept, type PayslipStatus, type RecalcPeriod, type WageSector,
+  type WithholdingBand,
 } from "./statutory";
 
 type Tool = "settlement" | "withholding";
+/**
+ * The two questions the withholding page answers. They share every input about
+ * the pay itself — the gross, the frequency, which contributions apply — so
+ * switching modes carries that state across instead of asking for it twice.
+ */
+type PayrollMode = "calculate" | "verify";
 
 
 const copy = {
@@ -28,7 +36,7 @@ const copy = {
     total: "Total bruto estimado", indemnity: "Indemnización / prestación",
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
     vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
-    quincena25: "Quincena 25", quincena25Note: "D.L. 499 art. 3: procede en despido o terminación con responsabilidad patronal, proporcional al tiempo del ciclo. Obligatoria para el sector privado desde 2027.",
+    quincena25: "Quincena 25", quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499) art. 3: procede cuando la terminación es con responsabilidad patronal o hay despido de hecho sin causa legal, y remite a las reglas del aguinaldo «o la parte proporcional, según corresponda». Obligatoria para el patrono privado desde 2027. El mismo artículo nombra a quien sale «antes del veinticinco de enero o en esa misma fecha», que es el día del pago: leído estrictamente, solo cubriría los despidos de enero. Aquí se paga la parte proporcional en cualquier despido del ciclo, que es la lectura de la remisión al aguinaldo; la diferencia está descrita, no resuelta.",
     wageOutOfRange: "La salida es anterior a la tabla de salarios mínimos más antigua que hemos verificado. El tope se calcula con esa tabla y puede no ser la que estaba vigente ese día.",
     aguinaldoAmbiguousLead: "La salida cae antes del 20 de octubre y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
     aguinaldoAmbiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del 20 de octubre serían",
@@ -73,8 +81,32 @@ const copy = {
     recalcEmployerNote: "Si hubo cambio de patrono, el recálculo lo hace el último del período y los acumulados deben incluir lo del anterior, según su constancia de retención.",
     taxDecree: "Decreto Ejecutivo 10/2025: tablas de retención", taxLaw: "Ley de Impuesto sobre la Renta: arts. 29, 37 y 65",
     isssSource: "ISSS: tasa laboral y techo de cotización", pensionSource: "SSF: Ley Integral del Sistema de Pensiones",
+    payrollModeLabel: "Qué querés hacer",
+    modeCalc: "Calcular mis descuentos", modeCalcSub: "Cuánto debería descontarte la planilla",
+    modeCheck: "Revisar mi boleta de pago", modeCheckSub: "Comparar lo que sí te descontaron",
+    payslipTitle: "Lo que dice tu boleta", payslipSubtitle: "Copiá las cifras tal como aparecen impresas",
+    payslipHint: "Todos los campos son opcionales. El que dejés vacío no se compara.",
+    slipAfp: "AFP según la boleta", slipIsss: "ISSS según la boleta",
+    slipIsr: "Renta retenida según la boleta", slipNet: "Pago neto según la boleta",
+    helpSlipAfp: "El aporte de AFP que aparece descontado en el período. Si tu boleta lo separa en cotización y comisión, sumá las dos líneas.",
+    helpSlipIsss: "El aporte de ISSS descontado en el período, solo la parte laboral. Lo que paga el patrono no va aquí.",
+    helpSlipIsr: "La retención de impuesto sobre la renta del período. No la sumes con AFP ni ISSS aunque vengan en el mismo bloque.",
+    helpSlipNet: "El líquido que efectivamente te depositaron o te pagaron en este período, después de todos los descuentos.",
+    checkResult: "Renglón por renglón",
+    checkEmpty: "Sin nada que comparar", checkEmptySub: "Ingresá al menos una cifra de tu boleta.",
+    checkAllMatch: "Todo coincide", checkAllMatchSub: "Las cifras que ingresaste caen dentro de un centavo de las tablas oficiales.",
+    checkDifference: "diferencia por revisar", checkDifferences: "diferencias por revisar",
+    checkDiffSub: "Cada una lleva abajo la causa probable y la regla que la explica.",
+    colExpected: "Según las tablas", colReported: "Tu boleta", colDifference: "Diferencia",
+    stMatch: "Coincide", stHigher: "La boleta es mayor", stLower: "La boleta es menor", stUnchecked: "Sin comparar",
+    causeLead: "Causa probable", causeLeadPlural: "Causas probables",
+    checkIntro: "Se compara con un centavo de tolerancia, porque tu planilla y esta calculadora redondean por separado.",
+    checkTone: "Esto describe diferencias entre tu boleta y las tablas oficiales; no afirma que tu patrono haya incumplido. Hay conceptos legítimos que esta calculadora no conoce y que pueden explicar una diferencia: préstamos de planilla, embargos, órdenes de descuento, anticipos, viáticos o pagos que no forman parte del salario cotizable.",
     invalidDates: "Revisa las fechas: el último día de trabajo debe ser posterior al ingreso y ambas deben caer entre 1950 y 2100.",
     exportPdf: "Descargar PDF", exportHint: "Llevate el cálculo",
+    pdfCheckTitle: "Revisión de boleta de pago", pdfCheckSubtitle: "AFP, ISSS y renta · El Salvador",
+    pdfCheckSlug: "boleta", pdfCheckStatus: "Estado", pdfCheckCauses: "Causas probables",
+    pdfCheckNotAdvice: "Comparación educativa calculada en el navegador de quien la generó. Describe diferencias frente a las tablas oficiales; no constituye un dictamen ni afirma incumplimiento de nadie.",
     pdfTitle: "Estimación de finiquito", pdfSubtitle: "Sector privado · Código de Trabajo de El Salvador",
     pdfInput: "Dato usado", pdfValue: "Valor",
     pdfConcept: "Concepto", pdfDetail: "Cómo sale", pdfAmount: "Monto",
@@ -119,7 +151,7 @@ const copy = {
     total: "Estimated gross total", indemnity: "Severance / benefit",
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
     vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
-    quincena25: "Quincena 25", quincena25Note: "Decree 499 art. 3: due on dismissal or termination with employer responsibility, prorated over the cycle. Mandatory for private employers from 2027.",
+    quincena25: "Quincena 25", quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499) art. 3: due where termination carries employer responsibility or the worker is dismissed de facto without legal cause, referring to the year-end bonus rules \"o la parte proporcional, según corresponda\". Mandatory for private employers from 2027. The same article names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\", which is the payment day: read strictly, it would cover January dismissals alone. The proportional share is paid here on any dismissal in the cycle, which is the reading the reference to the year-end bonus invites; the difference is described, not resolved.",
     wageOutOfRange: "The end date precedes the oldest minimum wage table we have verified. The cap uses that table, which may not be the one in force that day.",
     aguinaldoAmbiguousLead: "The last day worked falls before 20 October, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
     aguinaldoAmbiguousMid: "days, the reading that does not assume time that was not worked. On the 20 October scale it would be",
@@ -164,8 +196,32 @@ const copy = {
     recalcEmployerNote: "After a change of employer the last one in the period runs the recalculation, and the cumulative figures must include the previous employer's, per its withholding certificate.",
     taxDecree: "Executive Decree 10/2025: withholding tables", taxLaw: "Income Tax Law: articles 29, 37 and 65",
     isssSource: "ISSS: employee rate and contribution ceiling", pensionSource: "SSF: Integral Pension System Law",
+    payrollModeLabel: "What you want to do",
+    modeCalc: "Work out my deductions", modeCalcSub: "What payroll should be taking off",
+    modeCheck: "Check my payslip", modeCheckSub: "Compare what was actually deducted",
+    payslipTitle: "What your payslip says", payslipSubtitle: "Copy the figures exactly as they are printed",
+    payslipHint: "Every field is optional. Anything left empty is simply not compared.",
+    slipAfp: "Pension contribution on the payslip", slipIsss: "ISSS contribution on the payslip",
+    slipIsr: "Income tax withheld on the payslip", slipNet: "Take-home pay on the payslip",
+    helpSlipAfp: "The pension contribution deducted in the period. If your payslip splits it into contribution and fee, add the two lines together.",
+    helpSlipIsss: "The ISSS contribution deducted in the period, the employee share only. What the employer pays does not belong here.",
+    helpSlipIsr: "The income tax withheld in the period. Do not add pension or ISSS to it, even where they are printed in the same block.",
+    helpSlipNet: "What was actually deposited or paid to you for this period, after every deduction.",
+    checkResult: "Line by line",
+    checkEmpty: "Nothing to compare yet", checkEmptySub: "Enter at least one figure from your payslip.",
+    checkAllMatch: "Everything matches", checkAllMatchSub: "The figures you entered are within a cent of the official tables.",
+    checkDifference: "difference to look at", checkDifferences: "differences to look at",
+    checkDiffSub: "Each one carries its probable cause and the rule behind it below.",
+    colExpected: "Per the tables", colReported: "Your payslip", colDifference: "Difference",
+    stMatch: "Matches", stHigher: "Payslip is higher", stLower: "Payslip is lower", stUnchecked: "Not compared",
+    causeLead: "Probable cause", causeLeadPlural: "Probable causes",
+    checkIntro: "Compared with a one-cent tolerance, because your payroll and this calculator round separately.",
+    checkTone: "This describes differences between your payslip and the official tables; it does not assert that your employer failed to comply. There are lawful items this calculator knows nothing about that can explain a difference: payroll loans, garnishments, deduction orders, advances, travel allowances or pay that is not contributory salary.",
     invalidDates: "Check the dates: the last day worked must be after the start date and both must fall between 1950 and 2100.",
     exportPdf: "Download PDF", exportHint: "Take the calculation with you",
+    pdfCheckTitle: "Payslip check", pdfCheckSubtitle: "Pension, ISSS and income tax · El Salvador",
+    pdfCheckSlug: "payslip", pdfCheckStatus: "Status", pdfCheckCauses: "Probable causes",
+    pdfCheckNotAdvice: "An educational comparison, worked out in the browser of whoever generated it. It describes differences against the official tables; it is not a ruling and asserts no failure to comply by anyone.",
     pdfTitle: "Employment settlement estimate", pdfSubtitle: "Private sector · Labour Code of El Salvador",
     pdfInput: "Detail used", pdfValue: "Value",
     pdfConcept: "Concept", pdfDetail: "How it is worked out", pdfAmount: "Amount",
@@ -205,7 +261,83 @@ const sectorLabels = {
   en: { commerce: "Commerce, services and industry", maquila: "Textile maquila", coffee: "Coffee processing / sugar cane", agriculture: "Agriculture / fishing / coffee" },
 } as const;
 
+/**
+ * Why a line of a payslip came out different, in the reader's language.
+ *
+ * The identifiers come from `verifyPayslip`, which only attaches one after its
+ * arithmetic has actually landed on the reported figure. So every sentence here
+ * is allowed to be specific — it is describing a reading that reproduces the
+ * number, not a list of things that sometimes go wrong.
+ *
+ * All of them describe and none of them accuse. The subject of these sentences
+ * is the figure, never the employer: "la retención de la boleta es la que da la
+ * tabla aplicada sobre el bruto" says exactly what was found, where "tu patrono
+ * calculó mal" would be a conclusion this calculator is in no position to reach.
+ * Several of these causes are, in fact, lawful readings that this project
+ * disagrees with rather than errors — the pre-2025 fixed deduction rule is still
+ * what much of the country's payroll software does.
+ */
+type CauseText = (amount: number, money: Intl.NumberFormat) => string;
+
+const causeCopy: Record<Lang, Record<PayslipCauseId, CauseText>> = {
+  es: {
+    afpNotApplied: () => "La boleta no muestra aporte de AFP en este período. Para quien cotiza, corresponde el 7.25% del salario cotizable.",
+    afpApplied: () => "Marcaste que no se descuenta AFP, pero la boleta sí trae un aporte. Si sí cotizás, activá la casilla y volvé a comparar.",
+    afpOtherBase: (amount, money) => `El aporte de la boleta equivale al 7.25% de ${money.format(amount)}, no de la remuneración que ingresaste. Puede haber pagos que no son salario cotizable —viáticos, por ejemplo— o una base tope que la ley vigente ya no reconoce.`,
+    isssNotApplied: () => "La boleta no muestra aporte de ISSS en este período. La cotización laboral es del 3%.",
+    isssApplied: () => "Marcaste que no se descuenta ISSS, pero la boleta sí trae un aporte. Si sí cotizás, activá la casilla y volvé a comparar.",
+    isssNoCeiling: (amount, money) => `El ISSS de la boleta es el 3% de toda la remuneración, sin aplicar el techo de cotización del período (${money.format(amount)}). Por encima de ese techo el descuento ya no sube.`,
+    isssOtherBase: (amount, money) => `El aporte de la boleta equivale al 3% de ${money.format(amount)}, que no es ni la remuneración que ingresaste ni el techo del período.`,
+    isssProration: () => "El ISSS se liquida en planilla mensual. Para pagos quincenales y semanales repartir el techo entre los períodos es una aproximación nuestra, así que una diferencia de centavos puede venir de ahí y no de la planilla.",
+    isrNotApplied: () => "La boleta no muestra retención de renta, y con esta base la tabla del período sí retiene.",
+    isrOnGross: () => "La retención de la boleta es exactamente la que da la tabla aplicada sobre el bruto, sin restarle antes AFP e ISSS. La base gravada se obtiene después de esos dos aportes.",
+    isrWithoutFixedDeduction: () => "La retención de la boleta es la que da la tabla sin restar la deducción fija de $1,600. Hasta abril de 2025 esa era la lectura correcta; el D.E. 10/2025 la invirtió para el Tramo II, y muchas planillas del país siguen con la anterior.",
+    isrWithFixedDeduction: (amount, money) => `La retención de la boleta es la que resulta de restar ${money.format(amount)} de deducción fija a la base. En este caso no corresponde restarla: o el tramo ya la trae incorporada en sus límites, o la renta anual pasa del límite de $9,100.`,
+    isrQuincena25: (amount, money) => `La retención de la boleta coincide con la que saldría si a la base gravada se le hubieran sumado ${money.format(amount)} de Quincena 25. La ley que la crea la declara renta no gravable y prohíbe toda retención y todo descuento sobre ella, así que no debería entrar en esa base.`,
+    isrRecalc: (amount, money) => `Son ${money.format(amount)} por encima de la tabla del período, y ninguna de las lecturas anteriores lo reproduce. En junio y diciembre el patrono recalcula con lo acumulado del año y resta lo ya retenido, así que un solo pago puede llevar todo el ajuste. Podés estimarlo en el otro modo, en el recálculo acumulado.`,
+    netDeductionsDiffer: () => "El neto sigue a los descuentos: si alguno de los de arriba difiere, este también lo hará por la misma cantidad.",
+    netUndisclosed: (amount, money) => amount > 0
+      ? `Restando AFP, ISSS y renta a la remuneración quedan ${money.format(amount)} que estas líneas no recogen. Ahí caben conceptos legítimos que esta calculadora no conoce: préstamos, embargos, órdenes de descuento o anticipos.`
+      : `El neto de la boleta es ${money.format(Math.abs(amount))} mayor de lo que dejan la remuneración y esos tres descuentos. Puede haber en el mismo período un pago que no incluiste en la remuneración bruta.`,
+    unexplained: () => "Ninguna de las lecturas que esta calculadora conoce reproduce esta cifra. Puede venir de un concepto que no le declaramos o de una base distinta a la que ingresaste.",
+  },
+  en: {
+    afpNotApplied: () => "The payslip shows no pension contribution for this period. For anyone contributing, it is 7.25% of contributory salary.",
+    afpApplied: () => "You unticked the pension contribution, but the payslip does show one. If you do contribute, tick the box and compare again.",
+    afpOtherBase: (amount, money) => `The payslip contribution is 7.25% of ${money.format(amount)}, not of the pay you entered. There may be items that are not contributory salary — travel allowances, for instance — or a maximum base the law in force no longer recognises.`,
+    isssNotApplied: () => "The payslip shows no ISSS contribution for this period. The employee rate is 3%.",
+    isssApplied: () => "You unticked the ISSS contribution, but the payslip does show one. If you do contribute, tick the box and compare again.",
+    isssNoCeiling: (amount, money) => `The payslip's ISSS is 3% of the whole remuneration, without applying the period's contribution ceiling (${money.format(amount)}). Above that ceiling the deduction stops rising.`,
+    isssOtherBase: (amount, money) => `The payslip contribution is 3% of ${money.format(amount)}, which is neither the pay you entered nor the period's ceiling.`,
+    isssProration: () => "ISSS is settled on a monthly planilla. For twice-monthly and weekly pay, spreading the ceiling across periods is our own approximation, so a difference of cents may come from that rather than from payroll.",
+    isrNotApplied: () => "The payslip shows no income tax withholding, and at this base the period's table does withhold.",
+    isrOnGross: () => "The payslip's withholding is exactly what the table gives applied to the gross, without first deducting pension and ISSS. The taxable base is what remains after those two contributions.",
+    isrWithoutFixedDeduction: () => "The payslip's withholding is what the table gives without subtracting the $1,600 fixed deduction. Until April 2025 that was the correct reading; Decree 10/2025 reversed it for band II, and much of the country's payroll still follows the older one.",
+    isrWithFixedDeduction: (amount, money) => `The payslip's withholding is what results from subtracting ${money.format(amount)} of fixed deduction from the base. It does not belong here: either the band already builds it into its limits, or annual income is above the $9,100 limit.`,
+    isrQuincena25: (amount, money) => `The payslip's withholding matches what would result if ${money.format(amount)} of Quincena 25 had been added to the taxable base. The law creating that benefit declares it non-taxable income and bars every withholding and deduction on it, so it should not enter that base.`,
+    isrRecalc: (amount, money) => `That is ${money.format(amount)} above the period's table, and none of the readings above reproduces it. In June and December the employer recalculates on the year's cumulative pay and subtracts what was already withheld, so a single payment can carry the whole adjustment. You can estimate it in the other mode, under the cumulative recalculation.`,
+    netDeductionsDiffer: () => "Take-home pay follows the deductions: if any of the lines above differs, this one differs with it by the same amount.",
+    netUndisclosed: (amount, money) => amount > 0
+      ? `After pension, ISSS and income tax, ${money.format(amount)} of the remuneration is not accounted for by these lines. Lawful items this calculator knows nothing about fit there: loans, garnishments, deduction orders or advances.`
+      : `The payslip's take-home is ${money.format(Math.abs(amount))} higher than the remuneration and those three deductions leave. There may be a payment in the same period that you did not include in the gross.`,
+    unexplained: () => "None of the readings this calculator knows reproduces this figure. It may come from an item we were not told about, or from a base other than the one you entered.",
+  },
+};
+
+/** Text and a mark, never colour alone: the status has to survive a print-out. */
+const statusMark: Record<PayslipStatus, string> = {
+  match: "=", higher: "▲", lower: "▼", unchecked: "·",
+};
+
 function number(value: string) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
+/**
+ * An empty payslip box, kept apart from a zero.
+ *
+ * They are opposite claims and `number` would flatten them into the same one:
+ * "I do not have this figure" is a line that must not be compared, while "the
+ * payslip deducted nothing" is itself one of the differences worth finding.
+ */
+function reportedFigure(value: string) { return value.trim() === "" ? null : number(value); }
 // A last day of work can legitimately be scheduled ahead of today, but only by
 // so much; the rest of the range comes from the calculation module.
 const LATEST_END_DATE = `${Number(todayIso().slice(0, 4)) + 1}-12-31`;
@@ -253,6 +385,14 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const [recalcPeriod, setRecalcPeriod] = useState<RecalcPeriod>("june");
   const [accTaxable, setAccTaxable] = useState("5400");
   const [accWithheld, setAccWithheld] = useState("400");
+  const [payrollMode, setPayrollMode] = useState<PayrollMode>("calculate");
+  // Empty on purpose, all four of them. A prefilled payslip would be someone
+  // else's figures compared against the reader's pay, and the first thing they
+  // would see is a difference that is not theirs.
+  const [slipAfp, setSlipAfp] = useState("");
+  const [slipIsss, setSlipIsss] = useState("");
+  const [slipIsr, setSlipIsr] = useState("");
+  const [slipNet, setSlipNet] = useState("");
 
   const settlement = useMemo(() => calculateSettlement({
     startDate, endDate, monthlySalary: number(monthlySalary), sector, termination,
@@ -272,6 +412,43 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
     period: recalcPeriod, accumulatedTaxable: number(accTaxable),
     accumulatedWithheld: number(accWithheld), applyFixedDeduction, annualGross: number(annualGross),
   }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, recalcPeriod]);
+  // The same pay run the panel above already priced, read against what the
+  // payslip says. It reuses every input of the calculate mode, so a reader who
+  // set up their pay there and then switches has nothing to type again.
+  const verify = useMemo(() => verifyPayslip({
+    gross: number(gross), frequency, includeAfp, includeIsss, applyFixedDeduction,
+    annualGross: number(annualGross),
+    reported: {
+      afp: reportedFigure(slipAfp), isss: reportedFigure(slipIsss),
+      isr: reportedFigure(slipIsr), net: reportedFigure(slipNet),
+    },
+  }), [annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss,
+    slipAfp, slipIsr, slipIsss, slipNet]);
+
+  const conceptLabels: Record<PayslipConcept, string> = {
+    afp: t.afp, isss: t.isss, isr: t.isr, net: t.takeHome,
+  };
+  const statusLabels: Record<PayslipStatus, string> = {
+    match: t.stMatch, higher: t.stHigher, lower: t.stLower, unchecked: t.stUnchecked,
+  };
+  /**
+   * A difference is only readable with its sign: +$4.00 and −$4.00 are opposite
+   * findings, and a bare $4.00 makes the reader work out which one from the two
+   * figures beside it.
+   *
+   * The minus is a parameter because the two outputs cannot share one. On screen
+   * it is U+2212, the character that is the width of a digit and lines the
+   * column up. In the PDF that codepoint is outside the encoding jsPDF's built-in
+   * fonts use, and it comes out as a quotation mark — so the exported document
+   * asks for the ASCII hyphen instead.
+   */
+  const signed = (value: number, minus = "−") =>
+    `${value > 0 ? "+" : value < 0 ? minus : ""}${money.format(Math.abs(value))}`;
+  const causeText = (id: PayslipCauseId, amount: number | undefined) =>
+    causeCopy[lang][id](amount ?? 0, money);
+  /** The article behind a cause, so the reader can open the document it is in. */
+  const causeCitation = (cause: PayslipCause) =>
+    cause.rule ? citationsFor([cause.rule], todayIso())[0] : undefined;
 
   const frequencyLabel = frequency === "monthly" ? t.monthly : frequency === "fortnightly" ? t.fortnightly : t.weekly;
   const longDate = useMemo(() => new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-GB", {
@@ -373,6 +550,67 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
     }, lang);
   };
 
+  /**
+   * The payslip check as a document, which is where it is actually used.
+   *
+   * Whoever finds a difference here is going to take it to a payroll desk, and
+   * what makes that conversation possible is not the total but the middle of the
+   * page: the four lines side by side, and under each difference the reading
+   * that reproduces the payslip's own figure with the article it comes from.
+   *
+   * The notes carry the causes in the same words the screen used, and the last
+   * one is always the caveat — that lawful deductions exist which this does not
+   * model. It is printed last on purpose: on paper the closing line is the one
+   * a reader takes away, and this document must not be mistaken for a finding.
+   */
+  const exportCheck = () => {
+    const rows = verify.lines.map((line) => [
+      conceptLabels[line.concept],
+      money.format(line.expected),
+      line.reported === null ? "—" : money.format(line.reported),
+      line.status === "unchecked" ? "—" : signed(line.difference, "-"),
+      statusLabels[line.status],
+    ]);
+    const notes = [
+      ...verify.lines.flatMap((line) => line.causes.map((cause) => {
+        const citation = causeCitation(cause);
+        return `${conceptLabels[line.concept]} — ${causeText(cause.id, cause.amount)}${citation ? ` (${citation.norm})` : ""}`;
+      })),
+      t.checkTone,
+    ];
+    return downloadPdf({
+      slug: t.pdfCheckSlug,
+      title: t.pdfCheckTitle,
+      subtitle: `${t.pdfCheckSubtitle} · ${frequencyLabel}`,
+      tables: [
+        {
+          head: [t.pdfInput, t.pdfValue],
+          body: [
+            [t.gross, money.format(verify.expected.gross)],
+            [t.frequency, frequencyLabel],
+            [t.annualUsed, `${money.format(verify.expected.annualIncome)} · ${verify.expected.annualIncomeDeclared ? t.annualDeclared : t.annualEstimated}`],
+            [t.includeAfp, includeAfp ? t.pdfYes : t.pdfNo],
+            [t.includeIsss, includeIsss ? t.pdfYes : t.pdfNo],
+            [t.fixedDeduction, applyFixedDeduction ? t.pdfYes : t.pdfNo],
+            [t.taxable, money.format(verify.expected.taxable)],
+          ],
+        },
+        {
+          head: [t.pdfConcept, t.colExpected, t.colReported, t.colDifference, t.pdfCheckStatus],
+          body: rows,
+          numeric: [1, 2, 3],
+        },
+      ],
+      notes,
+      // Only the rules the comparison leant on, the way the settlement does it:
+      // a check that never applied the fixed deduction has no business printing
+      // article 29 underneath itself.
+      citations: citationsFor(verify.appliedRules, todayIso()),
+      reviewed: reviewedFor("withholding"),
+      disclaimer: `${t.checkIntro} ${t.pdfCheckNotAdvice}`,
+    }, lang);
+  };
+
   return <section className="statutory-tools standalone-tools" id="tools">
     {tool === "settlement" ? <>
       {/* Exportar un error no le sirve a nadie, así que la acción sólo existe
@@ -424,6 +662,21 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
       </div>
       <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.laborCode} target="_blank" rel="noreferrer"><b>01</b>{t.code}<span>↗</span></a><a href={OFFICIAL.laborService} target="_blank" rel="noreferrer"><b>02</b>{t.officialCalc}<span>↗</span></a><a href={OFFICIAL.resignation} target="_blank" rel="noreferrer"><b>03</b>{t.resignationLaw}<span>↗</span></a><a href={OFFICIAL.minimumWage} target="_blank" rel="noreferrer"><b>04</b>{t.wageDecree}<span>↗</span></a><a href={OFFICIAL.aguinaldoReform} target="_blank" rel="noreferrer"><b>05</b>{t.aguinaldoReform}<span>↗</span></a><a href={OFFICIAL.vacation} target="_blank" rel="noreferrer"><b>06</b>{t.vacationSource}<span>↗</span></a></div></div>
     </> : <>
+      {/* El mismo conmutador de /prestamos/: dos tarjetas con ícono, título y
+          subtítulo. La página responde ahora a dos preguntas distintas —cuánto
+          debería descontarme y si lo que me descontaron está bien— y son dos
+          modos, no dos secciones, porque comparten todos los datos del pago. */}
+      <div className="mode-switch" role="group" aria-label={t.payrollModeLabel}>
+        <button type="button" className={payrollMode === "calculate" ? "selected" : ""}
+          onClick={() => setPayrollMode("calculate")} aria-pressed={payrollMode === "calculate"}>
+          <span className="mode-icon">◎</span><span><b>{t.modeCalc}</b><small>{t.modeCalcSub}</small></span>
+        </button>
+        <button type="button" className={payrollMode === "verify" ? "selected" : ""}
+          onClick={() => setPayrollMode("verify")} aria-pressed={payrollMode === "verify"}>
+          <span className="mode-icon">⇄</span><span><b>{t.modeCheck}</b><small>{t.modeCheckSub}</small></span>
+        </button>
+      </div>
+      {payrollMode === "calculate" ? <>
       <div className="calculator-grid">
         <div className="form-panel">
           <div className="section-title"><span>01</span><div><h2>{t.payrollData}</h2><p>{lang === "es" ? "Servicios permanentes y persona domiciliada" : "Permanent services and a domiciled individual"}</p></div></div>
@@ -482,6 +735,73 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <div className="callout"><span>i</span><p>{t.recalcEmployerNote}</p></div>
         </div>
       </section>
+      </> : <>
+        {/* Sin una sola cifra de la boleta no hay comparación que exportar, y
+            un PDF que sólo repite las tablas ya lo da el otro modo. */}
+        {verify.compared > 0 && <div className="shell-toolbar export-toolbar">
+          <div className="export-actions">
+            <span>{t.exportHint}</span>
+            <button type="button" onClick={exportCheck}><i>PDF</i>{t.exportPdf}</button>
+          </div>
+        </div>}
+        <div className="calculator-grid">
+          <div className="form-panel">
+            <div className="section-title"><span>01</span><div><h2>{t.payrollData}</h2><p>{lang === "es" ? "Los mismos datos del otro modo" : "The same details as the other mode"}</p></div></div>
+            <div className="field-grid">
+              <MoneyField label={t.gross} lang={lang} value={gross} onChange={setGross} help={t.helpGross} />
+              <SelectField label={t.frequency} lang={lang} value={frequency} onChange={setFrequency} help={t.helpFrequency}
+                options={[{ value: "monthly", label: t.monthly }, { value: "fortnightly", label: t.fortnightly }, { value: "weekly", label: t.weekly }] as const} />
+              <MoneyField label={t.annualGross} lang={lang} value={annualGross} onChange={setAnnualGross} note={t.annualGrossHint} help={t.helpAnnualGross} />
+            </div>
+            <div className="payroll-checks">
+              <CheckField label={t.includeAfp} checked={includeAfp} onChange={setIncludeAfp} />
+              <CheckField label={t.includeIsss} checked={includeIsss} onChange={setIncludeIsss} />
+              <CheckField label={t.fixedDeduction} checked={applyFixedDeduction} onChange={setApplyFixedDeduction} />
+            </div>
+            <div className="section-title second"><span>02</span><div><h2>{t.payslipTitle}</h2><p>{t.payslipSubtitle}</p></div></div>
+            <p className="field-note payroll-note">{t.payslipHint}</p>
+            <div className="field-grid">
+              <MoneyField label={t.slipAfp} lang={lang} value={slipAfp} onChange={setSlipAfp} help={t.helpSlipAfp} />
+              <MoneyField label={t.slipIsss} lang={lang} value={slipIsss} onChange={setSlipIsss} help={t.helpSlipIsss} />
+              <MoneyField label={t.slipIsr} lang={lang} value={slipIsr} onChange={setSlipIsr} help={t.helpSlipIsr} />
+              <MoneyField label={t.slipNet} lang={lang} value={slipNet} onChange={setSlipNet} help={t.helpSlipNet} />
+            </div>
+          </div>
+          <div className="results-panel payroll-results">
+            <div className="results-kicker">{t.checkResult}</div>
+            {/* El titular dice cuántas diferencias hay, no si algo está mal.
+                Cero diferencias no significa que la boleta esté correcta: hay
+                conceptos que esta calculadora no conoce, y lo dice al cerrar. */}
+            <div className="result-headline">
+              <span>{frequencyLabel}</span>
+              <strong>{verify.compared === 0 ? t.checkEmpty : verify.differences === 0 ? t.checkAllMatch : `${verify.differences} ${verify.differences === 1 ? t.checkDifference : t.checkDifferences}`}</strong>
+              <small>{verify.compared === 0 ? t.checkEmptySub : verify.differences === 0 ? t.checkAllMatchSub : t.checkDiffSub}</small>
+            </div>
+            <p className="field-note">{t.checkIntro}</p>
+            <div className="payslip-check">
+              {verify.lines.map((line) => <div key={line.concept} className={`payslip-row ${line.status}`}>
+                <div className="payslip-grid">
+                  <b className="payslip-concept">{conceptLabels[line.concept]}</b>
+                  <div><span>{t.colExpected}</span><b>{money.format(line.expected)}</b></div>
+                  <div><span>{t.colReported}</span><b>{line.reported === null ? "—" : money.format(line.reported)}</b></div>
+                  <div><span>{t.colDifference}</span><b>{line.status === "unchecked" ? "—" : signed(line.difference)}</b></div>
+                  <div className="payslip-status"><i aria-hidden="true">{statusMark[line.status]}</i><span>{statusLabels[line.status]}</span></div>
+                </div>
+                {line.causes.length > 0 && <div className="payslip-causes">
+                  <span>{line.causes.length === 1 ? t.causeLead : t.causeLeadPlural}</span>
+                  {line.causes.map((cause) => {
+                    const citation = causeCitation(cause);
+                    return <p key={cause.id}>{causeText(cause.id, cause.amount)}
+                      {citation && <a href={OFFICIAL[citation.source]} target="_blank" rel="noreferrer">{citation.norm} ↗</a>}
+                    </p>;
+                  })}
+                </div>}
+              </div>)}
+            </div>
+            <div className="callout"><span>i</span><p>{t.checkTone}</p></div>
+          </div>
+        </div>
+      </>}
       <div className="tax-tables"><div className="table-heading"><div><span>DECRETO EJECUTIVO 10/2025</span><h2>{t.tableTitle} {frequencyLabel.toLowerCase()}</h2></div><a href={OFFICIAL.withholding} target="_blank" rel="noreferrer">{t.officialPdf} ↗</a></div><Table bands={WITHHOLDING_TABLES[frequency]} t={t} money={money} />
         <details><summary>{t.recalc}</summary><p>{t.recalcNote}</p><div className="recalc-grid"><div><h3>{t.june}</h3><Table bands={JUNE_RECALC_TABLE} t={t} money={money} /></div><div><h3>{t.december}</h3><Table bands={DECEMBER_RECALC_TABLE} t={t} money={money} /></div></div></details>
         <details><summary>{t.differsSummary}</summary><p>{t.differsBody}</p></details>

@@ -46,6 +46,23 @@ export const OFFICIAL = {
   // Sustituir este enlace por el del D.L. 433 en cuanto la bóveda lo publique,
   // o por el consolidado del código cuando la Asamblea lo actualice.
   aguinaldoDecree: "https://www.jurisprudencia.gob.sv/DocumentosBoveda/D/2/2020-2029/2025/10/10E76F.PDF",
+  // La Ley Especial Quincena Veinticinco, D.L. 499 del 14 de enero de 2026,
+  // publicada en el Diario Oficial n.° 8, Tomo n.° 450, de esa misma fecha. Es
+  // ley autónoma de nueve artículos, no una reforma al Código de Trabajo.
+  //
+  // Esta entrada existe porque las tres reglas de la Quincena 25 apuntaban a
+  // `laborCode`, que no la contiene y sí trae, en su tabla de reformas, un
+  // «D. L. No. 499, 8 DE ABRIL DE 1976». Son dos decretos distintos con el
+  // mismo número, y quien siguiera la cita llegaba al de 1976: el peor tipo de
+  // enlace roto, porque no parece roto. El PDF exportado agrupa las citas por
+  // documento, así que el error ya se imprimía bajo la dirección del código.
+  //
+  // El enlace es la ficha del decreto en la bóveda de la Asamblea
+  // (`leyes-y-decretos/view/6643`), que declara ese número de Diario Oficial,
+  // tomo y fecha de publicación. Como todo `asamblea.gob.sv/.../decretos/`, el
+  // archivo trae bytes basura antes del `%PDF` y hay que recortarlo para leerlo
+  // con poppler; el contenido es texto real, no escaneo.
+  quincena25: "https://www.asamblea.gob.sv/sites/default/files/documents/decretos/D72EB960-89D5-443E-AE2D-196F677CB0F2.pdf",
   // La explicación del MTPS sobre cómo opera el pago anticipado. Es publicación
   // institucional del ministerio que administra la regla, no prensa, y es la
   // que describe la práctica; el valor normativo lo lleva `aguinaldoDecree`.

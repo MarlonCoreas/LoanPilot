@@ -30,6 +30,19 @@ import { OFFICIAL } from "./sources";
  * a reader who never exports anything does not download them. Everything runs
  * in the browser: no figure the user typed leaves the tab, which is the whole
  * premise of the site and would be quietly broken by rendering server-side.
+ *
+ * WHAT A CALLER MAY PUT IN A STRING. jsPDF's built-in fonts encode WinAnsi, and
+ * a codepoint outside it is not dropped — it is rendered as some other
+ * character, so the document is wrong rather than incomplete and nobody notices
+ * until it is printed. Two that a calculator reaches for naturally:
+ *
+ *   U+2212 MINUS SIGN (−)          comes out as a quotation mark
+ *   U+2197 NORTH EAST ARROW (↗)    comes out as "!—"
+ *
+ * The payslip check printed "−$176.00" as "\"$176.00" this way. Em dash, middot,
+ * the Spanish accents and the guillemets are all inside the encoding and are
+ * used throughout. Where a page wants the typographic minus on screen, it passes
+ * the ASCII hyphen for this document instead — see `signed` in StatutoryTools.
  */
 
 export type PdfTable = {

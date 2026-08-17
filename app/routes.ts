@@ -57,7 +57,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
     },
     withholding: {
       title: "Calculadora de retenciones salariales | LoanPilot",
-      description: "Estima AFP, ISSS e ISR con las tablas oficiales de retención vigentes en El Salvador.",
+      description: "Estima AFP, ISSS e ISR con las tablas oficiales de El Salvador, o revisá tu boleta de pago renglón por renglón.",
       ogTitle: "LoanPilot | Retenciones salariales",
     },
   },
@@ -84,7 +84,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
     },
     withholding: {
       title: "Payroll withholding calculator | LoanPilot",
-      description: "Estimate pension, ISSS and income tax using the official withholding tables in force in El Salvador.",
+      description: "Estimate pension, ISSS and income tax with El Salvador's official withholding tables, or check your payslip line by line.",
       ogTitle: "LoanPilot | Payroll withholding",
     },
   },

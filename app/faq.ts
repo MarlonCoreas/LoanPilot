@@ -34,7 +34,7 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "¿Qué es la Quincena 25 y desde cuándo se paga?",
-      answer: "Es un pago equivalente a medio salario mensual creado por el Decreto Legislativo 499, dirigido a salarios de hasta $1,500. El régimen general empieza en 2027; durante 2026 es voluntario para el empleador privado. La ley lo declara renta no gravable, así que no paga retención.",
+      answer: "Es un ingreso complementario equivalente al 50% del salario básico o nominal mensual, creado por la Ley Especial Quincena Veinticinco, Decreto Legislativo 499 del 14 de enero de 2026. Solo alcanza a quienes ganan $1,500 mensuales o menos, y se paga entre el 15 y el 25 de enero. El régimen general empieza en 2027; durante 2026 el sector público lo recibe de forma obligatoria y para el patrono privado es voluntario. La ley lo declara renta no gravable y prohíbe todo descuento sobre él —ni renta, ni ISSS, ni AFP—, lo hace inembargable y lo deja fuera de la base de cálculo de otras prestaciones, así que tampoco entra en tu finiquito ni en tu aguinaldo.",
     },
     {
       question: "¿Cuánto me descuentan de AFP e ISSS cada mes?",
@@ -80,7 +80,7 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "What is the Quincena 25 and when is it paid?",
-      answer: "It is a payment equal to half a monthly salary created by Legislative Decree 499, aimed at salaries up to $1,500. The general regime starts in 2027; through 2026 it is voluntary for private employers. The law declares it non-taxable, so no withholding applies.",
+      answer: "It is a complementary payment equal to 50% of the basic or nominal monthly salary, created by the Ley Especial Quincena Veinticinco, Legislative Decree 499 of 14 January 2026. It reaches only those earning $1,500 a month or less, and it is paid between 15 and 25 January. The general regime starts in 2027; through 2026 the public sector receives it as of right while for private employers it is voluntary. The law declares it non-taxable income and bars every deduction from it — income tax, ISSS and pension alike — makes it unattachable, and keeps it out of the base used to calculate other benefits, so it enters neither your settlement nor your year-end bonus.",
     },
     {
       question: "How much is deducted for pension and ISSS each month?",

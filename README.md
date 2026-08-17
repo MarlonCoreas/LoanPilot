@@ -13,7 +13,8 @@ Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
 - `/prestamos/`: préstamos, amortización y abonos a capital.
 - `/finiquito/`: finiquito, indemnización y renuncia voluntaria.
 - `/horas-extras/`: horas extras, recargo nocturno, día de descanso y asueto.
-- `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención.
+- `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención, y revisión de
+  una boleta de pago contra ellas.
 
 Cada página existe en inglés bajo `/en/`: `/en/`, `/en/loans/`, `/en/settlement/`,
 `/en/overtime/` y `/en/withholding/`. El idioma lo determina la URL, no una preferencia
@@ -48,6 +49,13 @@ puede afirmar algo que la página no diga.
 - Recálculo acumulado de junio y diciembre: liquida el impuesto del período
   sobre las remuneraciones gravadas acumuladas, resta lo ya retenido e indica
   si queda diferencia a retener o retención en exceso.
+- Revisión de boleta de pago: compara AFP, ISSS, renta y neto declarados contra
+  las tablas, renglón por renglón y con un centavo de tolerancia. Cada campo es
+  opcional y el que se deja vacío no se compara. Donde hay diferencia se nombra
+  la causa probable —y sólo cuando su aritmética reproduce la cifra impresa— con
+  el enlace a la regla que la explica. Describe diferencias; no afirma
+  incumplimiento, y cierra advirtiendo que hay descuentos legítimos que la
+  calculadora no conoce.
 - Interfaz responsive en español e inglés.
 - Todos los cálculos se ejecutan localmente en el navegador.
 

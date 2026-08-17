@@ -190,6 +190,32 @@ test("a citation list names the version in force, and says each article once", (
   }
 });
 
+test("the Quincena 25 cites its own decree, not the one that shares its number", () => {
+  // Two different decrees are numbered 499. One is the Ley Especial Quincena
+  // Veinticinco of 14 January 2026, published in Diario Oficial 8, Tomo 450;
+  // the other is a 1976 amendment that appears in the Labour Code's own table
+  // of reforms at the end of the consolidated text.
+  //
+  // These rules used to point `source` at `laborCode`, so a reader who followed
+  // the citation opened a document that does not contain the law and does
+  // contain a decree with the right number and the wrong half-century. That is
+  // worse than a dead link, and the exported PDF — which groups citations under
+  // the document they are read from — printed it under the code's address.
+  for (const id of ["quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt",
+    "quincena25MandatoryFrom"]) {
+    assert.ok(id in RULES, `${id} is not a rule`);
+    for (const version of RULES[id].versions) {
+      assert.equal(version.source, "quincena25", `${id} cites "${version.source}"`);
+      // The norm has to name the law and the date, because the number alone is
+      // exactly what was ambiguous.
+      assert.match(version.norm, /Ley Especial Quincena Veinticinco/, id);
+      assert.match(version.norm, /D\.L\. 499 del 14 de enero de 2026/, id);
+    }
+  }
+  assert.notEqual(OFFICIAL.quincena25, OFFICIAL.laborCode,
+    "pointing both at the same document is the bug this test exists for");
+});
+
 test("no rule claims to have been reviewed before it existed, or in the future", () => {
   const today = new Date().toISOString().slice(0, 10);
   for (const rule of ALL_RULES) {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -9,8 +10,12 @@ import { OFFICIAL } from "../app/sources.ts";
 import {
   calculatePayrollWithholding, calculateRecalculation, calculateSettlement,
   DAILY_MINIMUM_WAGE, DECEMBER_RECALC_TABLE, JUNE_RECALC_TABLE,
-  MINIMUM_WAGE_TABLES, QUINCENA25, RULES_REVIEWED, withholdingForTaxable,
+  MINIMUM_WAGE_TABLES, PAYSLIP_TOLERANCE, QUINCENA25, RULES_REVIEWED,
+  verifyPayslip, withholdingForTaxable,
 } from "../app/statutory.ts";
+
+/** The line of a payslip check, which every test below reaches for by name. */
+const lineFor = (check, concept) => check.lines.find((item) => item.concept === concept);
 
 const round = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
@@ -85,7 +90,8 @@ test("the module's figures are the ones the rule registry declares", () => {
   assert.deepEqual(DECEMBER_RECALC_TABLE, currentValue(RULES.recalcTables).december);
   assert.equal(QUINCENA25.salaryCeiling, currentValue(RULES.quincena25SalaryCeiling));
   assert.equal(QUINCENA25.rate, currentValue(RULES.quincena25Rate));
-  assert.equal(QUINCENA25.mandatoryFrom, currentValue(RULES.quincena25MandatoryFrom));
+  assert.deepEqual(QUINCENA25.mandatoryFrom, currentValue(RULES.quincena25MandatoryFrom));
+  assert.deepEqual(QUINCENA25.exempt, currentValue(RULES.quincena25Exempt));
 });
 
 test("2025 monthly withholding bands use the official thresholds and fixed amounts", () => {
@@ -390,6 +396,61 @@ test("the Quincena 25 follows Decree 499 and stays out of every other case", () 
   assert.equal(settle({}).quincena25, round(1200 * 0.5 * 181 / 365));
   // A full year in service takes the whole half salary, never more.
   assert.equal(settle({ endDate: "2027-12-31" }).quincena25, 600);
+});
+
+test("Decree 499 puts the two sectors on different timetables", () => {
+  // Article 1 opens the general regime "a partir del año dos mil veintisiete"
+  // for everyone. Article 6 then splits 2026 in two directions: public servants
+  // and municipal employees "gozarán" of the benefit that fiscal year, with
+  // institutions ordered to move budget for it, while for private employers the
+  // same year's payment "tendrá carácter voluntario".
+  //
+  // One date could not say both. The single "2027-01-01" that used to be stored
+  // was the private half, silently making the same claim about the public one.
+  assert.equal(QUINCENA25.mandatoryFrom.private, "2027-01-01");
+  assert.equal(QUINCENA25.mandatoryFrom.public, "2026-01-14", "article 9: the day it took effect");
+  assert.ok(QUINCENA25.mandatoryFrom.public < QUINCENA25.mandatoryFrom.private);
+
+  // The settlement is Labour Code employment throughout, so it reads the
+  // private date and nothing is owed as of right before the general regime.
+  const settle = (endDate) => calculateSettlement({
+    startDate: "2020-01-01", endDate, monthlySalary: 1200,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
+  });
+  assert.equal(settle("2026-12-31").quincena25Applies, false);
+  assert.equal(settle(QUINCENA25.mandatoryFrom.private).quincena25Applies, true);
+});
+
+test("the Quincena 25 carries no withholding and enters no other base", () => {
+  // Article 1: paid "de forma íntegra y sin ningún descuento", it "no formará
+  // parte de la base de cálculo de otras prestaciones, por lo que no será
+  // objeto de ninguna clase de retención", and in no case may it be subject to
+  // deduction for social security or pension obligations. Article 4 adds income
+  // tax and unattachability.
+  assert.deepEqual(QUINCENA25.exempt.withholdings, [], "no deduction of any kind is allowed");
+  assert.equal(QUINCENA25.exempt.inBenefitBase, false);
+  assert.equal(QUINCENA25.exempt.attachable, false);
+
+  // And the arithmetic holds it there, which is the half a declaration cannot
+  // do on its own. In a settlement that DOES carry the benefit, every other
+  // line still prices at the ordinary daily salary of $1,200/30 = $40. Folding
+  // half a month's pay into the base would take that to $60 and move all of
+  // them, so these four assertions fail the moment the benefit leaks into one.
+  const settlement = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2027-06-30", monthlySalary: 1200,
+    sector: "commerce", termination: "dismissal", pendingSalaryDays: 10,
+    unusedVacationPeriods: 1,
+  });
+  assert.ok(settlement.quincena25 > 0, "the case has to carry the benefit to prove anything");
+  assert.equal(settlement.dailySalary, 40);
+  assert.equal(settlement.indemnityBaseDaily, 40, "under the $53.76 cap, so the salary itself");
+  assert.equal(settlement.pendingSalary, 400, "10 days at $40");
+  assert.equal(settlement.completeVacation, round(40 * 15 * 1.3));
+  assert.equal(settlement.aguinaldo, round(40 * settlement.aguinaldoDays));
+
+  // It reaches the total on its own line, and on no other.
+  assert.equal(settlement.total, round(settlement.indemnity + settlement.pendingSalary
+    + settlement.vacation + settlement.aguinaldo + settlement.quincena25));
 });
 
 test("an end date before the start date yields nothing instead of negative service", () => {
@@ -852,4 +913,234 @@ test("the article 187 divergence is flagged on the cases it actually touches", (
   });
   assert.equal(mtps.vacation, 90.16);
   assert.equal(mtps.proportionalVacationDisputed, true);
+});
+
+// --- Checking a payslip -----------------------------------------------------
+//
+// The other mode only has to be right. This one has to be right AND able to say
+// where a difference comes from, so the tests below are mostly about the second
+// half: that a cause is attached when its arithmetic actually reproduces the
+// reported figure, and left off when it does not. A checker that listed every
+// thing that can go wrong under every difference would pass a test that only
+// looked at the numbers, and would be worth nothing to the person holding the
+// payslip.
+
+test("a payslip that matches the tables reports no difference at all", () => {
+  const expected = calculatePayrollWithholding({ gross: 1000, frequency: "monthly" });
+  const check = verifyPayslip({
+    gross: 1000, frequency: "monthly",
+    reported: { afp: expected.afp, isss: expected.isss, isr: expected.isr, net: expected.net },
+  });
+  assert.equal(check.compared, 4);
+  assert.equal(check.differences, 0);
+  for (const line of check.lines) {
+    assert.equal(line.status, "match", line.concept);
+    assert.deepEqual(line.causes, [], line.concept);
+  }
+});
+
+test("an empty field is not compared, and a zero is a finding", () => {
+  // They are opposite claims: "I do not have this figure" must not be scored,
+  // while "the payslip deducted nothing" is one of the differences worth
+  // finding. Collapsing both into 0 would silently accuse every payslip that
+  // does not itemise its pension line.
+  const check = verifyPayslip({
+    gross: 1000, frequency: "monthly", reported: { afp: null, isss: 0 },
+  });
+  assert.equal(check.compared, 1);
+  const afp = lineFor(check, "afp");
+  assert.equal(afp.status, "unchecked");
+  assert.equal(afp.reported, null);
+  assert.deepEqual(afp.causes, []);
+  assert.ok(afp.expected > 0, "the expected figure is still shown beside the blank");
+
+  const isss = lineFor(check, "isss");
+  assert.equal(isss.status, "lower");
+  assert.deepEqual(isss.causes.map((cause) => cause.id), ["isssNotApplied"]);
+});
+
+test("a cent is rounding and two cents is a difference", () => {
+  // Both sides have already rounded to cents once, and the two roundings do not
+  // have to land on the same side. Reporting that as a finding would bury the
+  // real ones.
+  assert.equal(PAYSLIP_TOLERANCE, 0.01);
+  const expected = calculatePayrollWithholding({ gross: 1000, frequency: "monthly" });
+  const at = verifyPayslip({
+    gross: 1000, frequency: "monthly", reported: { isr: round(expected.isr + 0.01) },
+  });
+  assert.equal(lineFor(at, "isr").status, "match");
+  assert.equal(lineFor(at, "isr").difference, 0, "inside the tolerance nothing is reported");
+
+  const beyond = verifyPayslip({
+    gross: 1000, frequency: "monthly", reported: { isr: round(expected.isr + 0.02) },
+  });
+  assert.equal(lineFor(beyond, "isr").status, "higher");
+  assert.equal(lineFor(beyond, "isr").difference, 0.02);
+});
+
+test("an ISSS ceiling that was not applied is named, with the ceiling it should have used", () => {
+  const check = verifyPayslip({ gross: 2000, frequency: "monthly", reported: { isss: 60 } });
+  const isss = lineFor(check, "isss");
+  assert.equal(isss.expected, 30, "3% of the $1,000 monthly ceiling");
+  assert.equal(isss.status, "higher");
+  const cause = isss.causes.find((item) => item.id === "isssNoCeiling");
+  assert.ok(cause, "3% of the whole gross is exactly the ceiling being skipped");
+  assert.equal(cause.amount, 1000);
+  assert.equal(cause.rule, "isssMonthlyCeiling");
+});
+
+test("a pension contribution on another base reports that base rather than a ceiling", () => {
+  // The maximum pension base was repealed and this project does not carry the
+  // repealed figure, so naming it as the cause would be inventing a number. The
+  // base the deduction implies is checkable: the reader can compare it with the
+  // pay they entered and recognise a travel allowance or a bonus left out of it.
+  const check = verifyPayslip({ gross: 1000, frequency: "monthly", reported: { afp: 58 } });
+  const afp = lineFor(check, "afp");
+  assert.equal(afp.status, "lower");
+  const cause = afp.causes.find((item) => item.id === "afpOtherBase");
+  assert.ok(cause);
+  assert.equal(cause.amount, 800, "58.00 is 7.25% of 800");
+});
+
+test("income tax read on the gross instead of on the base after contributions", () => {
+  const onGross = withholdingForTaxable(1000, "monthly").amount;
+  const check = verifyPayslip({ gross: 1000, frequency: "monthly", reported: { isr: onGross } });
+  const isr = lineFor(check, "isr");
+  assert.equal(isr.status, "higher");
+  assert.ok(isr.causes.some((item) => item.id === "isrOnGross"));
+  assert.ok(!isr.causes.some((item) => item.id === "isrRecalc"),
+    "a reading that reproduces the figure rules out the catch-all");
+});
+
+test("the pre-2025 reading of the fixed deduction is named as the reading it is", () => {
+  // Much of the country's payroll still applies Decree 95/2015, where the tables
+  // were said to already contain the $1,600. That is not an error to accuse
+  // anyone of; it is the difference this whole calculator exists to explain.
+  const expected = calculatePayrollWithholding({ gross: 700, frequency: "monthly" });
+  assert.ok(expected.fixedDeduction > 0, "band II, under the $9,100 limit");
+  const older = withholdingForTaxable(expected.taxableBeforeFixedDeduction, "monthly").amount;
+  const check = verifyPayslip({ gross: 700, frequency: "monthly", reported: { isr: older } });
+  const isr = lineFor(check, "isr");
+  assert.equal(isr.status, "higher");
+  const cause = isr.causes.find((item) => item.id === "isrWithoutFixedDeduction");
+  assert.ok(cause);
+  assert.equal(cause.rule, "fixedDeduction");
+});
+
+test("a Quincena 25 left inside the taxable base explains the extra withholding", () => {
+  // Article 1 of Decree 499 bars every kind of retention on the benefit and
+  // article 4 keeps it out of "el cómputo de la renta obtenida". A payroll that
+  // adds it to the base withholds on money the law does not tax, and the cause
+  // is only claimed where that arithmetic lands on the payslip's own figure.
+  const expected = calculatePayrollWithholding({ gross: 1200, frequency: "monthly" });
+  const inflated = withholdingForTaxable(round(expected.taxable + 600), "monthly").amount;
+  const check = verifyPayslip({ gross: 1200, frequency: "monthly", reported: { isr: inflated } });
+  const cause = lineFor(check, "isr").causes.find((item) => item.id === "isrQuincena25");
+  assert.ok(cause);
+  assert.equal(cause.amount, 600, "half of a $1,200 monthly salary");
+  assert.equal(cause.rule, "quincena25Exempt");
+  assert.ok(check.appliedRules.includes("quincena25Exempt"),
+    "the exported document has to cite the rule the explanation rests on");
+
+  // Above the eligibility ceiling there is no benefit to have been included, so
+  // the same shape of difference must not be blamed on it.
+  const overCeiling = calculatePayrollWithholding({ gross: 1600, frequency: "monthly" });
+  const other = verifyPayslip({
+    gross: 1600, frequency: "monthly",
+    reported: { isr: withholdingForTaxable(round(overCeiling.taxable + 800), "monthly").amount },
+  });
+  assert.ok(!lineFor(other, "isr").causes.some((item) => item.id === "isrQuincena25"));
+});
+
+test("a withholding above the table with nothing else to explain it points at the recalculation", () => {
+  const expected = calculatePayrollWithholding({ gross: 1000, frequency: "monthly" });
+  const check = verifyPayslip({
+    gross: 1000, frequency: "monthly", reported: { isr: round(expected.isr + 45) },
+  });
+  const cause = lineFor(check, "isr").causes.find((item) => item.id === "isrRecalc");
+  assert.ok(cause, "June and December carry the whole catch-up in one payment");
+  assert.equal(cause.amount, 45);
+  assert.equal(cause.rule, "recalcTables");
+
+  // It is the last resort and never an extra voice beside a reading that fits.
+  assert.equal(lineFor(check, "isr").causes.length, 1);
+});
+
+test("the payslip is also read against itself, and the residual is reported not guessed", () => {
+  // Every deduction matches the tables and $50 of the pay still does not reach
+  // the net. A payroll loan, a garnishment, an advance — none of them is
+  // modelled here, and the honest answer is the amount, not a diagnosis.
+  const expected = calculatePayrollWithholding({ gross: 1000, frequency: "monthly" });
+  const check = verifyPayslip({
+    gross: 1000, frequency: "monthly",
+    reported: {
+      afp: expected.afp, isss: expected.isss, isr: expected.isr,
+      net: round(expected.net - 50),
+    },
+  });
+  const net = lineFor(check, "net");
+  assert.equal(net.status, "lower");
+  const cause = net.causes.find((item) => item.id === "netUndisclosed");
+  assert.ok(cause);
+  assert.equal(cause.amount, 50);
+  assert.ok(!net.causes.some((item) => item.id === "netDeductionsDiffer"),
+    "the three deductions match, so the net does not differ because of them");
+});
+
+test("a net that follows a deduction that differs says so, and leaves no residual", () => {
+  const expected = calculatePayrollWithholding({ gross: 2000, frequency: "monthly" });
+  const uncapped = 60;
+  const check = verifyPayslip({
+    gross: 2000, frequency: "monthly",
+    reported: {
+      afp: expected.afp, isss: uncapped, isr: expected.isr,
+      net: round(expected.net - (uncapped - expected.isss)),
+    },
+  });
+  const net = lineFor(check, "net");
+  assert.equal(net.status, "lower");
+  assert.deepEqual(net.causes.map((item) => item.id), ["netDeductionsDiffer"],
+    "the payslip is consistent with itself: nothing is left unaccounted for");
+});
+
+test("a check cites the rules it used and not the page's whole list", () => {
+  const full = verifyPayslip({ gross: 1000, frequency: "monthly", reported: {} });
+  for (const id of ["withholdingTables", "afpEmployeeRate", "isssEmployeeRate",
+    "isssMonthlyCeiling", "fixedDeduction", "fixedDeductionIncomeLimit"]) {
+    assert.ok(full.appliedRules.includes(id), id);
+  }
+
+  // Switch the contributions off and the articles behind them stop being cited:
+  // a document that names article 29 under a check that never applied the
+  // deduction is making a claim it cannot back.
+  const bare = verifyPayslip({
+    gross: 1000, frequency: "monthly",
+    includeAfp: false, includeIsss: false, applyFixedDeduction: false, reported: {},
+  });
+  assert.deepEqual(bare.appliedRules, ["withholdingTables"]);
+
+  for (const id of full.appliedRules) assert.ok(id in RULES, `${id} is not a rule`);
+  const citations = citationsFor(full.appliedRules, "2026-08-16");
+  assert.ok(citations.length > 0);
+  for (const citation of citations) assert.ok(citation.source in OFFICIAL, citation.norm);
+});
+
+test("every cause the checker can raise has wording behind it in both languages", () => {
+  // The identifiers live in the calculation and the sentences live in the page,
+  // which is the split the rest of the site uses. The failure it makes possible
+  // is a cause that fires and renders as nothing, so the page's dictionaries are
+  // read here rather than trusted.
+  const source = readFileSync(new URL("../app/StatutoryTools.tsx", import.meta.url), "utf8");
+  const causes = [
+    "afpNotApplied", "afpApplied", "afpOtherBase",
+    "isssNotApplied", "isssApplied", "isssNoCeiling", "isssOtherBase", "isssProration",
+    "isrNotApplied", "isrOnGross", "isrWithoutFixedDeduction", "isrWithFixedDeduction",
+    "isrQuincena25", "isrRecalc",
+    "netDeductionsDiffer", "netUndisclosed", "unexplained",
+  ];
+  for (const id of causes) {
+    // Once in the Spanish dictionary and once in the English one.
+    const written = source.split(`${id}:`).length - 1;
+    assert.equal(written, 2, `${id} is written ${written} time(s), not once per language`);
+  }
 });

@@ -8,11 +8,11 @@ import UtilityHero from "./UtilityHero";
 const heroCopy = {
   es: {
     settlement: { title: "Calcula lo que corresponde al terminar tu empleo.", lead: "Estima indemnización o prestación, vacaciones, aguinaldo y salarios pendientes con reglas verificables." },
-    withholding: { title: "Entiende cada descuento de tu salario.", lead: "Estima AFP, ISSS y renta y consulta la tabla oficial aplicada a tu frecuencia de pago." },
+    withholding: { title: "Entiende cada descuento de tu salario.", lead: "Estima AFP, ISSS y renta con la tabla oficial de tu frecuencia de pago, o revisá tu boleta para ver de dónde sale cada diferencia." },
   },
   en: {
     settlement: { title: "Estimate what is due when employment ends.", lead: "Estimate severance or resignation benefit, vacation, year-end bonus and unpaid salary with auditable rules." },
-    withholding: { title: "Understand every deduction from your pay.", lead: "Estimate pension, ISSS and income tax and inspect the official table for your pay frequency." },
+    withholding: { title: "Understand every deduction from your pay.", lead: "Estimate pension, ISSS and income tax against the official table for your pay frequency, or check your payslip to see where each difference comes from." },
   },
 } as const;
 

@@ -54,10 +54,12 @@ export type RuleUnit =
   | "ratio" | "multiple-of-daily-minimum-wage" | "multiple-of-hourly-wage"
   | "days" | "days/year" | "days/month" | "years" | "months"
   | "hours/day" | "hour-of-day" | "hours-by-shift"
-  | "date" | "day-of-year"
+  | "date" | "date-by-sector" | "day-of-year"
   | "usd-bands" | "days-by-seniority"
   /** Which ways of ending a contract a line is paid on. */
   | "terminations"
+  /** What a payment is kept out of: withholdings, bases, attachment. */
+  | "exclusions"
   /** Not applied by any calculation: recorded so the gap stays under review. */
   | "not-modelled";
 
@@ -109,6 +111,8 @@ export function currentValue<T>(subject: Rule<T>): T {
 // --- Shapes the rules carry ------------------------------------------------
 
 export type WageSector = "commerce" | "maquila" | "coffee" | "agriculture";
+/** The two halves article 6 of Decree 499 puts on different timetables. */
+export type Quincena25Sector = "public" | "private";
 export type PayFrequency = "monthly" | "fortnightly" | "weekly";
 export type RecalcPeriod = "june" | "december";
 export type ShiftKind =
@@ -505,19 +509,17 @@ export const aguinaldoCycleStart = rule<YearDay>({
 
 // --- Quincena 25 ------------------------------------------------------------
 //
-// KNOWN BAD CITATION, AND IT NEEDS A DOCUMENT, NOT AN EDIT. All three rules
-// below name Legislative Decree 499 of 14 January 2026 and point `source` at the
-// consolidated Labour Code, which does not contain it. The mismatch is worse
-// than a dead link: that consolidation carries its own "D. L. No. 499, 8 DE
-// ABRIL DE 1976" in the amendment table at the end, so a reader who follows the
-// citation finds a decree with the right number and the wrong half-century.
+// The document these four rules read is the Ley Especial Quincena Veinticinco,
+// Legislative Decree 499 of 14 January 2026, published in Diario Oficial 8, Tomo
+// 450, of that same day. It is a nine-article law of its own, not an amendment
+// to the Labour Code, and `sources.ts` carries it as `quincena25`.
 //
-// It was invisible while the source list on screen was hand-written prose. The
-// exported PDF groups citations under the document they are read from, so it now
-// prints these articles beneath the Labour Code address, where anyone checking
-// will hit it. Fix it by adding the decree — or its Diario Oficial publication —
-// to `OFFICIAL` and pointing these three at it. Do not paper over it by softening
-// the `norm` string: the norm is right, the document is missing.
+// They used to point at `laborCode`, which does not contain it and does carry
+// its own "D. L. No. 499, 8 DE ABRIL DE 1976" in the amendment table at the end.
+// Two different decrees share the number, and the citation sent a reader to the
+// one from the wrong half-century. The values below were read back against the
+// decree's own text on the day in `reviewed`, and the quotations in the notes
+// are verbatim from it.
 
 export const quincena25SalaryCeiling = rule<number>({
   id: "quincena25SalaryCeiling",
@@ -525,10 +527,10 @@ export const quincena25SalaryCeiling = rule<number>({
   versions: [{
     from: "2026-01-14",
     value: 1500,
-    norm: "D.L. 499 art. 2",
-    source: "laborCode",
-    reviewed: "2026-08-14",
-    note: "The source is a stand-in: the Labour Code does not carry D.L. 499. See the note above this rule.",
+    norm: "Ley Especial Quincena Veinticinco (D.L. 499 del 14 de enero de 2026) art. 2",
+    source: "quincena25",
+    reviewed: "2026-08-16",
+    note: "A ceiling on eligibility, not on the amount: article 2 applies the benefit \"solo […] para aquellos trabajadores cuyo salario básico o nominal mensual sea igual o inferior a mil quinientos dólares\", so a salary a cent above it carries no benefit at all rather than a capped one.",
   }],
 });
 
@@ -538,23 +540,77 @@ export const quincena25Rate = rule<number>({
   versions: [{
     from: "2026-01-14",
     value: 0.5,
-    norm: "D.L. 499 art. 2",
-    source: "laborCode",
-    reviewed: "2026-08-14",
-    note: "Half the monthly nominal salary. Article 4 declares it non-taxable income and article 1 keeps it out of the base of other benefits, so nothing else in the site's arithmetic touches it.",
+    norm: "Ley Especial Quincena Veinticinco (D.L. 499 del 14 de enero de 2026) art. 2",
+    source: "quincena25",
+    reviewed: "2026-08-16",
+    note: "\"El cincuenta por ciento (50%) sobre el salario básico o nominal mensual\" being earned when the payment falls due — the monthly salary, not the pay period, which is why a fortnightly payroll does not halve it.",
   }],
 });
 
-export const quincena25MandatoryFrom = rule<string>({
-  id: "quincena25MandatoryFrom",
-  unit: "date",
+/**
+ * What the decree keeps the benefit out of, which is everything.
+ *
+ * Declared rather than computed, in the shape of `vacationProportionalOnExit`:
+ * nothing here is multiplied by anything. It exists because two calculators owe
+ * the reader an explanation they cannot give from a rate and a ceiling — the
+ * settlement, for why the benefit sits on its own line instead of raising the
+ * base of the others, and the payroll checker, for why a Quincena 25 inside the
+ * taxable gross is a reason for a withholding to come out too high.
+ *
+ * Article 1, second paragraph, is the whole of it: the benefit is paid "de forma
+ * íntegra y sin ningún descuento", is "independiente del salario ordinario,
+ * aguinaldo, compensación adicional en efectivo y de otras prestaciones", "no
+ * formará parte de la base de cálculo de otras prestaciones, por lo que no será
+ * objeto de ninguna clase de retención", and "en ningún caso deberá ser objeto
+ * de retención ni descuento alguno por concepto de aportes u otras obligaciones
+ * de Seguridad Social o del Régimen Previsional". Article 4 adds the tax side:
+ * "se declara como rentas no gravables, y en consecuencia excluidos del cómputo
+ * de la renta obtenida", not subject to income tax withholding, and unattachable.
+ */
+export const quincena25Exempt = rule<{
+  withholdings: ("isr" | "isss" | "afp")[];
+  inBenefitBase: boolean;
+  attachable: boolean;
+}>({
+  id: "quincena25Exempt",
+  unit: "exclusions",
   versions: [{
     from: "2026-01-14",
-    value: "2027-01-01",
-    norm: "D.L. 499 arts. 1 y 6",
-    source: "laborCode",
-    reviewed: "2026-08-14",
-    note: "Article 1 starts the general regime in 2027; article 6 leaves 2026 voluntary for private employers, so nothing is owed as of right before then and the estimate stays silent.",
+    value: { withholdings: [], inBenefitBase: false, attachable: false },
+    norm: "Ley Especial Quincena Veinticinco (D.L. 499 del 14 de enero de 2026) arts. 1 y 4",
+    source: "quincena25",
+    reviewed: "2026-08-16",
+    note: "`withholdings` is empty because no deduction of any kind may be made: article 1 rules out social security and pension contributions and article 4 rules out income tax withholding. `inBenefitBase` is false, so the figure never enters the base of the settlement or of the year-end bonus.",
+  }],
+});
+
+/**
+ * The day the benefit stops being optional, which is not the same day for
+ * everyone.
+ *
+ * Article 1 opens the general regime "a partir del año dos mil veintisiete" for
+ * public servants, municipal employees and private-sector workers alike, and
+ * article 6 then carves 2026 out of it in two different directions: the public
+ * sector "gozará" of the benefit in the 2026 fiscal year, with institutions
+ * ordered to move budget for it, while for the private sector that same year the
+ * payment "tendrá carácter voluntario para los patronos" against a tax credit.
+ *
+ * A single date could not say that, and the one that used to be here — 1 January
+ * 2027 — said the private half and silently made the same claim about the
+ * public one. The public date is the day the decree took effect under article 9,
+ * because that is when the article 6 obligation for the 2026 fiscal year exists;
+ * there is no separate commencement for it.
+ */
+export const quincena25MandatoryFrom = rule<Record<Quincena25Sector, string>>({
+  id: "quincena25MandatoryFrom",
+  unit: "date-by-sector",
+  versions: [{
+    from: "2026-01-14",
+    value: { public: "2026-01-14", private: "2027-01-01" },
+    norm: "Ley Especial Quincena Veinticinco (D.L. 499 del 14 de enero de 2026) arts. 1, 6 y 9",
+    source: "quincena25",
+    reviewed: "2026-08-16",
+    note: "The settlement calculator is private-sector only — it is governed by the Labour Code throughout — so it reads the private date and nothing is owed as of right before 2027. The public date is recorded so the distinction is declared rather than assumed away.",
   }],
 });
 
@@ -818,7 +874,7 @@ export const RULES = {
   dailySalaryDivisor, accrualYearDays,
   vacationDaysPerYear, vacationSurcharge, vacationProportionalOnExit, vacationUnmodelled,
   aguinaldoScale, aguinaldoCutoff, aguinaldoCycleStart,
-  quincena25SalaryCeiling, quincena25Rate, quincena25MandatoryFrom,
+  quincena25SalaryCeiling, quincena25Rate, quincena25Exempt, quincena25MandatoryFrom,
   withholdingTables, recalcTables, recalcMonths,
   afpEmployeeRate, isssEmployeeRate, isssMonthlyCeiling,
   fixedDeduction, fixedDeductionIncomeLimit,
@@ -850,15 +906,19 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "dailySalaryDivisor", "accrualYearDays",
     "vacationDaysPerYear", "vacationSurcharge", "vacationProportionalOnExit", "vacationUnmodelled",
     "aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart",
-    "quincena25SalaryCeiling", "quincena25Rate", "quincena25MandatoryFrom",
+    "quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt", "quincena25MandatoryFrom",
   ],
   overtime: [
     "dailySalaryDivisor", "nightWindow", "shiftLimits", "minorOvertimeLimit", "overtimeFactors",
   ],
+  // `quincena25Exempt` is here for the payslip checker, which names a Quincena
+  // 25 left inside the taxable gross as one reason a withholding can come out
+  // above the table — a rule the page applies by excluding a figure, not by
+  // multiplying one, and which the reader still has to be able to look up.
   withholding: [
     "withholdingTables", "recalcTables", "recalcMonths",
     "afpEmployeeRate", "isssEmployeeRate", "isssMonthlyCeiling",
-    "fixedDeduction", "fixedDeductionIncomeLimit",
+    "fixedDeduction", "fixedDeductionIncomeLimit", "quincena25Exempt",
   ],
 };
 

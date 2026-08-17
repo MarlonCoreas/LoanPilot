@@ -1,16 +1,18 @@
 import {
   accrualYearDays, afpEmployeeRate, aguinaldoCutoff, aguinaldoCycleStart, aguinaldoScale,
   currentValue, dailySalaryDivisor, fixedDeduction, fixedDeductionIncomeLimit,
-  isssEmployeeRate, isssMonthlyCeiling, minimumWage, quincena25MandatoryFrom,
+  isssEmployeeRate, isssMonthlyCeiling, minimumWage, quincena25Exempt, quincena25MandatoryFrom,
   quincena25Rate, quincena25SalaryCeiling, recalcMonths, recalcTables, resignationDaysPerYear,
   resignationMinimumService, resignationWageCap, ruleAt, severanceDaysPerYear,
   severanceMinimumDays, severanceWageCap, vacationDaysPerYear,
   vacationProportionalOnExit, vacationSurcharge, withholdingTables,
 } from "./rules.ts";
-import type { PayFrequency, RecalcPeriod, RuleId, WageSector, WithholdingBand } from "./rules.ts";
+import type {
+  PayFrequency, Quincena25Sector, RecalcPeriod, RuleId, WageSector, WithholdingBand,
+} from "./rules.ts";
 
 export type EmploymentEnd = "dismissal" | "resignation";
-export type { PayFrequency, RecalcPeriod, WageSector, WithholdingBand };
+export type { PayFrequency, Quincena25Sector, RecalcPeriod, RuleId, WageSector, WithholdingBand };
 
 /**
  * Every statutory figure below now comes from `rules.ts`, which carries the
@@ -154,10 +156,21 @@ function aguinaldoDays(completedYears: number) {
 /** See the `accrualYearDays` rule: 365, inclusive of both first and last day. */
 const YEAR_DAYS = currentValue(accrualYearDays);
 
+/**
+ * The Quincena 25 as this module applies it: half a monthly salary, an
+ * eligibility ceiling, and the day it stops being optional — which article 6 of
+ * Decree 499 sets separately for the public and the private sector.
+ *
+ * `exempt` carries no arithmetic. It is read by the payroll checker, which has
+ * to be able to say that a Quincena 25 inside a taxable gross explains a
+ * withholding above the table, and it is the reason nothing else here adds the
+ * benefit into a base: article 1 keeps it out of every one of them.
+ */
 export const QUINCENA25 = {
   salaryCeiling: currentValue(quincena25SalaryCeiling),
   rate: currentValue(quincena25Rate),
   mandatoryFrom: currentValue(quincena25MandatoryFrom),
+  exempt: currentValue(quincena25Exempt),
 };
 
 export function calculateSettlement(input: {
@@ -320,10 +333,29 @@ export function calculateSettlement(input: {
   // aguinaldo. Voluntary resignation is not among the cases it names, so it
   // never carries this line. The proportion runs over the calendar year, which
   // is the cycle a payment made every January closes.
+  //
+  // The private-sector date is the one read: this calculator is Labour Code
+  // employment throughout, and article 6 leaves 2026 voluntary for those
+  // employers, so nothing is owed as of right before the general regime opens.
+  // The public date sits beside it in the rule and no case here reaches it.
+  //
+  // ONE CLAUSE OF ARTICLE 3 IS NOT MODELLED, AND IT IS NOT A SMALL ONE. The
+  // article grants the benefit to a worker dismissed "antes del veinticinco de
+  // enero o en esa misma fecha" — the day article 1 makes the payment fall due.
+  // Read strictly, that is a protection against being let go days before payday
+  // and nothing more, and a dismissal in July would carry no line at all. Read
+  // as the sentence that follows it invites — "deberán aplicarse las
+  // disposiciones establecidas para el goce de la prima anual en concepto de
+  // aguinaldo […] o la parte proporcional, según corresponda" — it works like
+  // article 202 of the Labour Code and every dismissal takes its proportional
+  // share. This module applies the second reading, which is the one that pays
+  // the worker, and the interface says so; adopting the first would drop the
+  // line from most settlements on the strength of a reading of an ambiguous
+  // clause, which is a decision for a document and not for this file.
   const quincena25Applies = input.termination === "dismissal"
     && salary > 0
     && salary <= QUINCENA25.salaryCeiling
-    && isoDate(end) >= QUINCENA25.mandatoryFrom;
+    && isoDate(end) >= QUINCENA25.mandatoryFrom.private;
   const quincena25 = quincena25Applies
     ? salary * QUINCENA25.rate * Math.min(1, daysInclusive(workStartThisYear, end) / YEAR_DAYS)
     : 0;
@@ -360,7 +392,8 @@ export function calculateSettlement(input: {
       ? ["aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart"] as const
       : []),
     ...(quincena25Applies
-      ? ["quincena25SalaryCeiling", "quincena25Rate", "quincena25MandatoryFrom"] as const
+      ? ["quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt",
+        "quincena25MandatoryFrom"] as const
       : []),
   ];
 
@@ -474,11 +507,12 @@ export function calculatePayrollWithholding(input: {
    * any other remuneration, so a worker just under the limit per period can sit
    * above it across the year. Left out, the period is annualised as before.
    *
-   * Taxable pay only. Legislative Decree 499 of 14 January 2026 declares the
-   * Quincena 25 "rentas no gravables, y en consecuencia excluidos del cómputo
-   * de la renta obtenida" (art. 4), so it never reaches this figure. Article 1
-   * also keeps it out of withholding and out of "la base de cálculo de otras
-   * prestaciones", which is why nothing else in this module touches it either.
+   * Taxable pay only. The Ley Especial Quincena Veinticinco (D.L. 499 of 14
+   * January 2026) declares the benefit "rentas no gravables, y en consecuencia
+   * excluidos del cómputo de la renta obtenida" (art. 4), so it never reaches
+   * this figure. Article 1 also keeps it out of withholding and out of "la base
+   * de cálculo de otras prestaciones", which is why nothing else in this module
+   * touches it either — see the `quincena25Exempt` rule.
    */
   annualGross?: number;
 }) {
@@ -515,6 +549,283 @@ export function calculatePayrollWithholding(input: {
     annualIncome, annualIncomeDeclared: declaredAnnual > 0,
     taxableBeforeFixedDeduction, taxable, isr: withholding.amount,
     band: withholding.band, marginalRate: withholding.rate, net,
+  };
+}
+
+// --- Checking a payslip against the tables ----------------------------------
+
+/**
+ * A cent. Every figure on both sides of this comparison has already been
+ * rounded to cents twice — once by the payroll that printed the payslip and
+ * once by `round2` here — and the two roundings do not have to land on the same
+ * side. Anything inside a cent is that, and reporting it as a difference would
+ * bury the real ones under noise.
+ */
+export const PAYSLIP_TOLERANCE = 0.01;
+
+export type PayslipConcept = "afp" | "isss" | "isr" | "net";
+
+/** Not compared, equal within the tolerance, or the payslip is above / below. */
+export type PayslipStatus = "unchecked" | "match" | "higher" | "lower";
+
+/**
+ * Why a line might differ, as an identifier and never as a sentence.
+ *
+ * The wording lives in the page, in both languages, the way every other string
+ * on this site does. What this module decides is the harder half: which of these
+ * readings actually reproduces the number on the payslip. A cause is only
+ * attached when the arithmetic of that reading lands on the reported figure
+ * within the tolerance — a list of things that *could* explain a difference is
+ * something anybody can write, and it is worth nothing to the person holding
+ * the payslip.
+ */
+export type PayslipCauseId =
+  /** No pension contribution where one was expected, or one where none was. */
+  | "afpNotApplied" | "afpApplied"
+  /** The reported contribution is 7.25% of some other base; `amount` is that base. */
+  | "afpOtherBase"
+  | "isssNotApplied" | "isssApplied"
+  /** 3% of the whole gross: the monthly ceiling was not applied. */
+  | "isssNoCeiling"
+  /** 3% of some other base; `amount` is that base. */
+  | "isssOtherBase"
+  /** Fortnightly or weekly, where spreading the monthly ceiling is our own approximation. */
+  | "isssProration"
+  | "isrNotApplied"
+  /** The table read on the gross instead of on the base left after contributions. */
+  | "isrOnGross"
+  /** The pre-2025 reading, where the tables were said to already contain the $1,600. */
+  | "isrWithoutFixedDeduction"
+  /** The $1,600 subtracted where this reading does not grant it; `amount` is the share. */
+  | "isrWithFixedDeduction"
+  /** A base inflated by half a monthly salary, which is what a Quincena 25 in the gross does. */
+  | "isrQuincena25"
+  /** Withheld above the table with nothing else explaining it: a June or December settlement. */
+  | "isrRecalc"
+  /** The take-home follows deductions that differ, so it differs with them. */
+  | "netDeductionsDiffer"
+  /** Gross less the three deductions does not reach the net; `amount` is what is missing. */
+  | "netUndisclosed"
+  /** The line differs and no reading here reproduces it. */
+  | "unexplained";
+
+export type PayslipCause = {
+  id: PayslipCauseId;
+  /** The rule a reader can open to check the cause, where one governs it. */
+  rule?: RuleId;
+  /** The figure the cause is about: a base, a share, a residual. */
+  amount?: number;
+};
+
+export type PayslipLine = {
+  concept: PayslipConcept;
+  /** What the tables give for the pay that was entered. */
+  expected: number;
+  /** What the payslip says, or null where the field was left empty. */
+  reported: number | null;
+  /** Payslip minus tables, so a positive number is the larger payslip figure. */
+  difference: number;
+  status: PayslipStatus;
+  causes: PayslipCause[];
+};
+
+/**
+ * The same pay run as `calculatePayrollWithholding`, read against what a payslip
+ * actually says.
+ *
+ * The other mode answers "how much should be deducted from me". This one
+ * answers the question people arrive with instead, which is whether what was
+ * deducted is right — and the difference between the two is not arithmetic but
+ * evidence: the first only has to be correct, the second has to be able to say
+ * where a discrepancy comes from, or admit that it cannot.
+ *
+ * Every reported figure is optional and an empty one is simply not compared,
+ * because payslips in the country itemise different things and a checker that
+ * demands all four would be unusable on most of them.
+ *
+ * What this deliberately does NOT do is decide whether an employer complied.
+ * There are lawful deductions no calculator can know about — a payroll loan, a
+ * garnishment, a court-ordered discount, an advance — and `netUndisclosed` is
+ * the honest shape of that: it reports the residual and names it as
+ * unaccounted-for, not as missing.
+ */
+export function verifyPayslip(input: {
+  gross: number;
+  frequency: PayFrequency;
+  includeAfp?: boolean;
+  includeIsss?: boolean;
+  applyFixedDeduction?: boolean;
+  annualGross?: number;
+  /** What the payslip prints. A missing or empty figure is not compared. */
+  reported: Partial<Record<PayslipConcept, number | null>>;
+}) {
+  const expected = calculatePayrollWithholding(input);
+  const gross = expected.gross;
+  const monthsPerPeriod = MONTHS_IN_A_YEAR / PAY_PERIODS[input.frequency];
+  const isssPeriodCeiling = round2(ISSS_MONTHLY_CEILING * monthsPerPeriod);
+  const near = (a: number, b: number) => Math.abs(a - b) <= PAYSLIP_TOLERANCE;
+
+  const reportedOf = (concept: PayslipConcept) => {
+    const value = input.reported[concept];
+    if (value === null || value === undefined || !Number.isFinite(value)) return null;
+    return round2(Math.max(0, value));
+  };
+
+  const afpCauses = (reported: number): PayslipCause[] => {
+    if (near(reported, 0)) return [{ id: "afpNotApplied", rule: "afpEmployeeRate" }];
+    if (expected.afp === 0) return [{ id: "afpApplied", rule: "afpEmployeeRate" }];
+    // The base the reported contribution implies, rather than a guess at which
+    // ceiling produced it. The pension ceiling was repealed and this project
+    // does not carry the repealed figure, so naming it would be inventing one;
+    // a base the reader can compare against their own gross is checkable.
+    const impliedBase = round2(reported / AFP_RATE);
+    if (near(impliedBase, gross)) return [];
+    return [{ id: "afpOtherBase", rule: "afpEmployeeRate", amount: impliedBase }];
+  };
+
+  const isssCauses = (reported: number): PayslipCause[] => {
+    if (near(reported, 0)) return [{ id: "isssNotApplied", rule: "isssEmployeeRate" }];
+    if (expected.isss === 0) return [{ id: "isssApplied", rule: "isssEmployeeRate" }];
+    const causes: PayslipCause[] = [];
+    if (gross > isssPeriodCeiling && near(reported, round2(gross * ISSS_RATE))) {
+      causes.push({ id: "isssNoCeiling", rule: "isssMonthlyCeiling", amount: isssPeriodCeiling });
+    } else {
+      causes.push({ id: "isssOtherBase", rule: "isssEmployeeRate", amount: round2(reported / ISSS_RATE) });
+    }
+    // Spreading a monthly ceiling over a fortnight or a week is this project's
+    // approximation, not the institute's rule, and it only moves the answer
+    // once the ceiling is what is biting. Saying so where it cannot matter
+    // would turn a real caveat into background noise.
+    if (input.frequency !== "monthly" && gross >= isssPeriodCeiling) {
+      causes.push({ id: "isssProration", rule: "isssMonthlyCeiling" });
+    }
+    return causes;
+  };
+
+  const isrCauses = (reported: number): PayslipCause[] => {
+    if (near(reported, 0)) return [{ id: "isrNotApplied", rule: "withholdingTables" }];
+    const causes: PayslipCause[] = [];
+    /** A reading counts only if it lands on the payslip and away from the table. */
+    const explains = (candidate: number) => near(reported, candidate) && !near(candidate, expected.isr);
+
+    if (explains(withholdingForTaxable(gross, input.frequency).amount)) {
+      causes.push({ id: "isrOnGross", rule: "withholdingTables" });
+    }
+    // The reading Decree 10/2025 replaced, and still the most common one in the
+    // country's payrolls: the table applied without subtracting the $1,600.
+    if (expected.fixedDeduction > 0
+      && explains(withholdingForTaxable(expected.taxableBeforeFixedDeduction, input.frequency).amount)) {
+      causes.push({ id: "isrWithoutFixedDeduction", rule: "fixedDeduction" });
+    }
+    // Its mirror: the deduction taken in a case this reading does not grant it,
+    // either because the band already carries it or because the annual income
+    // is over the limit — and the rule cited is whichever of the two ruled it out.
+    if (expected.fixedDeduction === 0) {
+      const periodDeduction = round2(FIXED_DEDUCTION * monthsPerPeriod);
+      const base = round2(Math.max(0, expected.taxableBeforeFixedDeduction - periodDeduction));
+      if (explains(withholdingForTaxable(base, input.frequency).amount)) {
+        causes.push({
+          id: "isrWithFixedDeduction",
+          rule: expected.qualifiesForFixedDeduction ? "fixedDeduction" : "fixedDeductionIncomeLimit",
+          amount: periodDeduction,
+        });
+      }
+    }
+    // A Quincena 25 that was left inside the taxable base. Article 1 of Decree
+    // 499 bars every kind of withholding on it and article 4 keeps it out of
+    // "el cómputo de la renta obtenida", so a payroll that added it to the base
+    // withholds on money the law does not tax. It is only worth naming where the
+    // arithmetic fits: the benefit is half a MONTHLY salary and only reaches
+    // salaries at or below the ceiling, so no other frequency can carry it whole.
+    if (input.frequency === "monthly" && gross > 0 && gross <= QUINCENA25.salaryCeiling) {
+      const benefit = round2(gross * QUINCENA25.rate);
+      if (explains(withholdingForTaxable(round2(expected.taxable + benefit), input.frequency).amount)) {
+        causes.push({ id: "isrQuincena25", rule: "quincena25Exempt", amount: benefit });
+      }
+    }
+    // Nothing above reproduces it and the payslip withheld more. June and
+    // December are when that is expected rather than surprising: the employer
+    // settles the accumulated tax and subtracts what was already withheld, so
+    // one month carries the whole catch-up. It is offered last and as a
+    // possibility, because unlike the readings above it is not checkable from
+    // a single period.
+    if (causes.length === 0 && reported > expected.isr) {
+      causes.push({ id: "isrRecalc", rule: "recalcTables", amount: round2(reported - expected.isr) });
+    }
+    return causes;
+  };
+
+  const netCauses = (reported: number): PayslipCause[] => {
+    const causes: PayslipCause[] = [];
+    const deductions = (["afp", "isss", "isr"] as const);
+    if (deductions.some((concept) => {
+      const value = reportedOf(concept);
+      return value !== null && !near(value, expected[concept]);
+    })) causes.push({ id: "netDeductionsDiffer" });
+    // The payslip read against itself, which is the one check that needs no
+    // table at all: its own gross less its own three deductions has to reach
+    // its own net. What is left over is the part this calculator knows nothing
+    // about, and saying how much it is beats guessing what it was.
+    const [afp, isss, isr] = deductions.map((concept) => reportedOf(concept) ?? expected[concept]);
+    const residual = round2(gross - afp - isss - isr - reported);
+    if (!near(residual, 0)) causes.push({ id: "netUndisclosed", amount: residual });
+    return causes;
+  };
+
+  const causesFor = (concept: PayslipConcept, reported: number) => {
+    const causes = concept === "afp" ? afpCauses(reported)
+      : concept === "isss" ? isssCauses(reported)
+        : concept === "isr" ? isrCauses(reported)
+          : netCauses(reported);
+    // A row that differs always says something. An empty explanation reads as a
+    // rendering bug, and "we cannot account for this one" is real information.
+    return causes.length > 0 ? causes : [{ id: "unexplained" } as PayslipCause];
+  };
+
+  const lines: PayslipLine[] = (["afp", "isss", "isr", "net"] as const).map((concept) => {
+    const reported = reportedOf(concept);
+    const value = expected[concept];
+    if (reported === null) {
+      return { concept, expected: value, reported: null, difference: 0, status: "unchecked" as const, causes: [] };
+    }
+    const difference = round2(reported - value);
+    if (Math.abs(difference) <= PAYSLIP_TOLERANCE) {
+      return { concept, expected: value, reported, difference: 0, status: "match" as const, causes: [] };
+    }
+    return {
+      concept, expected: value, reported, difference,
+      status: difference > 0 ? "higher" as const : "lower" as const,
+      causes: causesFor(concept, reported),
+    };
+  });
+
+  /**
+   * The rules this check actually leant on, for the exported document.
+   *
+   * Built the same way `calculateSettlement` builds its own: from what the
+   * comparison did, not from the page's full list. A check that never applied
+   * the fixed deduction has no business printing article 29 beneath it.
+   */
+  const appliedRules: RuleId[] = ["withholdingTables"];
+  if (input.includeAfp !== false) appliedRules.push("afpEmployeeRate");
+  if (input.includeIsss !== false) appliedRules.push("isssEmployeeRate", "isssMonthlyCeiling");
+  if (input.applyFixedDeduction !== false) appliedRules.push("fixedDeduction", "fixedDeductionIncomeLimit");
+  for (const line of lines) {
+    for (const cause of line.causes) {
+      if (cause.rule && !appliedRules.includes(cause.rule)) appliedRules.push(cause.rule);
+    }
+  }
+
+  return {
+    expected,
+    lines,
+    appliedRules,
+    /** The ceiling as it applies to this pay period, which the copy quotes. */
+    isssPeriodCeiling,
+    /** How many lines the payslip actually filled in. */
+    compared: lines.filter((line) => line.status !== "unchecked").length,
+    /** How many of those fall outside the tolerance. */
+    differences: lines.filter((line) => line.status === "higher" || line.status === "lower").length,
   };
 }
 
