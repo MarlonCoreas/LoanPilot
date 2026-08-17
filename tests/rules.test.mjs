@@ -1,0 +1,203 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import {
+  ALL_RULES, citationsFor, oldestReviewed, reviewedFor, ruleAt, RULES, RULE_USAGE,
+  RULES_REVIEWED,
+} from "../app/rules.ts";
+import { PAGES } from "../app/routes.ts";
+import { OFFICIAL } from "../app/sources.ts";
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * This is what the single `assert.match(RULES_REVIEWED, /^\d{4}-\d{2}-\d{2}$/)`
+ * grew into. That assertion could only catch a typo in one hand-edited string;
+ * the claim it stood for — that every figure the site applies is traceable to a
+ * document and to the day somebody read it — is now a shape, and this is the
+ * test that the shape holds.
+ */
+test("every rule declares a value, a unit, a norm, a live source and a review date", () => {
+  assert.ok(ALL_RULES.length > 0, "an empty registry would pass every other check here");
+
+  for (const rule of ALL_RULES) {
+    const where = rule.id;
+    assert.equal(typeof rule.id, "string", where);
+    assert.ok(rule.id.length > 0, where);
+    assert.equal(typeof rule.unit, "string", `${where} must say what its value counts`);
+    assert.ok(rule.unit.length > 0, where);
+    assert.ok(Array.isArray(rule.versions) && rule.versions.length > 0,
+      `${where} has no versions, so it applies nothing`);
+
+    for (const version of rule.versions) {
+      const at = `${where} @ ${version.from}`;
+      assert.match(version.from, ISO_DATE, `${at}: needs the day it takes effect`);
+      assert.notEqual(version.value, undefined, `${at}: a rule without a value is a comment`);
+      assert.equal(typeof version.norm, "string", at);
+      assert.ok(version.norm.length > 0, `${at}: name the article or the decree`);
+      // A source key that is not in OFFICIAL would render a broken citation, and
+      // an unverifiable figure is the one thing this project cannot ship.
+      assert.ok(version.source in OFFICIAL, `${at}: "${version.source}" is not in OFFICIAL`);
+      assert.match(OFFICIAL[version.source], /^https:\/\//, `${at}: sources are public https documents`);
+      assert.match(version.reviewed, ISO_DATE, `${at}: needs the day a human last read it`);
+      if (version.note !== undefined) {
+        assert.equal(typeof version.note, "string", at);
+        assert.ok(version.note.length > 0, `${at}: an empty note says nothing`);
+      }
+    }
+  }
+});
+
+test("the id a rule carries is the key it is filed under", () => {
+  // They are two separate strings, and only one of them appears in the CI
+  // warning. A rename that moved the key and not the id would send whoever
+  // reads that warning looking for a rule that is not there under that name.
+  for (const [key, rule] of Object.entries(RULES)) {
+    assert.equal(rule.id, key, `RULES.${key} calls itself "${rule.id}"`);
+  }
+});
+
+test("versions are ordered newest first, which is the order the lookup trusts", () => {
+  // `ruleAt` returns the first version whose `from` is on or before the date it
+  // is given. Out of order, it would silently hand back a superseded table, and
+  // every figure priced with it would be wrong without anything looking wrong.
+  for (const rule of ALL_RULES) {
+    for (let i = 1; i < rule.versions.length; i++) {
+      assert.ok(rule.versions[i - 1].from > rule.versions[i].from,
+        `${rule.id}: version ${i} starts on ${rule.versions[i].from}, not before ${rule.versions[i - 1].from}`);
+    }
+  }
+});
+
+test("a date resolves to the version in force, and an older one is flagged", () => {
+  const rule = RULES.minimumWage;
+  const newest = rule.versions[0];
+  const oldest = rule.versions.at(-1);
+
+  const current = ruleAt(rule, "2026-08-16");
+  assert.equal(current.version, newest);
+  assert.equal(current.predatesRule, false);
+
+  // On the first day of a version, that version already applies.
+  assert.equal(ruleAt(rule, newest.from).version, newest);
+
+  // Before every version there is nothing to be right with, so the oldest is
+  // used and the caller is told, which is what the settlement page shows.
+  const tooEarly = ruleAt(rule, "1900-01-01");
+  assert.equal(tooEarly.version, oldest);
+  assert.equal(tooEarly.predatesRule, true);
+});
+
+test("every page's rules exist, and only the loan page applies none", () => {
+  assert.deepEqual(Object.keys(RULE_USAGE).sort(), [...PAGES].sort(),
+    "a page missing from RULE_USAGE would make no freshness claim at all");
+
+  for (const [page, ids] of Object.entries(RULE_USAGE)) {
+    assert.deepEqual([...new Set(ids)], ids, `${page} lists a rule twice`);
+    for (const id of ids) assert.ok(id in RULES, `${page} uses "${id}", which is not a rule`);
+  }
+
+  assert.deepEqual(RULE_USAGE.loans, [],
+    "loan arithmetic depends on no Salvadoran rule; claiming one would be a claim it cannot back");
+  assert.equal(reviewedFor("loans"), undefined);
+  for (const page of ["settlement", "overtime", "withholding"]) {
+    assert.ok(RULE_USAGE[page].length > 0, `${page} is a statutory calculator with no rules listed`);
+    assert.match(reviewedFor(page), ISO_DATE, page);
+  }
+
+  // Every rule has to be reachable from a page, or the CI staleness check
+  // ignores it and it drifts unwatched.
+  const used = new Set(Object.values(RULE_USAGE).flat());
+  for (const id of Object.keys(RULES)) {
+    assert.ok(used.has(id), `${id} is applied by no page: either wire it up or delete it`);
+  }
+});
+
+test("a page's claim is its oldest rule, never its newest", () => {
+  // The direction is the whole point. Taking the newest would let one same-day
+  // edit refresh a claim about figures nobody has looked at in a year.
+  for (const page of PAGES) {
+    const reviewed = reviewedFor(page);
+    if (reviewed === undefined) continue;
+    for (const id of RULE_USAGE[page]) {
+      for (const version of RULES[id].versions) {
+        assert.ok(version.reviewed >= reviewed,
+          `${page} claims ${reviewed} but ${id} was last checked on ${version.reviewed}`);
+      }
+    }
+    assert.ok(RULE_USAGE[page].some((id) =>
+      RULES[id].versions.some((version) => version.reviewed === reviewed)),
+      `${page} claims ${reviewed}, which is not the date of any rule it uses`);
+  }
+
+  assert.match(RULES_REVIEWED, ISO_DATE);
+  assert.equal(RULES_REVIEWED, oldestReviewed(ALL_RULES));
+  // The site-wide claim goes in the sitemap and the structured data, so it can
+  // never be newer than the page-level one it summarises.
+  for (const page of PAGES) {
+    const reviewed = reviewedFor(page);
+    if (reviewed !== undefined) assert.ok(RULES_REVIEWED <= reviewed, page);
+  }
+});
+
+test("no normative figure is cited from the press", () => {
+  // The rule this stands for is in the header of `sources.ts`: a value enters
+  // the registry through a decree, a consolidated text or a publication of the
+  // institution that administers it — never through a newspaper reporting that
+  // a reform happened. Reported reforms are how wrong numbers get in: the
+  // article is right about the change and vague about the text, and a year
+  // later nobody remembers which of the two the figure came from.
+  //
+  // Every official body in El Salvador publishes on `.gob.sv`, so the domain is
+  // the cheap, mechanical half of that rule, and the only half a test can hold.
+  // The other half — that the document actually says the figure — is what the
+  // `reviewed` date is for.
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const url = new URL(OFFICIAL[version.source]);
+      assert.ok(url.hostname.endsWith(".gob.sv"),
+        `${rule.id} @ ${version.from} cites ${url.hostname}, which is not an official Salvadoran domain`);
+    }
+  }
+});
+
+test("a citation list names the version in force, and says each article once", () => {
+  // What an exported PDF prints. It has to resolve by date, because a
+  // settlement dated 2024 was priced with the pre-reform articles and citing
+  // today's decree beside a 2024 figure is a false statement about which text
+  // produced it.
+  const [current] = citationsFor(["aguinaldoCutoff"], "2026-01-01");
+  assert.match(current.norm, /433/, "the 2025 reform governs a 2026 settlement");
+  const [older] = citationsFor(["aguinaldoCutoff"], "2024-06-30");
+  assert.match(older.norm, /anterior a la reforma/, "a 2024 settlement cites the text it was priced with");
+
+  // Three rules all reading article 58 are one line to a reader, and repeating
+  // the article three times in a source list reads as three separate grounds.
+  const severance = citationsFor(
+    ["severanceDaysPerYear", "severanceMinimumDays", "severanceWageCap"], "2026-08-16");
+  assert.equal(severance.length, 1);
+  assert.equal(severance[0].norm, "Código de Trabajo art. 58");
+
+  // Every citation has to render: a source key outside OFFICIAL would print an
+  // article with no document behind it, which is worse than printing nothing.
+  for (const page of ["settlement", "overtime", "withholding"]) {
+    const citations = citationsFor(RULE_USAGE[page], "2026-08-16");
+    assert.ok(citations.length > 0, page);
+    for (const citation of citations) {
+      assert.ok(citation.source in OFFICIAL, `${page}: ${citation.source}`);
+      assert.ok(citation.norm.length > 0, page);
+    }
+  }
+});
+
+test("no rule claims to have been reviewed before it existed, or in the future", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      assert.ok(version.reviewed <= today,
+        `${rule.id} says it was verified on ${version.reviewed}, which has not happened yet`);
+      assert.ok(version.reviewed >= version.from,
+        `${rule.id} says it was verified on ${version.reviewed}, before the ${version.from} text existed`);
+    }
+  }
+});

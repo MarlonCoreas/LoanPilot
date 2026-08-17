@@ -20,6 +20,7 @@
     "package": "bash scripts/package-release.sh",
     "og": "node scripts/og-image.mjs",
     "test": "npm run build && node --test",
+    "check:rules": "node scripts/check-rules.mjs",
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit"
   },

@@ -4,14 +4,16 @@ import {
   calculateOvertime,
   NIGHT_ENDS_AT,
   NIGHT_STARTS_AT,
-  OVERTIME_REVIEWED,
   SHIFT_LIMITS,
   splitShiftHours,
   type OvertimeValidationIssue,
   type ShiftKind,
   type ShiftSplitIssue,
 } from "./overtime";
-import { reviewedLine } from "./reviewed";
+import { todayIso } from "./loan";
+import { downloadPdf } from "./pdf";
+import { reviewedLineFor } from "./reviewed";
+import { citationsFor, reviewedFor, RULE_USAGE } from "./rules";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { OFFICIAL } from "./sources";
@@ -166,8 +168,7 @@ const copy = {
     pdfAmount: "Monto",
     pdfTotal: "TOTAL A AGREGAR",
     pdfShift: "Tipo de jornada",
-    pdfSources: "Base legal: Código de Trabajo, arts. 116, 142, 161-170, 175-176 y 190-194. Explicaciones del MTPS sobre pago de horas extra, jornada nocturna y asuetos.",
-    pdfGenerated: "Generado",
+    pdfSlug: "horas-extras",
     emptyTitle: "Escribe tu salario para empezar",
     emptyLead: "Con el salario mensual y las horas de tu jornada ya podemos mostrarte cuánto vale tu hora extra, antes de que registres una sola hora.",
     nightIncluded: "Elegiste jornada nocturna. El 25% del art. 168 se calcula sobre el salario ordinario diurno, y en una jornada nocturna permanente ese recargo suele venir ya dentro del sueldo pactado. Si es tu caso, deja en cero las horas ordinarias de noche para no contarlo dos veces.",
@@ -350,8 +351,7 @@ const copy = {
     pdfAmount: "Amount",
     pdfTotal: "TOTAL TO BE ADDED",
     pdfShift: "Shift type",
-    pdfSources: "Legal basis: Labour Code, arts. 116, 142, 161-170, 175-176 and 190-194. MTPS guidance on overtime pay, night shifts and public holidays.",
-    pdfGenerated: "Generated",
+    pdfSlug: "overtime",
     emptyTitle: "Enter your salary to begin",
     emptyLead: "With your monthly salary and the hours in your working day we can already show what your overtime hour is worth, before you record a single hour.",
     nightIncluded: "You selected a night shift. The 25% in art. 168 is calculated on the ordinary daytime salary, and on a permanent night shift that premium is usually already inside the agreed salary. If that is your case, leave ordinary night hours at zero so it is not counted twice.",
@@ -645,82 +645,48 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
    * PDF lleva la operación de cada línea y los artículos que la respaldan, para
    * que el número se pueda defender sin tener que reconstruirlo.
    */
-  const exportPdf = async () => {
-    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-      import("jspdf"), import("jspdf-autotable"),
-    ]);
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
-    const finalY = () => (doc as typeof doc & { lastAutoTable?: { finalY: number } })
-      .lastAutoTable?.finalY ?? 40;
-
-    doc.setFillColor(16, 42, 42); doc.rect(0, 0, 216, 28, "F");
-    doc.setTextColor(169, 244, 207); doc.setFontSize(17); doc.text("LoanPilot", 14, 13);
-    doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.text(t.pdfTitle, 14, 21);
-
-    autoTable(doc, {
-      startY: 35,
-      head: [[t.pdfDataHead, ""]],
-      body: [
-        [t.salary, money.format(result.dailySalary * 30)],
-        [t.pdfShift, `${t.shifts[result.shiftKind]} · ${result.legalOrdinaryDayHours} h`],
-        [t.hourly, money.format(result.hourly)],
-        [t.daily, money.format(result.dailySalary)],
+  const exportPdf = () => {
+    const body = [
+      ...activeLines.map((line) => [line.label, line.formula, money.format(line.value)]),
+      [t.pdfTotal, "", money.format(result.total)],
+    ];
+    return downloadPdf({
+      slug: t.pdfSlug,
+      title: t.pdfTitle,
+      subtitle: `${t.shifts[result.shiftKind]} · ${result.legalOrdinaryDayHours} h`,
+      tables: [
+        {
+          head: [t.pdfDataHead, t.pdfAmount],
+          body: [
+            [t.salary, money.format(result.dailySalary * 30)],
+            [t.pdfShift, `${t.shifts[result.shiftKind]} · ${result.legalOrdinaryDayHours} h`],
+            [t.hourly, money.format(result.hourly)],
+            [t.daily, money.format(result.dailySalary)],
+          ],
+        },
+        {
+          head: [t.pdfConcept, t.pdfOperation, t.pdfAmount],
+          body,
+          totalRow: body.length - 1,
+          numeric: [2],
+        },
       ],
-      theme: "grid",
-      headStyles: { fillColor: [26, 127, 100] },
-      styles: { fontSize: 9, cellPadding: 2.5 },
-    });
-
-    autoTable(doc, {
-      startY: finalY() + 8,
-      head: [[t.pdfConcept, t.pdfOperation, t.pdfAmount]],
-      body: [
-        ...activeLines.map((line) => [line.label, line.formula, money.format(line.value)]),
-        [t.pdfTotal, "", money.format(result.total)],
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [16, 42, 42] },
-      styles: { fontSize: 8.5, cellPadding: 2 },
-      columnStyles: { 2: { halign: "right" } },
-      // La última fila es el total, y tiene que leerse como tal.
-      didParseCell: (hook) => {
-        if (hook.section === "body" && hook.row.index === activeLines.length) {
-          hook.cell.styles.fontStyle = "bold";
-          hook.cell.styles.fillColor = [223, 248, 233];
-        }
-      },
-    });
-
-    // El nombre del archivo y el pie tienen que decir el mismo día: toISOString
-    // da UTC, que después de las 18:00 en El Salvador ya es el día siguiente.
-    const today = new Date();
-    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-    let y = finalY() + 10;
-    doc.setFontSize(8); doc.setTextColor(60);
-    if (result.compensatoryDays > 0) {
-      y += doc.splitTextToSize(t.compensatory(result.compensatoryDays), 188)
-        .reduce((line: number, text: string) => (doc.text(text, 14, y + line * 4), line + 1), 0) * 4 + 2;
-    }
-    for (const note of [t.grossNote, t.pdfSources]) {
-      const wrapped = doc.splitTextToSize(note, 188) as string[];
-      wrapped.forEach((text, index) => doc.text(text, 14, y + index * 4));
-      y += wrapped.length * 4 + 2;
-    }
-    doc.setFontSize(7); doc.setTextColor(120);
-    doc.text(`${t.pdfGenerated}: ${today.toLocaleDateString(lang === "es" ? "es-SV" : "en-US")} · loanpilot.marloncoreas.com`,
-      14, doc.internal.pageSize.height - 8);
-
-    doc.save(`loanpilot-horas-extras-${stamp}.pdf`);
+      notes: result.compensatoryDays > 0 ? [t.compensatory(result.compensatoryDays)] : [],
+      // La lista de artículos ya no se escribe a mano aquí: sale de las mismas
+      // reglas que hicieron el cálculo, así que no puede quedarse atrás de ellas.
+      citations: citationsFor(RULE_USAGE.overtime, todayIso()),
+      reviewed: reviewedFor("overtime"),
+      disclaimer: t.grossNote,
+    }, lang);
   };
 
   return <main className="legal-page">
     <SiteHeader lang={lang} page="overtime" />
-    <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLine(lang, OVERTIME_REVIEWED)} />
+    <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLineFor(lang, "overtime")} />
     <section className="statutory-tools standalone-tools" id="tools">
       {/* Exportar un error no le sirve a nadie, así que la acción sólo existe
           cuando hay un resultado que defender. */}
-      {!result.invalid && result.total > 0 && <div className="shell-toolbar overtime-toolbar">
+      {!result.invalid && result.total > 0 && <div className="shell-toolbar export-toolbar">
         <div className="export-actions">
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>

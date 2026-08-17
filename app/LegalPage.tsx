@@ -1,4 +1,4 @@
-import { reviewedLine } from "./reviewed";
+import { reviewedLineFor } from "./reviewed";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import type { Lang } from "./routes";
@@ -81,7 +81,7 @@ export default function LegalPage({ lang, page }: { lang: Lang; page: "settlemen
   const hero = heroCopy[lang];
   return <main className="legal-page">
     <SiteHeader lang={lang} page={page} />
-    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={reviewedLine(lang)} />
+    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={reviewedLineFor(lang, page)} />
     <StatutoryTools lang={lang} tool={page} />
     <LegalGuide lang={lang} page={page} />
     <SiteFooter lang={lang} />

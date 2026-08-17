@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { CheckField, DateField, FieldGroup, MoneyField, NumberField, SegmentedField, SelectField } from "./fields";
 import { isoAfterMonths, todayIso } from "./loan";
+import { downloadPdf } from "./pdf";
+import { citationsFor, reviewedFor } from "./rules";
 import type { Lang } from "./routes";
 import { OFFICIAL } from "./sources";
 import {
@@ -41,6 +43,7 @@ const copy = {
     officialCalc: "Servicio oficial de cálculo del MTPS", resignationLaw: "Ley de Renuncia Voluntaria: arts. 2, 5, 7-9",
     wageDecree: "D.E. 12/2025: tabla de salarios mínimos vigente desde junio 2025",
     aguinaldoReform: "Reforma 2025: aguinaldo y art. 202 al 20 de octubre",
+    vacationSource: "Vacación anual remunerada: arts. 177-185 (CSJ)",
     payrollData: "Datos del pago", gross: "Remuneración bruta del período", frequency: "Frecuencia de pago",
     monthly: "Mensual", fortnightly: "Quincenal", weekly: "Semanal", includeAfp: "Descontar AFP (7.25%)",
     includeIsss: "Descontar ISSS (3%, techo mensual $1,000)", fixedDeduction: "Aplicar deducción fija de renta cuando corresponda",
@@ -71,6 +74,24 @@ const copy = {
     taxDecree: "Decreto Ejecutivo 10/2025: tablas de retención", taxLaw: "Ley de Impuesto sobre la Renta: arts. 29, 37 y 65",
     isssSource: "ISSS: tasa laboral y techo de cotización", pensionSource: "SSF: Ley Integral del Sistema de Pensiones",
     invalidDates: "Revisa las fechas: el último día de trabajo debe ser posterior al ingreso y ambas deben caer entre 1950 y 2100.",
+    exportPdf: "Descargar PDF", exportHint: "Llevate el cálculo",
+    pdfTitle: "Estimación de finiquito", pdfSubtitle: "Sector privado · Código de Trabajo de El Salvador",
+    pdfInput: "Dato usado", pdfValue: "Valor",
+    pdfConcept: "Concepto", pdfDetail: "Cómo sale", pdfAmount: "Monto",
+    pdfTotal: "TOTAL BRUTO ESTIMADO",
+    pdfBasis: "Base del cálculo", pdfBasisValue: "Monto",
+    pdfDailySalary: "Salario diario ordinario (salario mensual ÷ 30)",
+    pdfCapLimit: "Tope legal del salario base",
+    pdfCapMultiple: (multiple: number) => `${multiple} ${multiple === 1 ? "salario mínimo diario" : "salarios mínimos diarios"} del sector`,
+    pdfBaseUsed: "Salario diario usado para la prestación",
+    pdfCapApplied: "Sí: el salario diario supera el tope, así que la prestación se calcula sobre el tope.",
+    pdfCapFree: "No: el salario diario está por debajo del tope, así que se usa completo.",
+    pdfCapRow: "¿Se aplicó el tope legal?",
+    pdfYes: "Sí", pdfNo: "No",
+    pdfServiceDays: "días de servicio", pdfDaysPerYear: "días por año", pdfPerDay: "diarios", pdfSurcharge: "30%",
+    pdfNotAdvice: "Estimación educativa calculada en el navegador de quien la generó; no sustituye asesoría legal o contable ni un finiquito firmado.",
+    pdfDisputedVacation: "Vacación proporcional en renuncia: el artículo 187 reconoce la parte proporcional cuando la terminación es con responsabilidad patronal o hay despido de hecho, y para quien renuncia menciona solo la vacación del año continuo ya cumplido. El servicio oficial del MTPS sí paga la fracción en renuncia, y esa es la lectura aplicada aquí. La diferencia está descrita, no resuelta.",
+    pdfSlug: "finiquito",
     helpStart: "El primer día que trabajaste para este patrono, tal como aparece en el contrato. De aquí sale la antigüedad, que define los días de indemnización y de aguinaldo.",
     helpEnd: "El último día que trabajaste, no el día que te avisaron ni el día que te pagaron. Se cuenta como día trabajado y con él se elige la tabla de salario mínimo vigente.",
     helpSalary: "El salario mensual ordinario, antes de descuentos. Si tenés comisiones habituales, promedialas y sumalas; no incluyas viáticos ni pagos que no sean salario.",
@@ -113,6 +134,7 @@ const copy = {
     officialCalc: "MTPS official calculation service", resignationLaw: "Voluntary Resignation Law: articles 2, 5 and 7-9",
     wageDecree: "Executive Decree 12/2025: minimum wage table in force since June 2025",
     aguinaldoReform: "2025 reform: year-end bonus and article 202 moved to 20 October",
+    vacationSource: "Annual paid vacation: articles 177-185 (CSJ)",
     payrollData: "Pay details", gross: "Gross remuneration for the period", frequency: "Pay frequency",
     monthly: "Monthly", fortnightly: "Twice monthly", weekly: "Weekly", includeAfp: "Deduct pension contribution (7.25%)",
     includeIsss: "Deduct ISSS (3%, $1,000 monthly ceiling)", fixedDeduction: "Apply fixed income-tax deduction when eligible",
@@ -143,6 +165,24 @@ const copy = {
     taxDecree: "Executive Decree 10/2025: withholding tables", taxLaw: "Income Tax Law: articles 29, 37 and 65",
     isssSource: "ISSS: employee rate and contribution ceiling", pensionSource: "SSF: Integral Pension System Law",
     invalidDates: "Check the dates: the last day worked must be after the start date and both must fall between 1950 and 2100.",
+    exportPdf: "Download PDF", exportHint: "Take the calculation with you",
+    pdfTitle: "Employment settlement estimate", pdfSubtitle: "Private sector · Labour Code of El Salvador",
+    pdfInput: "Detail used", pdfValue: "Value",
+    pdfConcept: "Concept", pdfDetail: "How it is worked out", pdfAmount: "Amount",
+    pdfTotal: "ESTIMATED GROSS TOTAL",
+    pdfBasis: "Basis of the calculation", pdfBasisValue: "Amount",
+    pdfDailySalary: "Ordinary daily salary (monthly salary ÷ 30)",
+    pdfCapLimit: "Statutory cap on the base salary",
+    pdfCapMultiple: (multiple: number) => `${multiple} daily minimum ${multiple === 1 ? "wage" : "wages"} for the sector`,
+    pdfBaseUsed: "Daily salary used for the benefit",
+    pdfCapApplied: "Yes: the daily salary is above the cap, so the benefit is calculated on the cap.",
+    pdfCapFree: "No: the daily salary is below the cap, so it is used in full.",
+    pdfCapRow: "Was the statutory cap applied?",
+    pdfYes: "Yes", pdfNo: "No",
+    pdfServiceDays: "days of service", pdfDaysPerYear: "days per year", pdfPerDay: "a day", pdfSurcharge: "30%",
+    pdfNotAdvice: "An educational estimate, worked out in the browser of whoever generated it; it is not legal or accounting advice, nor a signed settlement.",
+    pdfDisputedVacation: "Proportional vacation on resignation: article 187 grants the proportional part where termination carries employer responsibility or the worker is dismissed de facto, and for someone who resigns it mentions only the vacation of the continuous year already completed. The MTPS official service does pay the fraction on a resignation, and that is the reading applied here. The difference is described, not resolved.",
+    pdfSlug: "settlement",
     helpStart: "The first day you worked for this employer, as the contract states it. Length of service comes from here, and it sets the severance and year-end bonus days.",
     helpEnd: "The last day you actually worked — not the day you were told, nor the day you were paid. It counts as a worked day and it picks the minimum wage table in force.",
     helpSalary: "The ordinary monthly salary before deductions. Average any recurring commissions and add them; leave out travel allowances and anything that is not salary.",
@@ -234,9 +274,116 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, recalcPeriod]);
 
   const frequencyLabel = frequency === "monthly" ? t.monthly : frequency === "fortnightly" ? t.fortnightly : t.weekly;
+  const longDate = useMemo(() => new Intl.DateTimeFormat(lang === "es" ? "es-SV" : "en-GB", {
+    day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
+  }), [lang]);
+  const days = (value: number) => `${value.toFixed(2)} ${t.daysLabel}`;
+
+  /**
+   * The settlement as a document somebody can hand over.
+   *
+   * A screenshot of the results panel proves nothing at a human resources desk:
+   * it shows a total without the salary it came from, the cap that shaped it,
+   * or the articles behind it. This builds all of that — inputs, one row per
+   * concept, the daily base with the cap stated in words, and the citations
+   * read out of `rules.ts` for the rules this case actually applied.
+   *
+   * Nothing here re-derives a figure. Every number is one `calculateSettlement`
+   * already returned, because a PDF that computed its own totals would be a
+   * second implementation nobody tests, and it would disagree with the screen
+   * on exactly the cases that matter.
+   */
+  const exportSettlement = () => {
+    const cause = termination === "dismissal" ? t.dismissal : t.resignation;
+    // The middle column is what makes the document defensible: each line says
+    // the days it counted and the daily figure it multiplied them by, so a
+    // reader who disagrees can point at the step they disagree with instead of
+    // at the total. The benefit is the one line whose rate is the capped base
+    // and not the ordinary daily salary, and it says so.
+    const atRate = (rate: number, surcharge = false) =>
+      `${money.format(rate)} ${t.pdfPerDay}${surcharge ? ` + ${t.pdfSurcharge}` : ""}`;
+    const lines: string[][] = [
+      [t.indemnity,
+        `${settlement.serviceDays} ${t.pdfServiceDays} · ${settlement.benefitDaysPerYear} ${t.pdfDaysPerYear} · ${atRate(settlement.indemnityBaseDaily)}`,
+        money.format(settlement.indemnity)],
+      [t.vacationComplete, `${days(settlement.completeVacationDays)} · ${atRate(settlement.dailySalary, true)}`, money.format(settlement.completeVacation)],
+      [t.vacationFraction, `${days(settlement.proportionalVacationDays)} · ${atRate(settlement.dailySalary, true)}`, money.format(settlement.proportionalVacation)],
+      [t.aguinaldo, `${days(settlement.aguinaldoDays)} · ${atRate(settlement.dailySalary)}`, money.format(settlement.aguinaldo)],
+      [t.pendingSalary, `${number(pendingDays)} ${t.daysLabel} · ${atRate(settlement.dailySalary)}`, money.format(settlement.pendingSalary)],
+    ];
+    if (settlement.quincena25Applies) lines.push([t.quincena25, "", money.format(settlement.quincena25)]);
+    lines.push([t.pdfTotal, "", money.format(settlement.total)]);
+
+    // Every note the screen would show for this case, in the same order, so
+    // that the document and the page never disagree about what was uncertain.
+    const notes = [
+      termination === "dismissal"
+        ? t.dismissalNote
+        : settlement.eligibleForResignationBenefit
+          ? `${t.resignationOk} ${t.resignationRule}`
+          : t.resignationNo,
+    ];
+    if (settlement.proportionalVacationDisputed) notes.push(t.pdfDisputedVacation);
+    if (settlement.aguinaldoScaleAmbiguous) {
+      notes.push(`${t.aguinaldoAmbiguousLead} (${settlement.aguinaldoScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldo)} ${t.aguinaldoAmbiguousMid} (${settlement.aguinaldoAlternativeScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldoAlternative)} ${t.aguinaldoAmbiguousTail}`);
+    }
+    if (settlement.quincena25Applies) notes.push(t.quincena25Note);
+    if (settlement.minimumWagePredatesTables) notes.push(t.wageOutOfRange);
+
+    return downloadPdf({
+      slug: t.pdfSlug,
+      title: t.pdfTitle,
+      subtitle: `${t.pdfSubtitle} · ${cause}`,
+      tables: [
+        {
+          head: [t.pdfInput, t.pdfValue],
+          body: [
+            [t.cause, cause],
+            [t.start, longDate.format(new Date(`${settlement.startDate}T00:00:00Z`))],
+            [t.end, longDate.format(new Date(`${settlement.endDate}T00:00:00Z`))],
+            [t.salary, money.format(number(monthlySalary))],
+            [t.sector, sectorLabels[lang][sector]],
+            [t.pendingDays, String(number(pendingDays))],
+            [t.unusedVacation, String(settlement.completeVacationPeriods)],
+            [t.aguinaldoPaid, aguinaldoPaid ? t.pdfYes : t.pdfNo],
+            [t.service, `${serviceLabel(settlement, t)} · ${settlement.serviceDays} ${t.daysLabel}`],
+          ],
+        },
+        {
+          head: [t.pdfConcept, t.pdfDetail, t.pdfAmount],
+          body: lines,
+          totalRow: lines.length - 1,
+          numeric: [2],
+        },
+        {
+          head: [t.pdfBasis, t.pdfBasisValue],
+          body: [
+            [t.pdfDailySalary, money.format(settlement.dailySalary)],
+            [`${t.pdfCapLimit} — ${t.pdfCapMultiple(settlement.capMultiplier)}`, money.format(settlement.capDaily)],
+            [t.pdfBaseUsed, money.format(settlement.indemnityBaseDaily)],
+            // Said in words, not left to a reader comparing the two rows above.
+            [t.pdfCapRow, settlement.capApplied ? t.pdfCapApplied : t.pdfCapFree],
+          ],
+        },
+      ],
+      notes,
+      citations: citationsFor(settlement.appliedRules, settlement.endDate),
+      reviewed: reviewedFor("settlement"),
+      disclaimer: `${t.grossNote} ${t.pdfNotAdvice}`,
+    }, lang);
+  };
 
   return <section className="statutory-tools standalone-tools" id="tools">
     {tool === "settlement" ? <>
+      {/* Exportar un error no le sirve a nadie, así que la acción sólo existe
+          cuando hay un resultado que defender — el mismo criterio de la
+          calculadora de horas extras. */}
+      {!settlement.invalid && settlement.total > 0 && <div className="shell-toolbar export-toolbar">
+        <div className="export-actions">
+          <span>{t.exportHint}</span>
+          <button type="button" onClick={exportSettlement}><i>PDF</i>{t.exportPdf}</button>
+        </div>
+      </div>}
       <div className="calculator-grid">
         <div className="form-panel">
           <div className="section-title"><span>01</span><div><h2>{t.data}</h2><p>{lang === "es" ? "Sector privado regido por el Código de Trabajo" : "Private sector governed by the Labor Code"}</p></div></div>
@@ -264,6 +411,10 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
                 scale disagree. It describes the discrepancy and names both
                 figures without asserting which one governs, because the reform
                 does not say — see the aguinaldo entry in faq.ts. */}
+            {/* El art. 187 y el servicio oficial no dicen lo mismo sobre la
+                vacación proporcional en renuncia. Se describe la diferencia y
+                se nombra la lectura aplicada, sin afirmar cuál rige. */}
+            {settlement.proportionalVacationDisputed && <div className="callout"><span>?</span><p>{t.pdfDisputedVacation}</p></div>}
             {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldo)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail}</p></div>}
             {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note}</p></div>}
             <div className={`callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
@@ -271,7 +422,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>
-      <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.laborCode} target="_blank" rel="noreferrer"><b>01</b>{t.code}<span>↗</span></a><a href={OFFICIAL.laborService} target="_blank" rel="noreferrer"><b>02</b>{t.officialCalc}<span>↗</span></a><a href={OFFICIAL.resignation} target="_blank" rel="noreferrer"><b>03</b>{t.resignationLaw}<span>↗</span></a><a href={OFFICIAL.minimumWage} target="_blank" rel="noreferrer"><b>04</b>{t.wageDecree}<span>↗</span></a><a href={OFFICIAL.aguinaldoReform} target="_blank" rel="noreferrer"><b>05</b>{t.aguinaldoReform}<span>↗</span></a></div></div>
+      <div className="source-panel"><h2>{t.sources}</h2><div className="source-links"><a href={OFFICIAL.laborCode} target="_blank" rel="noreferrer"><b>01</b>{t.code}<span>↗</span></a><a href={OFFICIAL.laborService} target="_blank" rel="noreferrer"><b>02</b>{t.officialCalc}<span>↗</span></a><a href={OFFICIAL.resignation} target="_blank" rel="noreferrer"><b>03</b>{t.resignationLaw}<span>↗</span></a><a href={OFFICIAL.minimumWage} target="_blank" rel="noreferrer"><b>04</b>{t.wageDecree}<span>↗</span></a><a href={OFFICIAL.aguinaldoReform} target="_blank" rel="noreferrer"><b>05</b>{t.aguinaldoReform}<span>↗</span></a><a href={OFFICIAL.vacation} target="_blank" rel="noreferrer"><b>06</b>{t.vacationSource}<span>↗</span></a></div></div>
     </> : <>
       <div className="calculator-grid">
         <div className="form-panel">

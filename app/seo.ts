@@ -2,7 +2,7 @@ import { FAQ } from "./faq";
 import {
   absoluteUrl, ogImagePath, PAGE_LABELS, PAGE_META, SITE_ORIGIN, type Lang, type Page,
 } from "./routes";
-import { RULES_REVIEWED } from "./statutory";
+import { reviewedFor } from "./rules";
 
 /**
  * Structured data (JSON-LD) for a page, injected at build time by the
@@ -62,6 +62,7 @@ function breadcrumbs(lang: Lang, page: Page): Json {
 function calculator(lang: Lang, page: Exclude<Page, "home">): Json {
   const meta = PAGE_META[lang][page];
   const url = absoluteUrl(lang, page);
+  const dateModified = reviewedFor(page);
   return {
     "@type": "WebApplication",
     "@id": `${url}#calculator`,
@@ -79,9 +80,11 @@ function calculator(lang: Lang, page: Exclude<Page, "home">): Json {
     image: `${SITE_ORIGIN}${ogImagePath(lang, page)}`,
     isPartOf: { "@id": WEBSITE_ID },
     publisher: { "@id": ORGANIZATION_ID },
-    // The employment and tax figures carry a review date; loan arithmetic does
-    // not depend on rules that change, so it does not claim one.
-    ...(page === "loans" ? {} : { dateModified: RULES_REVIEWED }),
+    // The date the oldest rule this page applies was last verified. The loan
+    // calculator applies none — its arithmetic does not depend on rules that
+    // change — so `reviewedFor` returns nothing and it claims no date, without
+    // needing to be named as an exception here.
+    ...(dateModified === undefined ? {} : { dateModified }),
     countriesSupported: "SV",
   };
 }

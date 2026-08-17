@@ -27,6 +27,13 @@ jobs:
       - name: Type-check source
         run: npm run typecheck
 
+      # Warns, and does not fail the build: a stale review date means nobody has
+      # looked lately, not that anything is broken. Failing here would teach
+      # people to bump dates without opening the documents, which is the one
+      # outcome that makes the mechanism worse than not having it.
+      - name: Check how long the rules in use have gone unverified
+        run: npm run check:rules
+
       - name: Upload static website artifact
         uses: actions/upload-artifact@v7
         with:

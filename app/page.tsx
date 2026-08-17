@@ -5,6 +5,7 @@ import {
   monthlyIrr, n, parseDate, solveRate, today,
   type ExtraPayment, type InsuranceMode, type RateChange, type Row,
 } from "./loan";
+import { downloadPdf } from "./pdf";
 import type { Lang } from "./routes";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
@@ -347,15 +348,24 @@ export default function Home({ lang }: { lang: Lang }) {
     // same tick cancels the download before it starts.
     document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30_000);
   };
-  const exportPdf = async () => {
+  // El encabezado, la fecha de generación, el aviso y el pie son los mismos que
+  // llevan el finiquito y las horas extras, y viven en `pdf.ts`. Aquí queda
+  // sólo lo que es del préstamo: el resumen, la tabla de amortización y el
+  // aviso de que ninguna cifra de este cálculo depende de normativa salvadoreña
+  // —por eso no cita fuentes ni declara fecha de verificación—.
+  const exportPdf = () => {
     const data = exportData();
-    const [{ jsPDF }, { default: autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
-    doc.setFillColor(16, 42, 42); doc.rect(0, 0, 216, 28, "F"); doc.setTextColor(169, 244, 207); doc.setFontSize(17); doc.text("LoanPilot", 14, 13); doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.text(data.title, 14, 21);
-    autoTable(doc, { startY: 35, head: [[lang === "es" ? "Resumen" : "Summary", lang === "es" ? "Resultado" : "Result"]], body: data.summary, theme: "grid", headStyles: { fillColor: [26, 127, 100] }, styles: { fontSize: 8, cellPadding: 2.5 } });
-    const scheduleStart = (doc as typeof doc & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 80;
-    autoTable(doc, { startY: scheduleStart + 8, head: [data.schedule[0].map(String)], body: data.schedule.slice(1).map((row) => row.map(String)), theme: "striped", headStyles: { fillColor: [16, 42, 42] }, styles: { fontSize: 6.4, cellPadding: 1.4 }, margin: { left: 8, right: 8 }, didDrawPage: (hook) => { doc.setTextColor(120); doc.setFontSize(7); doc.text(`${lang === "es" ? "Generado" : "Generated"}: ${new Date().toLocaleDateString(lang === "es" ? "es-SV" : "en-US")} · LoanPilot`, 14, hook.doc.internal.pageSize.height - 7); } });
-    doc.save(`loanpilot-${data.name}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    return downloadPdf({
+      slug: data.name,
+      title: data.title,
+      tables: [
+        { head: [lang === "es" ? "Resumen" : "Summary", lang === "es" ? "Resultado" : "Result"], body: data.summary, numeric: [1] },
+        { head: data.schedule[0].map(String), body: data.schedule.slice(1).map((row) => row.map(String)), dense: true, numeric: [2, 3, 4, 5, 6, 7] },
+      ],
+      disclaimer: `${t.accuracyText} ${lang === "es"
+        ? "Estimación educativa; no sustituye la carta de aprobación ni asesoría financiera."
+        : "An educational estimate; it does not replace the approval letter or financial advice."}`,
+    }, lang);
   };
   const input = (label: string, value: string, setter: (v: string) => void, suffix?: string, help?: string) => <NumericField label={label} value={value} suffix={suffix} onChange={setter} onTouch={touch} help={help} lang={lang} />;
   const dateInput = (label: string, value: string, setter: (v: string) => void, help?: string) => <DateField label={label} lang={lang} value={value} help={help} onChange={(next) => { touch(); setter(next); }} />;

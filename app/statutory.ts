@@ -1,12 +1,28 @@
-export type EmploymentEnd = "dismissal" | "resignation";
-export type WageSector = "commerce" | "maquila" | "coffee" | "agriculture";
-export type PayFrequency = "monthly" | "fortnightly" | "weekly";
+import {
+  accrualYearDays, afpEmployeeRate, aguinaldoCutoff, aguinaldoCycleStart, aguinaldoScale,
+  currentValue, dailySalaryDivisor, fixedDeduction, fixedDeductionIncomeLimit,
+  isssEmployeeRate, isssMonthlyCeiling, minimumWage, quincena25MandatoryFrom,
+  quincena25Rate, quincena25SalaryCeiling, recalcMonths, recalcTables, resignationDaysPerYear,
+  resignationMinimumService, resignationWageCap, ruleAt, severanceDaysPerYear,
+  severanceMinimumDays, severanceWageCap, vacationDaysPerYear,
+  vacationProportionalOnExit, vacationSurcharge, withholdingTables,
+} from "./rules.ts";
+import type { PayFrequency, RecalcPeriod, RuleId, WageSector, WithholdingBand } from "./rules.ts";
 
-// The day every figure in this file was last read back against the official
-// texts linked in the interface. The badge the user sees repeats this date, so
-// a stale value is a claim the site cannot back: change it only in the same
-// commit that re-checks the sources, never as a routine bump.
-export const RULES_REVIEWED = "2026-08-14";
+export type EmploymentEnd = "dismissal" | "resignation";
+export type { PayFrequency, RecalcPeriod, WageSector, WithholdingBand };
+
+/**
+ * Every statutory figure below now comes from `rules.ts`, which carries the
+ * article, the official document and the day each one was last verified beside
+ * the value itself. This file keeps the arithmetic and the readings that the
+ * texts do not settle; it no longer keeps any number it cannot cite.
+ *
+ * `RULES_REVIEWED` is re-exported for the sitemap and the structured data,
+ * where the claim is site-wide. It is now derived — the oldest review date in
+ * the registry — instead of being a string somebody had to remember to edit.
+ */
+export { RULES_REVIEWED } from "./rules.ts";
 
 export type WageTable = {
   /** First day the table applies, inclusive. */
@@ -22,33 +38,25 @@ export type WageTable = {
  * single rate — the one current at termination — across every year of service,
  * rather than one rate per year.
  *
- * Only the table this project has read back against its decree is listed.
+ * Only tables this project has read back against their decree are listed.
  * Earlier terminations are priced with the oldest entry and flagged, which is
  * visible guesswork rather than the silent kind.
  */
-export const MINIMUM_WAGE_TABLES: WageTable[] = [
-  {
-    // Executive Decree 12/2025, which replaced articles 2, 3(a) and 6 of Decree
-    // 11/2025 with a single table broken down by sector. The decree states the
-    // monthly equivalent as the daily rate times 365/12, not times 30.
-    from: "2025-06-01",
-    decree: "D.E. 12/2025",
-    daily: {
-      commerce: 13.44,   // comercio, servicios, industria, ingenios, agroindustria
-      maquila: 13.227,   // maquila textil y confección
-      coffee: 10.035,    // beneficios de café y recolección de caña de azúcar
-      agriculture: 8.96, // agropecuario, pesca y recolección de café
-    },
-  },
-];
+export const MINIMUM_WAGE_TABLES: WageTable[] = minimumWage.versions.map((version) => ({
+  from: version.from,
+  decree: version.norm,
+  daily: version.value,
+}));
 
 /** The table in force today, and the sector list the interface iterates. */
-export const DAILY_MINIMUM_WAGE: Record<WageSector, number> = MINIMUM_WAGE_TABLES[0].daily;
+export const DAILY_MINIMUM_WAGE: Record<WageSector, number> = currentValue(minimumWage);
 
 export function minimumWageAt(isoDate: string) {
-  const table = MINIMUM_WAGE_TABLES.find((item) => isoDate >= item.from);
-  const oldest = MINIMUM_WAGE_TABLES[MINIMUM_WAGE_TABLES.length - 1];
-  return { table: table ?? oldest, predatesTables: !table };
+  const { version, predatesRule } = ruleAt(minimumWage, isoDate);
+  return {
+    table: { from: version.from, decree: version.norm, daily: version.value },
+    predatesTables: predatesRule,
+  };
 }
 
 export const PAY_PERIODS: Record<PayFrequency, number> = {
@@ -57,68 +65,27 @@ export const PAY_PERIODS: Record<PayFrequency, number> = {
   weekly: 52,
 };
 
-export type WithholdingBand = {
-  from: number;
-  to: number | null;
-  rate: number;
-  excess: number;
-  fixed: number;
-};
+export const WITHHOLDING_TABLES: Record<PayFrequency, WithholdingBand[]> = currentValue(withholdingTables);
 
-export const WITHHOLDING_TABLES: Record<PayFrequency, WithholdingBand[]> = {
-  monthly: [
-    { from: 0.01, to: 550, rate: 0, excess: 0, fixed: 0 },
-    { from: 550.01, to: 895.24, rate: 0.10, excess: 550, fixed: 17.67 },
-    { from: 895.25, to: 2038.10, rate: 0.20, excess: 895.24, fixed: 60 },
-    { from: 2038.11, to: null, rate: 0.30, excess: 2038.10, fixed: 288.57 },
-  ],
-  fortnightly: [
-    { from: 0.01, to: 275, rate: 0, excess: 0, fixed: 0 },
-    { from: 275.01, to: 447.62, rate: 0.10, excess: 275, fixed: 8.83 },
-    { from: 447.63, to: 1019.05, rate: 0.20, excess: 447.62, fixed: 30 },
-    { from: 1019.06, to: null, rate: 0.30, excess: 1019.05, fixed: 144.28 },
-  ],
-  weekly: [
-    { from: 0.01, to: 137.50, rate: 0, excess: 0, fixed: 0 },
-    { from: 137.51, to: 223.81, rate: 0.10, excess: 137.50, fixed: 4.42 },
-    { from: 223.82, to: 509.52, rate: 0.20, excess: 223.81, fixed: 15 },
-    { from: 509.53, to: null, rate: 0.30, excess: 509.52, fixed: 72.14 },
-  ],
-};
+export const RECALC_TABLES: Record<RecalcPeriod, WithholdingBand[]> = currentValue(recalcTables);
+export const JUNE_RECALC_TABLE: WithholdingBand[] = RECALC_TABLES.june;
+export const DECEMBER_RECALC_TABLE: WithholdingBand[] = RECALC_TABLES.december;
 
-// Article 1 literal f), numerals 1) and 2). Transcribed literally. The $106.20
-// fixed amount does not line up with half the December figure ($106.06) or six
-// monthly ones ($106.02); it is inherited unchanged from Decree 95/2015, whose
-// June band started at $2,832 instead of $3,300, and the official table still
-// says $106.20. It stays as published — do not "correct" it.
-export const JUNE_RECALC_TABLE: WithholdingBand[] = [
-  { from: 0.01, to: 3300, rate: 0, excess: 0, fixed: 0 },
-  { from: 3300.01, to: 5371.44, rate: 0.10, excess: 3300, fixed: 106.20 },
-  { from: 5371.45, to: 12228.60, rate: 0.20, excess: 5371.44, fixed: 360 },
-  { from: 12228.61, to: null, rate: 0.30, excess: 12228.60, fixed: 1731.42 },
-];
+export const RECALC_MONTHS: Record<RecalcPeriod, number> = currentValue(recalcMonths);
 
-export const DECEMBER_RECALC_TABLE: WithholdingBand[] = [
-  { from: 0.01, to: 6600, rate: 0, excess: 0, fixed: 0 },
-  { from: 6600.01, to: 10742.86, rate: 0.10, excess: 6600, fixed: 212.12 },
-  { from: 10742.87, to: 24457.14, rate: 0.20, excess: 10742.86, fixed: 720 },
-  { from: 24457.15, to: null, rate: 0.30, excess: 24457.14, fixed: 3462.86 },
-];
+const AFP_RATE = currentValue(afpEmployeeRate);
+const ISSS_RATE = currentValue(isssEmployeeRate);
+const ISSS_MONTHLY_CEILING = currentValue(isssMonthlyCeiling);
+const FIXED_DEDUCTION = currentValue(fixedDeduction);
+const FIXED_DEDUCTION_INCOME_LIMIT = currentValue(fixedDeductionIncomeLimit);
+const MONTHS_IN_A_YEAR = 12;
 
-export type RecalcPeriod = "june" | "december";
-
-export const RECALC_TABLES: Record<RecalcPeriod, WithholdingBand[]> = {
-  june: JUNE_RECALC_TABLE,
-  december: DECEMBER_RECALC_TABLE,
-};
-
-/**
- * Months each recalculation accumulates. Literal f) accumulates January to June
- * for the first one and the whole "ejercicio o período de imposición" for the
- * second, and both tables are the periodic ones scaled by exactly these months:
- * June band I ends at 550 × 6 and December's at 550 × 12.
- */
-export const RECALC_MONTHS: Record<RecalcPeriod, number> = { june: 6, december: 12 };
+const DAILY_DIVISOR = currentValue(dailySalaryDivisor);
+const VACATION_DAYS_PER_YEAR = currentValue(vacationDaysPerYear);
+const VACATION_SURCHARGE = currentValue(vacationSurcharge);
+const AGUINALDO_SCALE = currentValue(aguinaldoScale);
+const AGUINALDO_CUTOFF = currentValue(aguinaldoCutoff);
+const AGUINALDO_CYCLE_START = currentValue(aguinaldoCycleStart);
 
 // Both fields are free-text `<input type="date">`, so a typo like "0025-01-01"
 // is a value the browser happily submits. Anything outside this window is
@@ -177,37 +144,20 @@ function daysInclusive(start: Date, end: Date) {
 const EARLIEST_DATE = utcDate(EARLIEST_EMPLOYMENT_DATE);
 const LATEST_DATE = utcDate(LATEST_EMPLOYMENT_DATE);
 
-// Labor Code article 198: one year and under three, 15 days; three and under
-// ten, 19 days; ten or more, 21 days. The October 2025 reform amended articles
-// 197, 200 and 202 — the dates — and left this scale untouched. Under a year
-// the caller prorates these 15 days, which is what reformed article 197 grants.
-// Takes completed years: with service measured in days, 1,095 days divides into
+// The article 198 scale, read at whatever date the caller decides. Takes
+// COMPLETED years: with service measured in days, 1,095 days divides into
 // exactly 3.0 while the third anniversary is still a day away.
 function aguinaldoDays(completedYears: number) {
-  if (completedYears >= 10) return 21;
-  if (completedYears >= 3) return 19;
-  return 15;
+  return AGUINALDO_SCALE.find((step) => completedYears >= step.fromCompletedYears)!.days;
 }
 
-/**
- * Every accrual in a settlement is priced as days over 365, counting both the
- * first and the last day worked. That is what the MTPS calculator does, and it
- * differs from counting whole anniversaries in two ways worth keeping: a leap
- * day inside a year of service is paid, and the day of departure is paid.
- */
-const YEAR_DAYS = 365;
+/** See the `accrualYearDays` rule: 365, inclusive of both first and last day. */
+const YEAR_DAYS = currentValue(accrualYearDays);
 
 export const QUINCENA25 = {
-  /** Article 2: only salaries at or below this monthly figure. */
-  salaryCeiling: 1500,
-  /** Article 2: half the monthly nominal salary. */
-  rate: 0.5,
-  /**
-   * Article 1 starts the general regime in 2027; article 6 leaves 2026
-   * voluntary for private employers, so nothing is owed as of right before
-   * then and the estimate stays silent.
-   */
-  mandatoryFrom: "2027-01-01",
+  salaryCeiling: currentValue(quincena25SalaryCeiling),
+  rate: currentValue(quincena25Rate),
+  mandatoryFrom: currentValue(quincena25MandatoryFrom),
 };
 
 export function calculateSettlement(input: {
@@ -227,21 +177,22 @@ export function calculateSettlement(input: {
   if (invalid) return {
     invalid: true, serviceYears: 0, completedYears: 0, serviceMonths: 0, serviceDays: 0,
     dailySalary: 0, indemnityBaseDaily: 0, minimumWageDecree: "", minimumWagePredatesTables: false,
+    capApplied: false, capMultiplier: 0, capDaily: 0, sectorDailyMinimumWage: 0,
+    benefitDaysPerYear: 0,
     indemnity: 0, eligibleForResignationBenefit: false, pendingSalary: 0,
     vacationDays: 0, vacation: 0, completeVacationPeriods: 0, completeVacationDays: 0,
     completeVacation: 0, proportionalVacationDays: 0, proportionalVacation: 0,
+    proportionalVacationDisputed: false,
     aguinaldoDays: 0, aguinaldo: 0, aguinaldoScaleAmbiguous: false, aguinaldoScaleDays: 0,
     aguinaldoAlternativeScaleDays: 0, aguinaldoAlternativeDays: 0, aguinaldoAlternative: 0,
     quincena25: 0, quincena25Applies: false, total: 0,
+    appliedRules: [] as RuleId[], startDate: "", endDate: "",
   };
 
   const salary = Math.max(0, input.monthlySalary || 0);
-  // Thirty, not the 365/12 ≈ 30.42 that the wage decree uses for its own
-  // monthly equivalent. The MTPS constancia reproduced in the tests settles
-  // which one the settlement runs on: 937.54/30 × (15 × 54/365) × 1.30 gives
-  // the $90.16 the statement prints, where 30.42 would give $88.92. Changing
-  // this divisor breaks that reconciliation, so it is not a free choice.
-  const dailySalary = salary / 30;
+  // See the `dailySalaryDivisor` rule: thirty, anchored to the MTPS constancia
+  // and not to a text, because neither article 183 nor article 142 fixes it.
+  const dailySalary = salary / DAILY_DIVISOR;
   const service = calendarService(start, end);
 
   // Split the way the MTPS statement does — complete years, then the days past
@@ -251,23 +202,33 @@ export function calculateSettlement(input: {
   const fractionDays = Math.round((end.getTime() - service.anniversary.getTime()) / DAY_MS) + 1;
   const serviceDays = yearsDays + fractionDays;
 
+  const dismissed = input.termination === "dismissal";
   const wage = minimumWageAt(isoDate(end));
-  const capMultiplier = input.termination === "dismissal" ? 4 : 2;
-  const indemnityBaseDaily = Math.min(dailySalary, wage.table.daily[input.sector] * capMultiplier);
-  const eligibleForResignationBenefit = service.completedYears >= 2;
+  const capMultiplier = currentValue(dismissed ? severanceWageCap : resignationWageCap);
+  const sectorDailyMinimumWage = wage.table.daily[input.sector];
+  // The cap in dollars, kept beside the base it produced. A settlement that was
+  // capped and one that was not are the same two numbers on screen — the base
+  // simply stops rising — so whether the limit bit has to be an answer the
+  // calculation gives, not something a reader infers by comparing two figures.
+  // Unrounded here: the maquila and coffee tables carry three decimals, and
+  // rounding the cap before comparing would move the base it produces.
+  const capDaily = sectorDailyMinimumWage * capMultiplier;
+  const indemnityBaseDaily = Math.min(dailySalary, capDaily);
+  const capApplied = capDaily < dailySalary;
+  const eligibleForResignationBenefit = service.completedYears >= currentValue(resignationMinimumService);
 
-  // Article 58 grants 30 days per year "y proporcionalmente por fracciones de
-  // año", with a 15-day floor. Article 8 of the Voluntary Resignation Law says
-  // 15 days "por cada año de servicio"; this estimator used to read that as
+  // Article 58 grants its days per year "y proporcionalmente por fracciones de
+  // año", with a floor. Article 8 of the Voluntary Resignation Law says its
+  // days "por cada año de servicio"; this estimator used to read that as
   // complete years only, but the MTPS calculator — the official service this
   // site links to — pays the fraction as a separate line, so it is paid here.
-  const daysPerYear = input.termination === "dismissal" ? 30 : 15;
+  const daysPerYear = currentValue(dismissed ? severanceDaysPerYear : resignationDaysPerYear);
   const accrue = (days: number) => round2(indemnityBaseDaily * daysPerYear * days / YEAR_DAYS);
-  const earned = input.termination === "dismissal" || eligibleForResignationBenefit
+  const earned = dismissed || eligibleForResignationBenefit
     ? accrue(yearsDays) + accrue(fractionDays)
     : 0;
-  const indemnity = input.termination === "dismissal"
-    ? Math.max(earned, indemnityBaseDaily * 15)
+  const indemnity = dismissed
+    ? Math.max(earned, indemnityBaseDaily * currentValue(severanceMinimumDays))
     : earned;
 
   const pendingSalary = dailySalary * Math.max(0, input.pendingSalaryDays || 0);
@@ -279,21 +240,29 @@ export function calculateSettlement(input: {
   // was actually asked, which is what the complete periods field controls.
   // Each part is rounded on its own and the total is their sum, the same way
   // the indemnity splits its complete years from its remaining days.
+  //
+  // The proportional part is paid on a resignation too, which article 187 read
+  // literally does not grant: see the `vacationProportionalOnExit` rule for the
+  // text and for the MTPS statement that pays it anyway. The result flags the
+  // cases the divergence actually touches so the page and the exported PDF can
+  // describe it, rather than leaving the reader to discover it at the ministry.
   const completeVacationPeriods = Math.max(0, input.unusedVacationPeriods || 0);
-  const completeVacationDays = 15 * completeVacationPeriods;
-  const proportionalVacationDays = 15 * fractionDays / YEAR_DAYS;
+  const completeVacationDays = VACATION_DAYS_PER_YEAR * completeVacationPeriods;
+  const proportionalVacationDays = VACATION_DAYS_PER_YEAR * fractionDays / YEAR_DAYS;
   const vacationDays = completeVacationDays + proportionalVacationDays;
-  const completeVacation = round2(dailySalary * completeVacationDays * 1.30);
-  const proportionalVacation = round2(dailySalary * proportionalVacationDays * 1.30);
+  const vacationRate = 1 + VACATION_SURCHARGE;
+  const completeVacation = round2(dailySalary * completeVacationDays * vacationRate);
+  const proportionalVacation = round2(dailySalary * proportionalVacationDays * vacationRate);
   const vacation = completeVacation + proportionalVacation;
 
   const year = end.getUTCFullYear();
-  // The 2025 reform moved the qualifying date and the article 202 payment window
-  // to 20 October, so an employee who reaches that date has already earned the
-  // whole bonus. Month index 9 is October on purpose.
-  // https://www.mtps.gob.sv/2025/10/27/entrega-anticipada-de-aguinaldo-es-opcional-de-empresarios/
-  const cutoff = new Date(Date.UTC(year, 9, 20));
-  const yearStart = new Date(Date.UTC(year, 0, 1));
+  // The date seniority is read at, and by which the bonus is fully earned: see
+  // the `aguinaldoCutoff` rule. The 2025 reform moved it, and the article 202
+  // payment window with it, from 12 December to 20 October.
+  const cutoff = new Date(Date.UTC(year, AGUINALDO_CUTOFF.month - 1, AGUINALDO_CUTOFF.day));
+  // Where the bonus year starts accruing. Declared rather than hardcoded — see
+  // the `aguinaldoCycleStart` rule, which records that no article settles it.
+  const yearStart = new Date(Date.UTC(year, AGUINALDO_CYCLE_START.month - 1, AGUINALDO_CYCLE_START.day));
   const workStartThisYear = start > yearStart ? start : yearStart;
   // Share of the year's bonus already earned, 0 to 1, kept separate from the
   // day scale so the Quincena 25 can reuse it without repeating the rules.
@@ -361,6 +330,40 @@ export function calculateSettlement(input: {
 
   const total = indemnity + pendingSalary + vacation + aguinaldo + quincena25;
 
+  // Whether this case sits inside the article 187 divergence: a resignation
+  // that is being paid a part-year of vacation the literal text gives only to
+  // dismissal. A dismissal never is, and neither is a resignation that leaves
+  // on an anniversary with no fraction to pay.
+  const proportionalVacationDisputed = !dismissed
+    && proportionalVacationDays > 0
+    && !currentValue(vacationProportionalOnExit).literal.includes("resignation");
+
+  /**
+   * The rules this case actually applied, in the order the estimate reads.
+   *
+   * The exported PDF cites these and only these, which is why the list is built
+   * here rather than assembled from `RULE_USAGE` by whoever draws the document:
+   * only this function knows that a dismissal touched no resignation article,
+   * or that the year-end bonus was already paid and its scale never opened. A
+   * citation list that names a rule the arithmetic did not use is a claim the
+   * document cannot back, and it is exactly the kind nobody checks.
+   */
+  const appliedRules: RuleId[] = [
+    "minimumWage", "dailySalaryDivisor", "accrualYearDays",
+    ...(dismissed
+      ? ["severanceDaysPerYear", "severanceMinimumDays", "severanceWageCap"] as const
+      : ["resignationDaysPerYear", "resignationWageCap", "resignationMinimumService"] as const),
+    "vacationDaysPerYear", "vacationSurcharge",
+    ...(proportionalVacationDays > 0 ? ["vacationProportionalOnExit"] as const : []),
+    "vacationUnmodelled",
+    ...(earnedAguinaldoDays > 0
+      ? ["aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart"] as const
+      : []),
+    ...(quincena25Applies
+      ? ["quincena25SalaryCeiling", "quincena25Rate", "quincena25MandatoryFrom"] as const
+      : []),
+  ];
+
   return {
     invalid: false,
     serviceYears: serviceDays / YEAR_DAYS,
@@ -368,6 +371,14 @@ export function calculateSettlement(input: {
     completedYears: service.completedYears,
     minimumWageDecree: wage.table.decree,
     minimumWagePredatesTables: wage.predatesTables,
+    /** 30 under article 58, 15 under article 8: what the benefit accrues at. */
+    benefitDaysPerYear: daysPerYear,
+    /** The sector's daily minimum wage, the cap it produces, and whether it bit. */
+    sectorDailyMinimumWage: round2(sectorDailyMinimumWage),
+    capMultiplier,
+    capDaily: round2(capDaily),
+    capApplied,
+    appliedRules,
     quincena25: round2(quincena25),
     quincena25Applies,
     // Whole months past the last anniversary. Reported separately because
@@ -386,6 +397,8 @@ export function calculateSettlement(input: {
     completeVacation,
     proportionalVacationDays,
     proportionalVacation,
+    /** True only where article 187 and the official service disagree. */
+    proportionalVacationDisputed,
     aguinaldoDays: earnedAguinaldoDays,
     aguinaldo: round2(aguinaldo),
     /** True only inside the window where the two readings of the scale differ. */
@@ -415,6 +428,40 @@ export function withholdingForTaxable(taxable: number, frequency: PayFrequency) 
   return applyBands(taxable, WITHHOLDING_TABLES[frequency]);
 }
 
+/**
+ * Whether the $1,600 fixed deduction applies, and how much of it this period
+ * takes. Shared by the payroll calculation and the June/December recalculation,
+ * which apply the same two article 29 figures over different spans and used to
+ * each carry their own copy of both.
+ *
+ * `months` is what the span covers: one pay period's share of a year for
+ * payroll, the six or twelve accumulated months for a recalculation. The
+ * deduction is stored annually precisely so that this is the only place it is
+ * ever divided.
+ *
+ * The band rule is literal e) of Executive Decree 10/2025: "los valores
+ * consignados únicamente en el Tramo II [...] no contienen las deducciones", so
+ * band II is the only band where the deduction belongs in the periodic
+ * withholding rather than only in the annual return. Bands III and IV already
+ * carry it — their limits are the article 37 ones displaced by exactly $1,600
+ * ($9,142.86 + 1,600 = $10,742.86 = 895.24 x 12) — and subtracting it there
+ * deducted it twice. Band I never withholds either way. Literal f) closes by
+ * extending that same band II rule to the two recalculation tables by name.
+ */
+function fixedDeductionFor(input: {
+  annualIncome: number;
+  bandBeforeFixedDeduction: number;
+  months: number;
+  applyFixedDeduction?: boolean;
+}) {
+  const qualifies = input.annualIncome <= FIXED_DEDUCTION_INCOME_LIMIT;
+  const amount = input.applyFixedDeduction !== false && qualifies
+    && input.bandBeforeFixedDeduction === 2
+    ? round2(FIXED_DEDUCTION * input.months / MONTHS_IN_A_YEAR)
+    : 0;
+  return { qualifiesForFixedDeduction: qualifies, fixedDeduction: amount };
+}
+
 export function calculatePayrollWithholding(input: {
   gross: number;
   frequency: PayFrequency;
@@ -437,38 +484,29 @@ export function calculatePayrollWithholding(input: {
 }) {
   const gross = round2(Math.max(0, input.gross || 0));
   const periods = PAY_PERIODS[input.frequency];
-  // The Integral Pension System Law (arts. 14 and 16) sets the employee rate at
-  // 7.25% of the monthly contributory salary, with no maximum base.
-  const afp = input.includeAfp === false ? 0 : round2(gross * 0.0725);
-  // ISSS caps the contributory salary at $1,000 per month. Payrolls that are not
-  // monthly get that ceiling spread over the period, which is an approximation:
-  // the institute settles contributions on a monthly planilla, so a weekly run
-  // can land a few cents away from the monthly settlement.
-  const isssCap = 12000 / periods;
-  const isss = input.includeIsss === false ? 0 : round2(Math.min(gross, isssCap) * 0.03);
+  /** Months of a year this one pay period covers: 1, a half, or 12/52. */
+  const monthsPerPeriod = MONTHS_IN_A_YEAR / periods;
+  const afp = input.includeAfp === false ? 0 : round2(gross * AFP_RATE);
+  // The monthly ISSS ceiling, spread over whatever period is being paid. That
+  // spreading is an approximation and the interface says so: the institute
+  // settles contributions on a monthly planilla, so a weekly run can land a few
+  // cents away from the monthly settlement.
+  const isssCap = ISSS_MONTHLY_CEILING * monthsPerPeriod;
+  const isss = input.includeIsss === false ? 0 : round2(Math.min(gross, isssCap) * ISSS_RATE);
   const taxableBeforeFixedDeduction = round2(Math.max(0, gross - afp - isss));
-  // Article 29 caps the $1,600 fixed deduction by "renta obtenida", which
-  // article 2 defines as the salary and remuneration received — the gross, not
-  // the base left after pension and health contributions.
+  // Article 29 caps the fixed deduction by "renta obtenida", which article 2
+  // defines as the salary and remuneration received — the gross, not the base
+  // left after pension and health contributions.
   const declaredAnnual = round2(Math.max(0, input.annualGross || 0));
   const annualIncome = declaredAnnual > 0 ? declaredAnnual : round2(gross * periods);
-  const qualifiesForFixedDeduction = annualIncome <= 9100;
-  // Literal e) of Executive Decree 10/2025 leaves the $1,600 out of band II
-  // alone — "los valores consignados únicamente en el Tramo II [...] no
-  // contienen las deducciones" — so that is the only band where it belongs in
-  // the periodic withholding rather than only in the annual return. Bands III
-  // and IV already carry it: their limits are the article 37 ones displaced by
-  // exactly $1,600 ($9,142.86 + 1,600 = $10,742.86 = 895.24 × 12), and
-  // subtracting it there deducted it twice. Band I never withholds either way.
-  //
   // The band is read from the base before the deduction, which is the figure
   // the table's own limits are written in. A base that band II then drops below
   // $550 still withholds nothing, which is what the annual liquidation gives.
   const bandBeforeFixedDeduction = withholdingForTaxable(taxableBeforeFixedDeduction, input.frequency).band;
-  const fixedDeduction = input.applyFixedDeduction !== false && qualifiesForFixedDeduction
-    && bandBeforeFixedDeduction === 2
-    ? round2(1600 / periods)
-    : 0;
+  const { qualifiesForFixedDeduction, fixedDeduction } = fixedDeductionFor({
+    annualIncome, bandBeforeFixedDeduction, months: monthsPerPeriod,
+    applyFixedDeduction: input.applyFixedDeduction,
+  });
   const taxable = round2(Math.max(0, taxableBeforeFixedDeduction - fixedDeduction));
   const withholding = withholdingForTaxable(taxable, input.frequency);
   const net = round2(gross - afp - isss - withholding.amount);
@@ -522,13 +560,10 @@ export function calculateRecalculation(input: {
   // Scaling the accumulated base to a year measures the limit on taxable pay
   // rather than on the gross the decree names, so a declared figure is always
   // the better one and the interface asks for it.
-  const annualIncome = declaredAnnual > 0 ? declaredAnnual : round2(accumulatedTaxable * 12 / months);
-  const qualifiesForFixedDeduction = annualIncome <= 9100;
+  const annualIncome = declaredAnnual > 0
+    ? declaredAnnual
+    : round2(accumulatedTaxable * MONTHS_IN_A_YEAR / months);
 
-  // Literal f) closes by extending the band II rule of literal e) to these two
-  // tables by name: the $1,600 "respecto del Tramo II de las tablas contenidas
-  // en los numerales 1) y 2)". Bands III and IV already carry it in their
-  // limits, exactly as in the periodic tables.
   const bandBeforeFixedDeduction = applyBands(accumulatedTaxable, table).band;
   // The decree writes the deduction as the flat $1,600 with no proration
   // clause, but the June table is the monthly table scaled by six, and the
@@ -536,11 +571,12 @@ export function calculateRecalculation(input: {
   // Deducting the full $1,600 against a half-year table would break the
   // continuity the recalculation exists to provide, leaving band II workers
   // permanently over-withheld until December. December, being the annual
-  // settlement, takes the whole $1,600 either way.
-  const fixedDeduction = input.applyFixedDeduction !== false && qualifiesForFixedDeduction
-    && bandBeforeFixedDeduction === 2
-    ? round2(1600 * months / 12)
-    : 0;
+  // settlement, takes the whole $1,600 either way. Passing `months` to the
+  // shared helper is what expresses that; the arithmetic is not repeated here.
+  const { qualifiesForFixedDeduction, fixedDeduction } = fixedDeductionFor({
+    annualIncome, bandBeforeFixedDeduction, months,
+    applyFixedDeduction: input.applyFixedDeduction,
+  });
 
   const taxable = round2(Math.max(0, accumulatedTaxable - fixedDeduction));
   const settled = applyBands(taxable, table);

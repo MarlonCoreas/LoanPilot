@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ALL_RULES, citationsFor, currentValue, isssMonthlyCeiling, oldestReviewed, RULES,
+  RULE_USAGE,
+} from "../app/rules.ts";
+import { OFFICIAL } from "../app/sources.ts";
+import {
   calculatePayrollWithholding, calculateRecalculation, calculateSettlement,
   DAILY_MINIMUM_WAGE, DECEMBER_RECALC_TABLE, JUNE_RECALC_TABLE,
   MINIMUM_WAGE_TABLES, QUINCENA25, RULES_REVIEWED, withholdingForTaxable,
@@ -57,7 +62,30 @@ test("statutory figures still match the official texts they are quoted from", ()
   assert.equal(high.isss, 30);
   assert.equal(high.afp, 1450, "7.25% of the whole salary: the previous ceiling was repealed");
 
-  assert.match(RULES_REVIEWED, /^\d{4}-\d{2}-\d{2}$/);
+  // The ceiling is MONTHLY. It used to be stored as its annualised 12,000 and
+  // divided by the pay periods, which is the same arithmetic and the wrong
+  // magnitude to read: the figure in the file did not match the figure in the
+  // comment beside it, and only the division reconciled them. A monthly gross
+  // just over the ceiling must contribute exactly the ceiling's 3%, and a
+  // fortnightly one exactly half of that.
+  assert.equal(currentValue(isssMonthlyCeiling), 1000);
+  assert.equal(calculatePayrollWithholding({ gross: 1000.01, frequency: "monthly" }).isss, 30);
+  assert.equal(calculatePayrollWithholding({ gross: 500.01, frequency: "fortnightly" }).isss, 15);
+});
+
+// Each figure above is now declared in `app/rules.ts` with its article, its
+// official document and the day it was last verified. That the declaration is
+// well formed — every rule sourced, dated, ordered and reachable from a page —
+// is checked in `tests/rules.test.mjs`, which is what replaced the lone format
+// assertion on `RULES_REVIEWED` that used to sit at the end of this test.
+test("the module's figures are the ones the rule registry declares", () => {
+  assert.equal(RULES_REVIEWED, oldestReviewed(ALL_RULES));
+  assert.deepEqual(DAILY_MINIMUM_WAGE, currentValue(RULES.minimumWage));
+  assert.deepEqual(JUNE_RECALC_TABLE, currentValue(RULES.recalcTables).june);
+  assert.deepEqual(DECEMBER_RECALC_TABLE, currentValue(RULES.recalcTables).december);
+  assert.equal(QUINCENA25.salaryCeiling, currentValue(RULES.quincena25SalaryCeiling));
+  assert.equal(QUINCENA25.rate, currentValue(RULES.quincena25Rate));
+  assert.equal(QUINCENA25.mandatoryFrom, currentValue(RULES.quincena25MandatoryFrom));
 });
 
 test("2025 monthly withholding bands use the official thresholds and fixed amounts", () => {
@@ -686,4 +714,142 @@ test("the year-end bonus scale window is flagged, not silently resolved", () => 
   });
   assert.equal(paid.aguinaldoScaleAmbiguous, false);
   assert.equal(paid.aguinaldo, 0);
+});
+
+// --- What the exported document is allowed to say ---------------------------
+
+test("a settlement cites the rules it applied, and no others", () => {
+  // The PDF prints these and only these. The temptation is to cite everything
+  // the settlement page could ever use — it is one constant and it never goes
+  // stale — but a dismissal that cites the voluntary resignation law is a
+  // document making a claim its own arithmetic does not support, and nobody
+  // reads a source list closely enough to catch it.
+  const dismissal = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal",
+  });
+  for (const id of dismissal.appliedRules) {
+    assert.ok(id in RULES, `${id} is cited but is not a rule`);
+    assert.ok(RULE_USAGE.settlement.includes(id), `${id} is cited by a page that does not list it`);
+  }
+  assert.deepEqual([...new Set(dismissal.appliedRules)], dismissal.appliedRules, "an article cited twice");
+  assert.ok(dismissal.appliedRules.includes("severanceDaysPerYear"));
+  for (const id of ["resignationDaysPerYear", "resignationWageCap", "resignationMinimumService"]) {
+    assert.ok(!dismissal.appliedRules.includes(id), `a dismissal must not cite ${id}`);
+  }
+
+  const resignation = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "resignation",
+  });
+  assert.ok(resignation.appliedRules.includes("resignationDaysPerYear"));
+  for (const id of ["severanceDaysPerYear", "severanceMinimumDays", "severanceWageCap"]) {
+    assert.ok(!resignation.appliedRules.includes(id), `a resignation must not cite ${id}`);
+  }
+
+  // A bonus already paid never opens the article 198 scale, so the document
+  // must not claim the scale is what produced its zero.
+  const paid = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
+  });
+  assert.equal(paid.aguinaldo, 0);
+  for (const id of ["aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart"]) {
+    assert.ok(!paid.appliedRules.includes(id), `a bonus already paid must not cite ${id}`);
+  }
+
+  // Every citation the document will print has to resolve to a live document.
+  for (const citation of citationsFor(dismissal.appliedRules, dismissal.endDate)) {
+    assert.match(OFFICIAL[citation.source], /^https:\/\//, citation.norm);
+  }
+
+  // An invalid case exports nothing, and must not offer a source list for a
+  // calculation that did not happen.
+  const broken = calculateSettlement({
+    startDate: "2026-06-30", endDate: "2020-01-01", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal",
+  });
+  assert.deepEqual(broken.appliedRules, []);
+});
+
+test("the settlement says whether the statutory cap bit, rather than implying it", () => {
+  // On screen and on paper the capped and the uncapped case look the same —
+  // two dollar figures, one smaller than the other — and the reader is left to
+  // work out whether that is the cap or just arithmetic. So it is an answer.
+  const capped = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 9000,
+    sector: "commerce", termination: "dismissal",
+  });
+  assert.equal(capped.dailySalary, 300, "9,000 / 30");
+  assert.equal(capped.capMultiplier, 4);
+  assert.equal(capped.sectorDailyMinimumWage, 13.44);
+  assert.equal(capped.capDaily, 53.76, "13.44 x 4");
+  assert.equal(capped.capApplied, true);
+  assert.equal(capped.indemnityBaseDaily, 53.76, "the cap, not the salary");
+
+  const free = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "resignation",
+  });
+  assert.equal(free.dailySalary, 30);
+  assert.equal(free.capMultiplier, 2, "resignation is capped at two, not four");
+  assert.equal(free.capDaily, 26.88);
+  assert.equal(free.capApplied, true);
+
+  const under = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 600,
+    sector: "commerce", termination: "resignation",
+  });
+  assert.equal(under.dailySalary, 20);
+  assert.equal(under.capApplied, false, "20 is under the 26.88 cap");
+  assert.equal(under.indemnityBaseDaily, 20, "the salary is used in full");
+});
+
+test("the article 187 divergence is flagged on the cases it actually touches", () => {
+  // Article 187 grants the part-year of vacation to dismissal and, read
+  // literally, gives someone who resigns only the years already completed. The
+  // MTPS pays the fraction on a resignation anyway, and this module follows the
+  // ministry — so it has to say where the two readings part company.
+  const resignation = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "resignation",
+  });
+  assert.ok(resignation.proportionalVacation > 0);
+  assert.equal(resignation.proportionalVacationDisputed, true);
+  assert.ok(resignation.appliedRules.includes("vacationProportionalOnExit"),
+    "the case that diverges has to cite the article it diverges from");
+
+  // A dismissal is squarely inside the literal text: nothing to disclose.
+  const dismissal = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal",
+  });
+  assert.ok(dismissal.proportionalVacation > 0);
+  assert.equal(dismissal.proportionalVacationDisputed, false);
+
+  // Every valid resignation carries a fraction — the smallest is the single
+  // day accrued by leaving on the anniversary itself — so the flag is really
+  // "this is a resignation", and it says so on the shortest case there is.
+  const oneDay = calculateSettlement({
+    startDate: "2020-07-01", endDate: "2026-07-01", monthlySalary: 900,
+    sector: "commerce", termination: "resignation",
+  });
+  assert.equal(round(oneDay.proportionalVacationDays), 0.04, "15 / 365");
+  assert.equal(oneDay.proportionalVacationDisputed, true);
+
+  // A case that never calculated has nothing to disclose and nothing to export.
+  const broken = calculateSettlement({
+    startDate: "2026-07-01", endDate: "2020-07-01", monthlySalary: 900,
+    sector: "commerce", termination: "resignation",
+  });
+  assert.equal(broken.proportionalVacationDisputed, false);
+
+  // The statement the suite reconciles against is itself one of these cases,
+  // which is the whole reason the fraction is paid on a resignation at all.
+  const mtps = calculateSettlement({
+    startDate: "2021-11-01", endDate: "2025-12-24", monthlySalary: 937.54,
+    sector: "commerce", termination: "resignation", aguinaldoPaid: true,
+  });
+  assert.equal(mtps.vacation, 90.16);
+  assert.equal(mtps.proportionalVacationDisputed, true);
 });

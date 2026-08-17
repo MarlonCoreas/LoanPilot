@@ -3,15 +3,52 @@
  * calculators each kept their own copy of this map and had already drifted:
  * two different MTPS entries, and a minimum-wage link pointing at the decree
  * whose table had been replaced.
+ *
+ * NOTHING NORMATIVE IS CITED FROM THE PRESS. A figure enters `rules.ts` only
+ * through a decree, a consolidated text, or an institutional publication of the
+ * body that administers the rule. A newspaper reporting a reform is evidence
+ * that the reform happened; it is not evidence of what the reform says, and the
+ * difference is invisible three months later when nobody remembers which one
+ * the number came from. Every entry below is on a `.gob.sv` domain for that
+ * reason, and `tests/rules.test.mjs` holds the line.
  */
 export const OFFICIAL = {
   // Consolidación oficial actualizada por la Asamblea en diciembre de 2024.
   laborCode: "https://www.asamblea.gob.sv/sites/default/files/documents/decretos/27207B63-DF82-4453-833B-F54B24B52A10.pdf",
   laborService: "https://www.mtps.gob.sv/servicios/calculo-de-indemnizacion-en-linea/",
+  // La ficha de la CSJ con los arts. 177-185 de la vacación anual remunerada,
+  // transcritos íntegros. Se cita aparte del código completo porque es la
+  // fuente corta que un lector puede abrir y comprobar en un minuto.
+  //
+  // El nombre del archivo lleva los acentos en forma descompuesta (NFD): la
+  // "ó" es "o" + acento combinante, y por eso va escapado. Con la forma
+  // compuesta, que es la que escribe cualquier editor, el servidor responde
+  // 404 — no lo "arregles" sustituyendo los escapes por letras acentuadas.
+  vacation: "https://www.csj.gob.sv/wp-content/uploads/2021/06/10-Co%CC%81digo-de-Trabajo-de-El-Salvador-Vacacio%CC%81n-anual-remunerada.pdf",
   resignation: "https://www.mtps.gob.sv/download/decreto-no-592-ley-reguladora-de-la-prestacion-economica-por-renuncia-voluntaria/",
   // Decree 12 replaced the wage table in Decree 11, so it is the document that
   // actually carries the figures the calculator uses.
   minimumWage: "https://www.jurisprudencia.gob.sv/DocumentosBoveda/R/2/2020-2029/2025/05/10A54E.HTML",
+  // El D.L. 433 movió el aguinaldo al 20 de octubre, y a agosto de 2026 la
+  // Asamblea todavía no lo incorpora a su texto consolidado del Código de
+  // Trabajo: los arts. 197, 200 y 202 del PDF de `laborCode` siguen diciendo
+  // «doce de diciembre». La cita de grado decreto es entonces el considerando
+  // V del D.L. 440, publicado en la bóveda oficial de jurisprudencia, que da
+  // número, fecha y Diario Oficial de la reforma:
+  //
+  //   «Que por medio de Decretos Legislativos números 433 y 434, de fecha 15
+  //   de octubre de 2025, publicados en el Diario Oficial n.° 194, Tomo n.°
+  //   449, de la misma fecha, se aprobaron reformas al Código de Trabajo y a
+  //   la Ley sobre la Compensación Adicional en Efectivo, a fin de ampliar el
+  //   periodo para realizar el pago del correspondiente aguinaldo […] entre el
+  //   20 de octubre y el 20 diciembre de cada año.»
+  //
+  // Sustituir este enlace por el del D.L. 433 en cuanto la bóveda lo publique,
+  // o por el consolidado del código cuando la Asamblea lo actualice.
+  aguinaldoDecree: "https://www.jurisprudencia.gob.sv/DocumentosBoveda/D/2/2020-2029/2025/10/10E76F.PDF",
+  // La explicación del MTPS sobre cómo opera el pago anticipado. Es publicación
+  // institucional del ministerio que administra la regla, no prensa, y es la
+  // que describe la práctica; el valor normativo lo lleva `aguinaldoDecree`.
   aguinaldoReform: "https://www.mtps.gob.sv/2025/10/27/entrega-anticipada-de-aguinaldo-es-opcional-de-empresarios/",
   // La explicación del MTPS con el ejemplo numérico de la hora extra: es la
   // que fija el orden de las operaciones para la nocturna (el 25% se aplica

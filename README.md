@@ -34,7 +34,9 @@ puede afirmar algo que la página no diga.
 - Proyección de abonos extraordinarios y aportes mensuales.
 - Historial de abonos con fecha y monto.
 - Comparación de intereses, saldo, fecha de finalización y meses ahorrados.
-- Exportación a PDF y formato compatible con Microsoft Excel.
+- Exportación a PDF en préstamos, finiquito y horas extras, y formato compatible
+  con Microsoft Excel en préstamos. El PDF se arma en el navegador: ninguna cifra
+  del cálculo sale del dispositivo para generarlo.
 - Estimación de finiquito e indemnización por despido injustificado o renuncia
   voluntaria, incluyendo vacaciones, aguinaldo y salario pendiente.
 - Estimación de la hora extra diurna y nocturna, del recargo nocturno de la
@@ -79,45 +81,138 @@ La dirección local se mostrará en la terminal.
 ## Verificación
 
 ```bash
-npm test         # compila y valida el resultado del build
+npm test              # compila y valida el resultado del build
 npm run typecheck
+npm run check:rules   # avisa de reglas en uso sin verificar hace más de 6 meses
 ```
 
-## Actualizar una regla laboral o fiscal
+## Actualizar una regla cuando cambie la ley
 
-Las cifras normativas viven en `app/statutory.ts` —finiquito y retenciones— y en
-`app/overtime.ts` —horas extras y recargos—, cada una con el artículo o decreto
-que la respalda escrito al lado. Al cambiar cualquiera:
+Todas las cifras normativas viven en un solo archivo, `app/rules.ts`. No hay
+ninguna más suelta en el código: `app/statutory.ts` y `app/overtime.ts` guardan
+la aritmética y las lecturas que los textos no resuelven, pero ya no guardan
+ningún número que no puedan citar.
 
-1. Leer el texto oficial, no una nota de prensa ni un resumen. Los enlaces del
-   pie y del panel de fuentes apuntan al documento correspondiente.
-2. Actualizar la constante y la cita que la acompaña.
-3. Ajustar la prueba `statutory figures still match the official texts...`, que
-   existe justamente para que un cambio accidental falle en vez de publicarse.
-4. Mover a la fecha de la revisión la constante que corresponda,
-   `RULES_REVIEWED` u `OVERTIME_REVIEWED`. La insignia de cada página muestra
-   ese valor, así que una fecha desactualizada afirma algo que no se comprobó.
+Cada regla lleva seis campos, y ninguno es decorativo:
 
-Los salarios mínimos no son una constante suelta sino `MINIMUM_WAGE_TABLES`,
-ordenada de la más nueva a la más antigua: una liquidación se calcula con la
-tabla vigente el último día de trabajo. Al publicarse un decreto nuevo se
-antepone una entrada; no se edita la anterior. Si la fecha de salida es previa
-a la tabla más antigua verificada, la calculadora lo advierte en pantalla en
-lugar de aparentar una cifra de la época.
+| Campo      | Qué es |
+| ---------- | ------ |
+| `value`    | El valor que el cálculo aplica. |
+| `unit`     | Qué cuenta ese valor, escrito. Es lo que hace visible un error de magnitud sin rehacer la aritmética: el techo del ISSS estuvo guardado como el anual `12000` junto a un comentario que hablaba de $1,000 mensuales, y sólo la división reconciliaba las dos cifras. |
+| `norm`     | El artículo o decreto, redactado para poder buscarlo. |
+| `source`   | La clave de `app/sources.ts` del documento que hay que abrir para comprobarlo. |
+| `from`     | El primer día en que esa versión aplica. |
+| `reviewed` | El día en que una persona la leyó por última vez contra ese documento. |
+
+### El procedimiento
+
+1. **Leer el texto oficial**, no una nota de prensa ni un resumen. El enlace
+   está en el campo `source` de la propia regla.
+2. **Anteponer una versión nueva** al arreglo `versions`, con su `from` en el
+   día en que la norma entra en vigor. **No se edita la versión anterior.** Una
+   liquidación se calcula con la regla vigente el último día de trabajo, así que
+   la versión vieja sigue haciendo falta para las salidas anteriores; `ruleAt`
+   elige sola. Sólo se corrige en el sitio una versión que estuviera mal
+   transcrita, y entonces también se mueve su `reviewed`.
+3. **Poner `reviewed` en la fecha de hoy**, y sólo en el mismo commit en que se
+   abrió el documento. La insignia de cada página muestra ese valor: una fecha
+   movida sin revisar es una afirmación que el sitio no puede respaldar.
+4. **Ajustar la prueba** `statutory figures still match the official texts...`,
+   que existe justamente para que un cambio accidental falle en vez de
+   publicarse. Si el valor cambió de verdad, cambia también la prueba, y el
+   commit debe decir contra qué documento.
+5. **Comprobar `RULE_USAGE`** si la regla es nueva. Una regla que no aparezca en
+   la lista de ninguna página no entra en el aviso de vencimiento de CI ni en la
+   fecha que la página muestra, y queda envejeciendo sin que nadie la mire. La
+   prueba de estructura falla si una regla no la aplica ninguna página.
+6. `npm test && npm run check:rules`.
+
+### Fechas de revisión y aviso de vencimiento
+
+Cada página muestra la **más antigua** de las reglas que realmente aplica, no la
+más nueva: una página que cita diez reglas es tan fresca como la más rezagada
+de ellas, y tomar la más nueva dejaría que una edición de hoy refrescara una
+afirmación sobre cifras que nadie ha mirado en un año. `/prestamos/` no aplica
+ninguna regla salvadoreña y por eso no muestra insignia: no tener afirmación es
+la respuesta correcta, no una omisión.
+
+`npm run check:rules` avisa cuando una regla **en uso** lleva más de seis meses
+sin verificarse, y CI lo ejecuta en cada cambio. Avisa y no rompe el build a
+propósito: una fecha vencida significa que nadie ha mirado últimamente, no que
+algo esté roto, y hacer fallar el build enseñaría a mover las fechas sin abrir
+los documentos, que es justo lo que volvería el mecanismo peor que no tenerlo.
+Con `--strict` sí falla, para quien quiera exigirlo antes de publicar.
+
+Ninguna fecha se escribe ya a mano en dos sitios. `RULES_REVIEWED` —el que usan
+el `sitemap.xml` y los datos estructurados— se calcula como la más antigua del
+registro completo, y `OVERTIME_REVIEWED` como la más antigua de las reglas de su
+página.
+
+### De dónde puede salir una cifra
+
+De un decreto, de un texto consolidado o de una publicación de la institución
+que administra la regla. De la prensa, nunca. Un periódico que informa de una
+reforma prueba que algo cambió, no qué dice ahora el texto, y a los seis meses
+las dos cosas son indistinguibles: sólo queda un número sin documento detrás.
+Cuando la única fuente disponible es periodística, la regla se queda en su
+versión anterior y la brecha se anota, en lugar de rellenarse.
+
+Por eso `aguinaldoCutoff` no cita la nota de prensa de la reforma sino el D.L.
+433 del 15 de octubre de 2025 (D.O. 194, Tomo 449), y lo cita a través del
+considerando V del D.L. 440 —publicado en la bóveda oficial de jurisprudencia—,
+porque a agosto de 2026 el consolidado del Código de Trabajo de la Asamblea
+todavía trae «doce de diciembre» en los arts. 197, 200 y 202. La prueba
+`no normative figure is cited from the press` sostiene la mitad mecánica de esta
+regla: toda fuente citada por una regla vive en un dominio `.gob.sv`.
+
+### Lo que las fuentes no resuelven
+
+Cuatro cosas que el registro declara como decisiones del proyecto y no como
+lecturas de la ley, cada una anotada en su regla. Las notas lo dicen en su
+primera palabra: `UNSOURCED` cuando ningún documento la fija, `DISPUTED` cuando
+las fuentes —o un texto y la práctica oficial— no coinciden, y `NOT MODELLED`
+cuando la regla existe y no se aplica:
+
+- **`dailySalaryDivisor`.** El divisor 30 no sale de ningún texto. El art. 183
+  fija la base y el art. 142 define el salario diario en la dirección contraria
+  —hora pactada por horas de la jornada—, pero ninguno fija el divisor. El 30
+  está anclado empíricamente a la constancia del MTPS: con 30.42 el cálculo deja
+  de coincidir con el ministerio.
+- **`aguinaldoCycleStart`.** Los arts. 196 a 202 fijan la fecha de corte y la
+  ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado»,
+  pero ninguno dice sobre qué período corre esa proporción. Ya no es sólo una
+  laguna: son dos lecturas vivas. El módulo corre la proporción sobre el año
+  calendario, que es lo que respalda el MTPS al calcular el pago anticipado
+  «como si fuera en diciembre»; la constancia del MTPS sólo reconcilia con un
+  ciclo desde el 12 de diciembre, y la práctica contable todavía mezcla esa
+  fecha con la del 20 de octubre. El valor no se mueve por eso, y la línea de
+  aguinaldo sigue siendo la única que la prueba de reconciliación deja sin
+  comparar.
+- **`vacationProportionalOnExit`.** El art. 187 reconoce la vacación
+  proporcional cuando la terminación es con responsabilidad patronal o hay
+  despido de hecho, y para quien renuncia menciona sólo la vacación del año
+  continuo ya cumplido. La constancia del MTPS con la que reconcilia la suite es
+  una renuncia voluntaria —tope de $26.88, que son dos salarios mínimos diarios,
+  y 15 días por año— y trae la vacación proporcional en su propia línea. El
+  módulo sigue al servicio oficial, y lo dice: en pantalla, en el PDF y en la
+  FAQ. Aplicar la lectura literal rompería la reconciliación.
+- **`vacationUnmodelled`.** El art. 180 exige 200 días trabajados en el año para
+  tener derecho a vacaciones y el art. 184 añade un 25% por alojamiento y otro
+  por alimentación. Ninguno se modela —el formulario no pregunta ni una cosa ni
+  la otra— y ambos quedan registrados como limitación conocida, no como
+  silencio.
+
+### Salarios mínimos y referencia externa
+
+Los salarios mínimos son la regla `minimumWage`, ordenada de la más nueva a la
+más antigua como todas las demás. Si la fecha de salida es previa a la tabla más
+antigua verificada, la calculadora lo advierte en pantalla en lugar de aparentar
+una cifra de la época.
 
 La prueba `reproduces a real MTPS settlement statement to the cent` compara el
 resultado contra una constancia real del servicio oficial del MTPS. Es la
 referencia externa del módulo: si un cambio la rompe, la aritmética dejó de
 coincidir con la del ministerio.
-
-
-## Fechas de revisión
-
-Cada grupo de constantes legales lleva la fecha en que se leyó contra su fuente,
-y esa fecha es la que muestra la página: `RULES_REVIEWED` en `app/statutory.ts`
-para el finiquito y las retenciones, y `OVERTIME_REVIEWED` en `app/overtime.ts`
-para las horas extras. Se cambian sólo en el mismo commit que vuelve a revisar
-las fuentes, nunca como parte de un despliegue rutinario.
 
 Dos advertencias encontradas al verificar las horas extras, por si alguien
 vuelve sobre el tema: la hora extra nocturna no es 2.25 veces la hora básica
@@ -125,6 +220,30 @@ sino 2.5, porque el MTPS aplica el 25% de nocturnidad sobre la hora ya recargada
 al 100% —su ejemplo de $1.50 la hora lo muestra—; y el PDF divulgativo de la
 Corte Suprema sobre la jornada contradice al artículo 161, ya que habla de
 semana de 40 horas y de jornada nocturna a partir de las diez de la noche.
+
+### El cálculo como documento
+
+`app/pdf.ts` es el único sitio que sabe cómo se ve un PDF de LoanPilot: la banda
+con la marca, la fecha de generación, el aviso de estimación, el pie con la
+numeración de páginas y el bloque de fuentes. Una calculadora aporta sólo lo
+suyo —un título, unas tablas, las notas que levantó su caso y las reglas que
+aplicó— en un `PdfSpec`. Agregar el PDF de retenciones es escribir ese objeto,
+no escribir jsPDF.
+
+Los artículos no se escriben a mano en ningún diccionario de textos:
+`citationsFor(ids, fecha)` los lee del registro, resuelve la versión vigente en
+la fecha del caso y agrupa por documento, de modo que una cita no puede quedarse
+atrás de la cifra que la sostiene. `calculateSettlement` devuelve `appliedRules`,
+que son las reglas que su aritmética realmente usó: un despido no cita la Ley de
+Renuncia Voluntaria, y un aguinaldo ya pagado no cita la escala del art. 198.
+
+El documento está pensado para imprimirse en blanco y negro y llevarse a
+recursos humanos o al MTPS. Nada distingue información sólo por color, el total
+va en negrita además de sombreado, y las direcciones se imprimen completas
+—inútiles como enlace en papel, imprescindibles para poder teclearlas—. Un
+finiquito corriente cabe en una página; uno que además arrastra la ventana
+ambigua del aguinaldo y la divergencia del art. 187 pasa a dos, con las fuentes
+enteras en la segunda.
 
 ## Publicación
 

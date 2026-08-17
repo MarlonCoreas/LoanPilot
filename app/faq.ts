@@ -25,6 +25,10 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       answer: "La Ley Reguladora de la Prestación Económica por Renuncia Voluntaria reconoce 15 días de salario por año trabajado y exige al menos dos años continuos con el mismo patrono. En este caso el tope del salario base es de dos salarios mínimos diarios, no de cuatro.",
     },
     {
+      question: "Si renuncio, ¿me pagan la vacación del año que llevo corrido?",
+      answer: "Aquí el texto y la práctica no dicen lo mismo. El artículo 187 del Código de Trabajo reconoce la vacación proporcional al tiempo trabajado cuando el contrato termina con responsabilidad patronal o hay despido de hecho sin causa legal, y enseguida agrega que, si ya se cumplió el año continuo de servicio, la vacación se paga aunque el contrato termine sin responsabilidad para el patrono. Leído al pie de la letra, quien renuncia se lleva la vacación de los períodos completos y no la fracción del año en curso. El servicio oficial de cálculo del MTPS sí paga esa fracción en renuncia: la constancia con la que contrastamos nuestros resultados es precisamente una renuncia voluntaria y trae la vacación proporcional en su propia línea. Nuestra calculadora sigue al ministerio y te la muestra, y te lo advierte en pantalla cuando tu caso cae en esa diferencia, para que sepas que el texto admite la otra lectura antes de reclamarla.",
+    },
+    {
       question: "¿Cuántos días de aguinaldo me tocan?",
       answer: "Para quien sigue laborando, según la antigüedad alcanzada al 20 de octubre: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez años. Con menos de un año se paga la parte proporcional al tiempo trabajado. Si el contrato terminó antes del 20 de octubre, la norma no define expresamente qué escala rige: esa persona nunca llegó a la fecha del corte. Nuestra calculadora usa la antigüedad del último día trabajado, que es la lectura que no presupone tiempo no trabajado, y cuando las dos fechas caen en escalones distintos te muestra también la otra cifra para que la consultes con el MTPS.",
     },
@@ -65,6 +69,10 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     {
       question: "What is owed on voluntary resignation?",
       answer: "The Voluntary Resignation Benefit Law grants 15 days of salary per year worked and requires at least two continuous years with the same employer. Here the base salary is capped at two daily minimum wages rather than four.",
+    },
+    {
+      question: "If I resign, am I paid the vacation for the year in progress?",
+      answer: "Here the text and the practice do not say the same thing. Article 187 of the Labour Code grants vacation in proportion to time worked when the contract ends with employer responsibility or the worker is dismissed without legal cause, and then adds that where the continuous year of service is already complete, vacation is paid even if the contract ends without employer responsibility. Read literally, someone who resigns takes the vacation of complete periods and not the fraction of the year in progress. The MTPS official calculation service does pay that fraction on a resignation: the statement we check our results against is a voluntary resignation, and it carries proportional vacation on its own line. Our calculator follows the ministry and shows it to you, and it flags your case on screen when it falls inside that difference, so you know the text admits the other reading before you claim it.",
     },
     {
       question: "How many days of year-end bonus apply?",
