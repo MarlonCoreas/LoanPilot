@@ -81,7 +81,11 @@ const detail = (title, rules, lead) => {
   for (const rule of rules) {
     for (const version of rule.versions) {
       if (!version.status || version.status.length === 0) continue;
-      console.log(`- **\`${rule.id}\`** (${version.status.join(" + ")}, desde ${version.from}) — ${version.norm}\n  ${version.note}`);
+      // Notes run to several paragraphs. Every line is indented, not just the
+      // first: an unindented continuation breaks out of the list item and the
+      // markdown renders the rest of the note as body text under nothing.
+      const note = String(version.note ?? "").split("\n").map((line) => `  ${line}`.trimEnd()).join("\n");
+      console.log(`- **\`${rule.id}\`** (${version.status.join(" + ")}, desde ${version.from}) — ${version.norm}\n${note}`);
     }
   }
 };

@@ -388,18 +388,23 @@ export function withholdingForTaxable(taxable: number, frequency: PayFrequency) 
  * The renta obtenida behind a figure of taxable pay, which is the pay less the
  * pension contribution and nothing else.
  *
- * WHY THE AFP AND NOT THE ISSS. Article 26 of the Ley Integral del Sistema de
- * Pensiones declares the compulsory contributions "rentas no gravables para
- * efectos de Impuesto sobre la Renta", and article 4 of the Ley de Impuesto
- * sobre la Renta attaches the consequence to that status: a renta no gravable
- * is "excluida del cómputo de la renta obtenida". The health contribution has
- * no article giving it that character — what carries it is a recital of
- * Executive Decree 10/2025 describing it as deducted from the ingresos brutos —
- * so it leaves the base later, on the way to the renta imponible, and is still
- * inside the renta obtenida when the $9,100 limit is measured.
+ * WHY THE AFP AND NOT THE ISSS. The compulsory pension contribution is a
+ * "renta no gravable para efectos de Impuesto sobre la Renta", and article 4 of
+ * the Ley de Impuesto sobre la Renta attaches the consequence to that status: a
+ * renta no gravable is "excluida del cómputo de la renta obtenida". The health
+ * contribution has no statute giving it that character — what carries it is a
+ * recital of Executive Decree 10/2025 describing it as deducted from the
+ * ingresos brutos — so it leaves the base later, on the way to the renta
+ * imponible, and is still inside the renta obtenida when the $9,100 limit is
+ * measured. The citation lives on `afpEmployeeRate` and the reasoning on
+ * `fixedDeductionIncomeLimit`; neither is restated here on purpose.
  *
- * The rate is applied to the whole figure because article 14 of the pension law
- * sets no maximum contributory base: the previous ceiling was repealed, so a
+ * ONLY THE COMPULSORY PART. This function derives the contribution from the
+ * statutory rate, so a voluntary contribution cannot reach it and there is
+ * nothing to over-exclude on this path.
+ *
+ * The rate is applied to the whole figure because the pension law sets no
+ * maximum contributory base: the previous ceiling was repealed, so a
  * high salary contributes the same 7.25% as a low one. If a ceiling ever comes
  * back this stops being a multiplication and the rule note is where it lands.
  */

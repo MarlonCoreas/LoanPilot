@@ -419,7 +419,10 @@ export default function Home({ lang }: { lang: Lang }) {
         <div className="export-actions"><span>{t.exportHint}</span><button onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button><button onClick={exportExcel}><i>XLS</i>{t.exportExcel}</button></div>
         {/* See SHARE_SCHEMA: the active-loan ledgers do not fit a flat
             fragment, and a link that drops them silently is worse than none. */}
-        {mode === "new" && <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />}
+        {mode === "new" && <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} labels={{
+          mo: t.amount, ta: t.rate, pl: t.term, fe: t.firstDate,
+          sv: t.insurance, co: t.commission, ot: t.otherFees,
+        }} />}
       </div>
       {mode === "new" ? <div className="calculator-grid">
         <div className="form-panel"><div className="section-title"><span>01</span><div><h2>{t.basics}</h2><p>{lang === "es" ? "Lo mínimo para una buena estimación" : "The minimum for a useful estimate"}</p></div></div><div className="field-grid">{input(t.amount, amount, setAmount, "$", t.helpAmount)}{input(t.rate, rate, setRate, "%", t.helpRate)}{input(t.term, years, setYears, t.years, t.helpTerm)}{dateInput(t.firstDate, firstDate, setFirstDate, t.helpFirstDate)}</div>

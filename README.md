@@ -150,7 +150,13 @@ La dirección local se mostrará en la terminal.
 npm test              # compila y valida el resultado del build
 npm run typecheck
 npm run check:rules   # avisa de reglas en uso sin verificar hace más de 6 meses
+npm run inventory     # inventario del registro: reglas, estado y huecos declarados
 ```
+
+El inventario **se genera, no está escrito**: no busques una tabla de reglas en
+este archivo porque no existe a propósito —una segunda copia del registro se
+desfasa—. `npm run inventory` la imprime desde `app/rules.ts`, y
+`npm run inventory -- --terse` da una línea por regla.
 
 ## Actualizar una regla cuando cambie la ley
 
@@ -286,12 +292,12 @@ de la regla.
 **No hay tabla de inventario escrita a mano en este README, y es deliberado.**
 Una segunda copia del registro es un segundo registro, y un segundo registro se
 desfasa: el primer decreto que agregue una regla deja la tabla atrás, y quien la
-lea le va a creer a la mitad vieja porque tiene forma de documentación. Al 17 de
-agosto de 2026 son **43 reglas en 50 versiones**, de las cuales 8 llevan estado:
-4 en disputa, 2 sin fuente y 3 fuera de alcance. Ese conteo puede quedar
+lea le va a creer a la mitad vieja porque tiene forma de documentación. Al 18 de
+agosto de 2026 son **44 reglas en 51 versiones**, de las cuales 9 llevan estado:
+4 en disputa, 2 sin fuente y 4 fuera de alcance. Ese conteo puede quedar
 desactualizado; el comando, no.
 
-Lo que queda **fuera de alcance** —las tres `NOT MODELLED`— no cabe en una
+Lo que queda **fuera de alcance** —las cuatro `NOT MODELLED`— no cabe en una
 insignia y conviene tenerlo escrito entero:
 
 - **`vacationUnmodelled`** (Código de Trabajo arts. 180 y 184). El artículo 180
@@ -307,6 +313,16 @@ insignia y conviene tenerlo escrito entero:
   está transcrito a propósito: nadie lo ha leído contra el texto vigente para
   este proyecto, y una cifra de memoria es lo único que este registro existe
   para impedir. Modelarlo empieza por leerlo.
+- **`voluntaryPensionUnmodelled`** (Ley Integral del Sistema de Pensiones,
+  ahorro previsional voluntario). El art. 26 hace renta no gravable la
+  cotización **obligatoria**; el ahorro voluntario no entra ahí, y en cambio
+  rebaja la renta imponible hasta un tope. Son dos mecanismos distintos y el
+  proyecto no aplica ninguno de los dos. Solo puede morder en un campo: el modo
+  «Las tengo» de `/renta-anual/`, donde la cifra de AFP la escribe el lector.
+  Por eso el campo pide la cotización obligatoria por su nombre y la ayuda
+  explica qué pasa si se suman los aportes voluntarios. Ni el artículo ni el
+  tope se escriben en el registro: una fuente secundaria los ubica, y una
+  fuente secundaria no basta para entrar acá.
 - **`annualTablePriorExercises`** (art. 37, texto anterior al D.L. 293). El
   registro sólo carga la tabla que resultó de la reforma, así que un ejercicio
   cerrado antes de 2025 no se puede cotizar: `/renta-anual/` ofrece 2025 como

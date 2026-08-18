@@ -147,27 +147,33 @@ export function calculateAnnualReturn(input: AnnualInput) {
   const isssPaid = round2(Math.max(0, input.isssPaid || 0));
   const contributions = round2(afpPaid + isssPaid);
 
-  // RENTA OBTENIDA, AND WHY THE PENSION CONTRIBUTION IS NOT IN IT. Article 26
-  // of the Ley Integral del Sistema de Pensiones declares the compulsory
-  // contributions "rentas no gravables para efectos de Impuesto sobre la
-  // Renta", and article 4 of the Ley de Impuesto sobre la Renta says what that
-  // status does: a renta no gravable is "en consecuencia excluida del cómputo
-  // de la renta obtenida". So the AFP never enters the figure the two
-  // thresholds below are measured on — it is an exclusion, not a deduction.
+  // RENTA OBTENIDA, AND WHY THE PENSION CONTRIBUTION IS NOT IN IT. The
+  // compulsory contribution is a renta no gravable, and article 4 of the Ley de
+  // Impuesto sobre la Renta says what that status does: such income is "en
+  // consecuencia excluida del cómputo de la renta obtenida". So the AFP never
+  // enters the figure the two thresholds below are measured on — it is an
+  // exclusion, not a deduction. The reasoning and the citation live in
+  // `fixedDeductionIncomeLimit` and `afpEmployeeRate`; this comment does not
+  // repeat an article number, because a number repeated is a number that drifts.
   //
   // The health contribution is NOT in the same position and this module does
-  // not put it there. No article gives the ISSS that character; what carries it
+  // not put it there. No statute gives the ISSS that character; what carries it
   // is the third recital of Executive Decree 10/2025, which describes it as
   // deducted from the ingresos brutos when the base is built. That makes it a
   // subtraction on the way to the renta imponible and nothing more, which is
-  // why it comes out one line below and not here. See
-  // `contributionsExcludedFromBase` for the two citations side by side.
+  // why it comes out one line below and not here.
   //
   // The renta imponible is the same either way — the two contributions both
   // leave before the table — so the only thing riding on this distinction is
   // the two thresholds, and they are exactly where it bites: a gross of $9,400
   // is renta obtenida of $8,718.50, which is under the limit and gets the flat
   // deduction that measuring on the gross would have denied it.
+  //
+  // `afpPaid` IS THE READER'S OWN FIGURE, which is the one place in this
+  // project where a voluntary contribution could get excluded along with the
+  // compulsory one — only the compulsory part is renta no gravable. The field
+  // asks for the compulsory contribution and says so; the gap is declared in
+  // `voluntaryPensionUnmodelled`.
   const rentaObtenida = round2(Math.max(0, grossPay - afpPaid));
 
   // The bifurcation of article 29 numeral 7. Below the limit, the flat $1,600
@@ -190,7 +196,7 @@ export function calculateAnnualReturn(input: AnnualInput) {
   // Article 38's three exceptions, and the reader only has to answer one
   // question for all three: everything else is already on the screen.
   // Measured on the same renta obtenida as the $9,100 test, and for the same
-  // reason: article 38 speaks of "rentas" and the AFP is not one of them.
+  // reason: article 38 speaks of "rentas", and a renta no gravable is not one.
   const overThreshold = rentaObtenida > FILING_THRESHOLD;
   const nothingWithheld = withheld === 0 && settled.amount > 0;
   // "Las retenciones efectuadas no guardan correspondencia con el impuesto".
@@ -286,10 +292,13 @@ function appliedRulesFor(input: {
     "annualTaxTable", "contributionsExcludedFromBase",
     "afpEmployeeRate", "isssEmployeeRate", "isssMonthlyCeiling",
     "fixedDeductionIncomeLimit", "annualFilingThreshold", "annualFilingWindowMonths",
-    // The gap travels with the citation list, the way the settlement carries
+    // The gaps travel with the citation list, the way the settlement carries
     // `vacationUnmodelled`: an exported return that names article 33 and stays
-    // silent about article 32 has told the reader the list is complete.
-    "annualDonationsUnmodelled",
+    // silent about article 32 has told the reader the list is complete. The
+    // voluntary-saving gap rides along for the same reason — it is the one that
+    // can move this page's thresholds if the reader put the wrong figure in the
+    // AFP box, so a printed return should not hide it either.
+    "annualDonationsUnmodelled", "voluntaryPensionUnmodelled",
   ];
   if (input.qualifiesForFixedDeduction) ids.push("fixedDeduction");
   else ids.push("annualDeductionLimit");

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { balanceSeries, compareCard, type MinimumMode } from "./card";
 import { DateField, MoneyField, NumberField, SegmentedField } from "./fields";
 import { isoAfterMonths, n, parseDate, type Row } from "./loan";
-import DebtComparator, { DEBT_SAMPLE, type DebtRow } from "./DebtComparator";
+import DebtComparator, { DEBT_LABELS as debtCopy, DEBT_SAMPLE, type DebtRow } from "./DebtComparator";
 import { downloadPdf } from "./pdf";
 import { readShare, type ShareSchema } from "./share";
 import { ShareButton, SharedNotice } from "./ShareLink";
@@ -285,6 +285,23 @@ export default function CreditCardPage({ lang }: { lang: Lang }) {
   const [debts, setDebts] = useState<DebtRow[]>(() => debtsFromShare(shared));
   const [debtTotal, setDebtTotal] = useState(shared.dt ?? "300");
 
+  /**
+   * Field names for the safeguard in `ShareButton`, so a value it refuses is
+   * pinned to the box it came from. The comparator's rows are numbered rather
+   * than named — its own labels repeat on every row, and "Deuda 2 · Saldo" is
+   * what the reader can actually find.
+   */
+  const shareLabels: Record<string, string> = {
+    sa: t.balance, ta: t.rate, mi: t.minimumAmount, mp: t.minimumPercent,
+    ca: t.charge, fe: t.firstDate, ab: t.extra, dt: debtCopy[lang].total,
+  };
+  for (let index = 1; index <= MAX_SHARED_DEBTS; index++) {
+    const debt = debtCopy[lang].debtLabel(index);
+    shareLabels[`b${index}`] = `${debt} · ${debtCopy[lang].balance}`;
+    shareLabels[`r${index}`] = `${debt} · ${debtCopy[lang].rate}`;
+    shareLabels[`m${index}`] = `${debt} · ${debtCopy[lang].minimum}`;
+  }
+
   const shareValues: Record<string, string> = {
     sa: balance, ta: rate, mm: minimumMode, mi: minimumAmount, mp: minimumPercent,
     ca: charge, fe: firstDate, ab: extra, dt: debtTotal,
@@ -426,7 +443,7 @@ export default function CreditCardPage({ lang }: { lang: Lang }) {
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
-        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />
+        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} labels={shareLabels} />
       </div>
 
       <div className="calculator-grid">

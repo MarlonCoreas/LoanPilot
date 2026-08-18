@@ -62,7 +62,7 @@ const copy = {
     openExercise: "Este ejercicio todavía no cierra: corre hasta el 31 de diciembre, así que esto es una proyección de cómo va el año, no la cuenta final.",
     source: "De dónde salen las cifras", sourceDirect: "Las tengo", sourceSalary: "Estimarlas del salario",
     income: "Ingresos gravados del año", withheld: "Renta retenida en el año",
-    afp: "AFP aportada en el año", isss: "ISSS aportado en el año",
+    afp: "AFP obligatoria aportada en el año", isss: "ISSS aportado en el año",
     salary: "Salario mensual", months: "Meses trabajados en el año",
     estimated: "Estimado del salario", estimatedNote: "Meses iguales entre sí, sin bonos ni cambios de salario, y sin el recálculo de junio y diciembre —que puede mover unos centavos—. Si tu año no fue plano, tomá las cifras de tus boletas y cambiá a «Las tengo».",
     bonus: "Aguinaldo recibido", bonusHint: "Opcional. Solo la parte que pasa del monto exento entra a la renta del año.",
@@ -82,8 +82,9 @@ const copy = {
     balanceZeroNote: "Con estas cifras, lo retenido coincide con el impuesto del año.",
 
     grossPay: "Ingresos gravados", grossIncome: "Renta obtenida",
-    afpExcluded: "AFP", afpExcludedNote: "renta no gravable, art. 26",
+    afpExcluded: "AFP", afpExcludedNote: "cotización obligatoria: renta no gravable",
     thresholdFigure: "sobre esto se miden $9,100 y $60,000",
+    thresholdNote: "El umbral se mide sobre la renta obtenida (ingresos gravados menos la cotización obligatoria de AFP), no sobre el salario bruto. El ISSS no se excluye en este punto: reduce la renta imponible, pero no la renta obtenida.",
     isssDeducted: "ISSS", isssDeductedNote: "deducción",
     contributions: "Cotizaciones (AFP e ISSS)",
     deductionsApplied: "Deducciones aplicadas", taxable: "Renta imponible",
@@ -141,14 +142,14 @@ const copy = {
     guideLead: "Cuatro piezas, en este orden. Cambiar cualquiera cambia el saldo.",
     guide: [
       ["Renta obtenida", "Todo lo gravado que recibiste en el año, incluido el excedente del aguinaldo. No entra la Quincena 25, que la ley declara renta no gravable.", "$"],
-      ["Menos cotizaciones", "AFP e ISSS salen de la base antes de la tabla. El art. 26 de la Ley Integral del Sistema de Pensiones declara las cotizaciones renta no gravable.", "−"],
+      ["Menos cotizaciones", "AFP e ISSS salen de la base antes de la tabla, pero no de la misma forma: la cotización obligatoria de AFP es renta no gravable y queda fuera de la renta obtenida, mientras que el ISSS solo baja la renta imponible.", "−"],
       ["Menos deducciones", "O los $1,600 fijos si tu renta obtenida no pasa de $9,100, o hasta $800 de médico y $800 de colegiatura si la pasa. Nunca las dos.", "§"],
       ["Tabla del artículo 37", "Sobre lo que queda. El primer tramo, hasta $6,600 al año, es exento desde el D.L. 293 de 2025.", "%"],
     ],
 
     helpIncome: "Lo gravado que recibiste en el año: sueldo, comisiones, horas extras, bonos. Si tenés la constancia de retención de tu patrono, es la casilla de ingresos gravados.",
     helpWithheld: "El total de renta que te retuvieron en el año, según tus boletas o la constancia. No incluye AFP ni ISSS.",
-    helpAfp: "Lo que te descontaron de AFP en el año, sumando los doce meses.",
+    helpAfp: "Lo que te descontaron de AFP en el año, sumando los doce meses. Solo la cotización obligatoria: los aportes voluntarios no son renta no gravable y esta página no los modela, así que sumarlos acá dejaría fuera de la renta obtenida más de lo que corresponde.",
     helpIsss: "Lo que te descontaron de ISSS en el año. El descuento se calcula hasta un salario máximo cotizable de $1,000 al mes.",
     helpSalary: "Tu salario mensual ordinario bruto, antes de descuentos.",
     helpMonths: "Cuántos meses del año trabajaste. Si entraste o saliste a mitad de año, esta es la casilla que más mueve el resultado.",
@@ -168,7 +169,7 @@ const copy = {
     openExercise: "This exercise has not closed yet: it runs to 31 December, so this is a projection of how the year is going rather than the final account.",
     source: "Where the figures come from", sourceDirect: "I have them", sourceSalary: "Estimate from salary",
     income: "Taxable income for the year", withheld: "Income tax withheld in the year",
-    afp: "Pension contributions in the year", isss: "ISSS contributions in the year",
+    afp: "Compulsory pension contributions in the year", isss: "ISSS contributions in the year",
     salary: "Monthly salary", months: "Months worked in the year",
     estimated: "Estimated from salary", estimatedNote: "Identical months, no bonuses and no salary changes, and without the June and December recalculation — which can move a few cents. If your year was not flat, take the figures off your payslips and switch to \"I have them\".",
     bonus: "Year-end bonus received", bonusHint: "Optional. Only the part above the exempt amount joins the year's income.",
@@ -188,8 +189,9 @@ const copy = {
     balanceZeroNote: "On these figures, what was withheld matches the year's tax.",
 
     grossPay: "Taxable pay", grossIncome: "Renta obtenida",
-    afpExcluded: "Pension", afpExcludedNote: "renta no gravable, art. 26",
+    afpExcluded: "Pension", afpExcludedNote: "compulsory contribution: renta no gravable",
     thresholdFigure: "the $9,100 and $60,000 tests read this",
+    thresholdNote: "The threshold is measured on the renta obtenida (taxable pay less the compulsory pension contribution), not on gross pay. The ISSS is not excluded at this point: it reduces the renta imponible, but not the renta obtenida.",
     isssDeducted: "ISSS", isssDeductedNote: "deduction",
     contributions: "Contributions (pension and ISSS)",
     deductionsApplied: "Deductions applied", taxable: "Taxable income",
@@ -247,14 +249,14 @@ const copy = {
     guideLead: "Four pieces, in this order. Change any of them and the balance moves.",
     guide: [
       ["Renta obtenida", "Everything taxable you received in the year, including the excess of the bonus. The Quincena 25 stays out: the law declares it non-taxable.", "$"],
-      ["Less contributions", "Pension and ISSS leave the base before the table. Article 26 of the Ley Integral del Sistema de Pensiones declares the contributions non-taxable income.", "−"],
+      ["Less contributions", "Pension and ISSS both leave the base before the table, but not in the same way: the compulsory pension contribution is renta no gravable and falls outside the renta obtenida, while the ISSS only lowers the renta imponible.", "−"],
       ["Less deductions", "Either the flat $1,600 if your renta obtenida is at or under $9,100, or up to $800 of medical and $800 of schooling if it is above. Never both.", "§"],
       ["The article 37 table", "On what is left. Its first band, up to $6,600 a year, has been exempt since D.L. 293 of 2025.", "%"],
     ],
 
     helpIncome: "The taxable income you received in the year: salary, commissions, overtime, bonuses. If you have your employer's constancia de retención, it is the taxable income box.",
     helpWithheld: "The total income tax withheld from you over the year, per your payslips or the constancia. It does not include pension or ISSS.",
-    helpAfp: "What was deducted for your pension fund over the year, across all twelve months.",
+    helpAfp: "What was deducted for your pension fund over the year, across all twelve months. The compulsory contribution only: voluntary contributions are not renta no gravable and this page does not model them, so adding them here would take more out of the renta obtenida than belongs there.",
     helpIsss: "What was deducted for ISSS over the year. The deduction is worked out up to a maximum contributory salary of $1,000 a month.",
     helpSalary: "Your gross ordinary monthly salary, before deductions.",
     helpMonths: "How many months of the year you worked. If you started or left mid-year, this is the box that moves the result most.",
@@ -451,7 +453,10 @@ export default function AnnualTaxPage({ lang }: { lang: Lang }) {
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
-        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />
+        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} labels={{
+          ej: t.exercise, in: t.income, re: t.withheld, afp: t.afp, isss: t.isss,
+          sal: t.salary, ms: t.months, ag: t.bonus, med: t.medical, edu: t.education,
+        }} />
       </div>}
 
       <div className="calculator-grid">
@@ -545,6 +550,11 @@ export default function AnnualTaxPage({ lang }: { lang: Lang }) {
               <div><span>{t.tax}</span><b>{money.format(result.tax)}</b></div>
               <div><span>{t.withheldLabel}</span><b>{money.format(result.withheld)}</b></div>
             </div>
+
+            {/* Directly under the chain, because it is about the step the
+                chain shows and not about the balance: which of the two
+                contributions leaves the renta obtenida and which does not. */}
+            <div className="callout"><span>§</span><p>{t.thresholdNote}</p></div>
 
             {result.bonusTaxable > 0 && <div className="callout warn"><span>?</span>
               <p><b>{t.bonusHoleTitle}.</b> {t.bonusHoleText}</p></div>}

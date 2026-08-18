@@ -322,7 +322,8 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
-        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />
+        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues}
+          labels={{ de: t.start, ha: t.end, sal: t.salary }} />
       </div>}
       <div className="calculator-grid">
         <div className="form-panel">

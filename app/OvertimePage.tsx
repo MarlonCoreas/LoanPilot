@@ -744,7 +744,12 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
-        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />
+        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} labels={{
+          sal: t.salary, jd: t.dayHours, ed: t.diurnal, en: t.nocturnal,
+          no: t.nightOrdinary, mn: t.minorDaily, tu: t.shiftCount,
+          dd: t.restDays, do_: t.restOrdinary, dxd: t.restExtraDay, dxn: t.restExtraNight,
+          as: t.holidays, axd: t.holidayExtraDay, axn: t.holidayExtraNight, co: t.coincident,
+        }} />
       </div>}
       <div className="calculator-grid">
         <div className="form-panel">

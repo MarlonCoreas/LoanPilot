@@ -31,8 +31,9 @@ const copy = {
     copy: "Copiar enlace con tus cifras",
     copied: "Enlace copiado",
     failed: "No se pudo copiar. Copialo de la barra de direcciones.",
-    dropped: "No se copió nada, porque estos datos no caben en un enlace y se irían sin avisar:",
-    droppedTail: "Los montos van con dos decimales como máximo. Ajustalos y volvé a intentar.",
+    dropped: "No se copió nada. Este dato no cabe en un enlace y se habría ido sin avisar:",
+    droppedPlural: "No se copió nada. Estos datos no caben en un enlace y se habrían ido sin avisar:",
+    droppedTail: "Los montos van con dos decimales como máximo. Corregí el campo y volvé a intentar.",
     contains: "El enlace lleva lo que escribiste —montos, fechas y opciones—, nunca los resultados ni nada que te identifique. Esa parte va después del # y no viaja a ningún servidor, pero sí llega completa a quien le pases el enlace.",
     fromLink: "Estas cifras vienen del enlace que abriste",
     fromLinkText: "No las escribiste en este dispositivo y nadie las envió a un servidor: viajaron dentro de la dirección, después del #. Revisalas antes de leer el resultado y cambiá lo que no corresponda a tu caso.",
@@ -41,16 +42,24 @@ const copy = {
     copy: "Copy a link with your figures",
     copied: "Link copied",
     failed: "Could not copy. Take it from the address bar.",
-    dropped: "Nothing was copied, because these figures do not fit in a link and would have gone missing without saying so:",
-    droppedTail: "Amounts take two decimals at most. Adjust them and try again.",
+    dropped: "Nothing was copied. This figure does not fit in a link and would have gone missing without saying so:",
+    droppedPlural: "Nothing was copied. These figures do not fit in a link and would have gone missing without saying so:",
+    droppedTail: "Amounts take two decimals at most. Fix the field and try again.",
     contains: "The link carries what you typed — amounts, dates and options — never the results and nothing that identifies you. That part sits after the # and reaches no server, but it does reach whoever you send the link to, in full.",
     fromLink: "These figures came from the link you opened",
     fromLinkText: "You did not type them on this device and nobody sent them to a server: they travelled inside the address, after the #. Check them before reading the result, and change whatever is not your case.",
   },
 } as const;
 
-export function ShareButton({ lang, schema, values }: {
+export function ShareButton({ lang, schema, values, labels }: {
   lang: Lang; schema: ShareSchema; values: ShareValues;
+  /**
+   * The field names the reader sees, keyed the way the schema is. Used only to
+   * say WHICH box is holding the link up — "Saldo: 1500.123" sends somebody to
+   * the right field, while a bare "1500.123" makes them hunt for it. A key
+   * without a label degrades to the value alone rather than to nothing.
+   */
+  labels?: Record<string, string>;
 }) {
   const t = copy[lang];
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
@@ -61,7 +70,7 @@ export function ShareButton({ lang, schema, values }: {
     // before the copy, not after: see the note above the component.
     const lost = Object.keys(schema)
       .filter((key) => (values[key] ?? "").trim() !== "" && sanitiseValue(schema[key], values[key]) === null)
-      .map((key) => values[key]);
+      .map((key) => (labels?.[key] ? `${labels[key]}: ${values[key]}` : values[key]));
     if (lost.length > 0) {
       setDropped([...new Set(lost)]);
       setState("idle");
@@ -83,7 +92,7 @@ export function ShareButton({ lang, schema, values }: {
       <i aria-hidden="true">⧉</i>{state === "copied" ? t.copied : t.copy}
     </button>
     <small aria-live="polite">
-      {dropped.length > 0 ? <>{t.dropped} <b>{dropped.join(", ")}</b>. {t.droppedTail}</>
+      {dropped.length > 0 ? <>{dropped.length === 1 ? t.dropped : t.droppedPlural} <b>{dropped.join(" · ")}</b>. {t.droppedTail}</>
         : state === "failed" ? t.failed : t.contains}
     </small>
   </div>;

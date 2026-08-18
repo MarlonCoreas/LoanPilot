@@ -35,15 +35,24 @@ export const DEBT_SAMPLE: DebtRow[] = [
   { id: 2, balance: "800", rate: "14", minimum: "45" },
 ];
 
+/**
+ * The field names the card page needs for the share safeguard. Re-exported from
+ * the same object the form renders, so a renamed label cannot go on naming a
+ * field that no longer exists by that name.
+ */
+export const DEBT_LABELS = {
+  es: { balance: "Saldo", rate: "Tasa anual", minimum: "Pago mínimo", total: "Total que podés pagar al mes", debtLabel: (index: number) => `Deuda ${index}` },
+  en: { balance: "Balance", rate: "Annual rate", minimum: "Minimum payment", total: "What you can pay each month", debtLabel: (index: number) => `Debt ${index}` },
+} as const;
+
 const copy = {
   es: {
+    ...DEBT_LABELS.es,
     title: "Varias deudas: en qué orden",
     subtitle: "Con un solo presupuesto mensual, el orden cambia lo que pagás de intereses",
     lead: "Poné cada deuda con su saldo, su tasa y el pago mínimo que exige. Abajo van las dos formas de ordenarlas: pagar primero la más cara y pagar primero la más pequeña. Las dos pagan los mínimos de todas; lo que sobra va a una sola.",
-    balance: "Saldo", rate: "Tasa anual", minimum: "Pago mínimo",
-    debtLabel: (index: number) => `Deuda ${index}`,
     remove: "Quitar esta deuda", add: "+ Agregar deuda",
-    total: "Total que podés pagar al mes", totalHint: "Todo lo que destinás a estas deudas juntas, mínimos incluidos",
+    totalHint: "Todo lo que destinás a estas deudas juntas, mínimos incluidos",
     helpBalance: "Lo que debés hoy en esa cuenta, según el último estado.",
     helpRate: "La tasa de interés anual de esa deuda. Si el estado de cuenta da una tasa mensual, multiplicala por doce.",
     helpMinimum: "El pago mínimo que exige esa cuenta cada mes, en dólares. Si tu tarjeta lo calcula como porcentaje del saldo, usá el monto que te está exigiendo ahora.",
@@ -81,13 +90,12 @@ const copy = {
     notModelledText: "Compras nuevas en esas cuentas, mínimos que cambian con el saldo, cargos por mora y tasas promocionales que vencen. Los cuatro empeoran el resultado real, en los dos órdenes por igual. Y esto es aritmética, no una regla legal: no hay norma que citar acá.",
   },
   en: {
+    ...DEBT_LABELS.en,
     title: "Several debts: in which order",
     subtitle: "With one monthly budget, the order changes what you pay in interest",
     lead: "Enter each debt with its balance, its rate and the minimum it demands. Below are the two ways to order them: the dearest first, and the smallest first. Both pay every minimum; whatever is left over goes to one debt at a time.",
-    balance: "Balance", rate: "Annual rate", minimum: "Minimum payment",
-    debtLabel: (index: number) => `Debt ${index}`,
     remove: "Remove this debt", add: "+ Add a debt",
-    total: "What you can pay each month", totalHint: "Everything you put towards these debts together, minimums included",
+    totalHint: "Everything you put towards these debts together, minimums included",
     helpBalance: "What you owe on that account today, from your latest statement.",
     helpRate: "The annual interest rate on that debt. If the statement gives a monthly rate, multiply it by twelve.",
     helpMinimum: "The minimum that account demands each month, in dollars. If your card works it out as a percentage of the balance, use the amount it is demanding now.",
