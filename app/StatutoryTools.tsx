@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import DisputePanel from "./DisputePanel";
 import { CheckField, DateField, FieldGroup, MoneyField, NumberField, SegmentedField, SelectField } from "./fields";
 import { isoAfterMonths, todayIso } from "./loan";
+import NextStep from "./NextStep";
+import { readShare, type ShareSchema, type ShareValues } from "./share";
+import { ShareButton, SharedNotice } from "./ShareLink";
 import { downloadPdf } from "./pdf";
 import { citationsFor, reviewedFor, type RuleId } from "./rules";
 import { ROUTES, type Lang } from "./routes";
@@ -70,8 +73,8 @@ const copy = {
     monthly: "Mensual", fortnightly: "Quincenal", weekly: "Semanal", includeAfp: "Descontar AFP (7.25%)",
     includeIsss: "Descontar ISSS (3%, techo mensual $1,000)", fixedDeduction: "Aplicar deducción fija de renta cuando corresponda",
     isssApprox: "El ISSS se liquida en planilla mensual. Para pagos quincenales y semanales el techo se prorratea, así que el resultado puede diferir en centavos del descuento real.",
-    annualGross: "Renta anual gravada estimada", annualGrossHint: "Opcional. Suma solo lo gravado con renta: aguinaldo y bonificaciones sí, la Quincena 25 no. Vacío, se anualiza el período.",
-    annualUsed: "Renta anual usada para el límite de $9,100", annualEstimated: "estimada del período", annualDeclared: "indicada por ti",
+    annualGross: "Renta anual gravada estimada", annualGrossHint: "Opcional. Suma solo lo gravado con renta: aguinaldo y bonificaciones sí, la Quincena 25 no. En bruto: la AFP se resta acá, porque el art. 26 la deja fuera de la renta obtenida. Vacío, se anualiza el período.",
+    annualUsed: "Renta obtenida del año, para el límite de $9,100", annualEstimated: "estimada del período", annualDeclared: "de tu renta anual, menos la AFP",
     takeHome: "Pago neto estimado", isr: "Retención de renta", afp: "Aporte AFP", isss: "Aporte ISSS",
     taxableBefore: "Remuneración gravada antes de deducción fija", taxable: "Base usada en la tabla", band: "Tramo aplicado",
     fiscalDeduction: "Deducción fiscal prorrateada", notCash: "Reduce la base de renta; no se descuenta del pago.",
@@ -91,6 +94,12 @@ const copy = {
     recalcExclusions: "Deja fuera las remuneraciones con retención definitiva y las sujetas al 10% de un segundo patrono (literal h).",
     settledTaxLabel: "Impuesto del acumulado", alreadyWithheld: "Ya retenido", toWithhold: "A retener en el mes", excessLabel: "Retenido de más",
     excessNote: "La diferencia negativa no se retiene, pero tampoco se devuelve por planilla: el literal i) deja al trabajador la declaración anual o la solicitud de devolución.",
+    nextAnnual: "El excedente de diciembre solo se recupera declarando.",
+    nextAnnualCta: "Mirá cómo queda el saldo del año",
+    nextSettlementWithholding: "Este total es bruto: al salario y a las vacaciones sí les entra planilla.",
+    nextSettlementWithholdingCta: "Calculá AFP, ISSS y renta sobre ese monto",
+    nextSettlementAguinaldo: "El aguinaldo de acá sale del finiquito, no de la escala completa del año.",
+    nextSettlementAguinaldoCta: "Revisá los días que te tocan al 20 de octubre",
     recalcDeductionNote: "El decreto extiende la deducción de $1,600 al Tramo II de estas tablas. Aquí se prorratea a los meses que cubre cada recálculo — $800 en junio y $1,600 en diciembre — porque es lo que mantiene la continuidad con las retenciones mensuales.",
     recalcEmployerNote: "Si hubo cambio de patrono, el recálculo lo hace el último del período y los acumulados deben incluir lo del anterior, según su constancia de retención.",
     modeRecalc: "Estimar junio o diciembre", modeRecalcSub: "El ajuste acumulado del año",
@@ -202,8 +211,8 @@ const copy = {
     monthly: "Monthly", fortnightly: "Twice monthly", weekly: "Weekly", includeAfp: "Deduct pension contribution (7.25%)",
     includeIsss: "Deduct ISSS (3%, $1,000 monthly ceiling)", fixedDeduction: "Apply fixed income-tax deduction when eligible",
     isssApprox: "ISSS is settled on a monthly planilla. For twice-monthly and weekly pay the ceiling is prorated, so the result can differ by a few cents from the actual deduction.",
-    annualGross: "Estimated annual taxable income", annualGrossHint: "Optional. Add up taxable pay only: the year-end bonus and bonuses count, the Quincena 25 does not. Left empty, the period is annualised.",
-    annualUsed: "Annual income used for the $9,100 limit", annualEstimated: "annualised from the period", annualDeclared: "entered by you",
+    annualGross: "Estimated annual taxable income", annualGrossHint: "Optional. Add up taxable pay only: the year-end bonus and bonuses count, the Quincena 25 does not. Gross — the pension contribution is taken out here, because article 26 leaves it outside the renta obtenida. Left empty, the period is annualised.",
+    annualUsed: "Renta obtenida for the year, for the $9,100 limit", annualEstimated: "annualised from the period", annualDeclared: "your annual figure, less the pension contribution",
     takeHome: "Estimated take-home pay", isr: "Income-tax withholding", afp: "Pension contribution", isss: "ISSS contribution",
     taxableBefore: "Taxable remuneration before fixed deduction", taxable: "Table tax base", band: "Applied band",
     fiscalDeduction: "Prorated tax deduction", notCash: "Reduces the income-tax base; it is not taken from pay.",
@@ -223,6 +232,12 @@ const copy = {
     recalcExclusions: "Leave out remuneration under final withholding and pay subject to a second employer's 10% (literal h).",
     settledTaxLabel: "Tax on the cumulative base", alreadyWithheld: "Already withheld", toWithhold: "To withhold this month", excessLabel: "Over-withheld",
     excessNote: "A negative difference withholds nothing, but payroll does not refund it either: literal i) leaves the worker the annual return or a refund request.",
+    nextAnnual: "The December excess comes back only through the annual return.",
+    nextAnnualCta: "See how the year's balance lands",
+    nextSettlementWithholding: "This total is gross: salary and vacation do carry payroll deductions.",
+    nextSettlementWithholdingCta: "Work out the pension, ISSS and income tax on it",
+    nextSettlementAguinaldo: "The bonus here is the settlement's share, not the full year's scale.",
+    nextSettlementAguinaldoCta: "Check the days you are owed at 20 October",
     recalcDeductionNote: "The decree extends the $1,600 deduction to band II of these tables. It is prorated here to the months each recalculation covers — $800 in June and $1,600 in December — because that is what keeps it continuous with the monthly withholding.",
     recalcEmployerNote: "After a change of employer the last one in the period runs the recalculation, and the cumulative figures must include the previous employer's, per its withholding certificate.",
     modeRecalc: "Estimate June or December", modeRecalcSub: "The year's cumulative adjustment",
@@ -409,36 +424,94 @@ function Table({ bands, t, money }: { bands: WithholdingBand[]; t: typeof copy.e
   return <div className="law-table-wrap"><table className="law-table"><thead><tr><th>{t.from}</th><th>{t.to}</th><th>{t.rate}</th><th>{t.excess}</th><th>{t.fixed}</th></tr></thead><tbody>{bands.map((band) => <tr key={band.from}><td>{money.format(band.from)}</td><td>{band.to === null ? t.onwards : money.format(band.to)}</td><td>{band.rate === 0 ? t.noRetention : `${band.rate * 100}%`}</td><td>{band.rate === 0 ? "—" : money.format(band.excess)}</td><td>{band.rate === 0 ? "—" : money.format(band.fixed)}</td></tr>)}</tbody></table></div>;
 }
 
+/**
+ * The two schemas of this file, one per route.
+ *
+ * They are separate because the component is: /finiquito/ and /retenciones/
+ * share a module and share nothing else, and a settlement link that quietly
+ * carried a payslip's figures would be handing over more than the reader
+ * thought they were sending.
+ */
+const SETTLEMENT_SHARE: ShareSchema = {
+  cau: { kind: "option", values: ["dismissal", "resignation"] },
+  de: { kind: "date" },
+  ha: { kind: "date" },
+  sal: { kind: "money" },
+  sec: { kind: "option", values: ["commerce", "maquila", "coffee", "agriculture"] },
+  dp: { kind: "int", max: 31 },
+  vac: { kind: "int", max: 50 },
+  agp: { kind: "flag" },
+};
+
+const PAYROLL_SHARE: ShareSchema = {
+  mo: { kind: "option", values: ["calculate", "verify", "recalc"] },
+  br: { kind: "money" },
+  fr: { kind: "option", values: ["monthly", "fortnightly", "weekly"] },
+  an: { kind: "money" },
+  afp: { kind: "flag" },
+  isss: { kind: "flag" },
+  ded: { kind: "flag" },
+  pe: { kind: "option", values: ["june", "december"] },
+  fu: { kind: "option", values: ["entered", "estimated"] },
+  asa: { kind: "money" },
+  aba: { kind: "money" },
+  are: { kind: "money" },
+  // The four figures off the payslip. Blank stays blank: `sanitiseValue`
+  // drops an empty string, and an unfilled row is not compared.
+  bafp: { kind: "money" },
+  bisss: { kind: "money" },
+  bisr: { kind: "money" },
+  bnet: { kind: "money" },
+};
+
 export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool }) {
   const t = copy[lang];
   const money = useMemo(() => new Intl.NumberFormat(lang === "es" ? "es-SV" : "en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }), [lang]);
-  const [termination, setTermination] = useState<EmploymentEnd>("dismissal");
-  const [startDate, setStartDate] = useState(() => isoAfterMonths(-60));
-  const [endDate, setEndDate] = useState(todayIso);
-  const [monthlySalary, setMonthlySalary] = useState("900");
-  const [sector, setSector] = useState<WageSector>("commerce");
-  const [pendingDays, setPendingDays] = useState("10");
-  const [unusedVacation, setUnusedVacation] = useState("0");
-  const [aguinaldoPaid, setAguinaldoPaid] = useState(false);
-  const [gross, setGross] = useState("900");
-  const [frequency, setFrequency] = useState<PayFrequency>("monthly");
-  const [includeAfp, setIncludeAfp] = useState(true);
-  const [includeIsss, setIncludeIsss] = useState(true);
-  const [applyFixedDeduction, setApplyFixedDeduction] = useState(true);
-  const [annualGross, setAnnualGross] = useState("");
-  const [recalcPeriod, setRecalcPeriod] = useState<RecalcPeriod>("june");
-  const [accSource, setAccSource] = useState<AccumulatedSource>("estimated");
-  const [accSalary, setAccSalary] = useState("900");
-  const [accTaxable, setAccTaxable] = useState("5400");
-  const [accWithheld, setAccWithheld] = useState("400");
-  const [payrollMode, setPayrollMode] = useState<PayrollMode>("calculate");
+  const shareSchema = tool === "settlement" ? SETTLEMENT_SHARE : PAYROLL_SHARE;
+  const [shared] = useState(() => readShare(shareSchema));
+  const fromLink = Object.keys(shared).length > 0;
+  const [termination, setTermination] = useState<EmploymentEnd>((shared.cau as EmploymentEnd) ?? "dismissal");
+  const [startDate, setStartDate] = useState(() => shared.de ?? isoAfterMonths(-60));
+  const [endDate, setEndDate] = useState(() => shared.ha ?? todayIso());
+  const [monthlySalary, setMonthlySalary] = useState(shared.sal ?? "900");
+  const [sector, setSector] = useState<WageSector>((shared.sec as WageSector) ?? "commerce");
+  const [pendingDays, setPendingDays] = useState(shared.dp ?? "10");
+  const [unusedVacation, setUnusedVacation] = useState(shared.vac ?? "0");
+  const [aguinaldoPaid, setAguinaldoPaid] = useState(shared.agp === "1");
+  const [gross, setGross] = useState(shared.br ?? "900");
+  const [frequency, setFrequency] = useState<PayFrequency>((shared.fr as PayFrequency) ?? "monthly");
+  // The three switches default to on, so a link only ever turns one off — an
+  // absent key must not read as "unticked".
+  const [includeAfp, setIncludeAfp] = useState(shared.afp !== "0");
+  const [includeIsss, setIncludeIsss] = useState(shared.isss !== "0");
+  const [applyFixedDeduction, setApplyFixedDeduction] = useState(shared.ded !== "0");
+  const [annualGross, setAnnualGross] = useState(shared.an ?? "");
+  const [recalcPeriod, setRecalcPeriod] = useState<RecalcPeriod>((shared.pe as RecalcPeriod) ?? "june");
+  const [accSource, setAccSource] = useState<AccumulatedSource>((shared.fu as AccumulatedSource) ?? "estimated");
+  const [accSalary, setAccSalary] = useState(shared.asa ?? "900");
+  const [accTaxable, setAccTaxable] = useState(shared.aba ?? "5400");
+  const [accWithheld, setAccWithheld] = useState(shared.are ?? "400");
+  const [payrollMode, setPayrollMode] = useState<PayrollMode>((shared.mo as PayrollMode) ?? "calculate");
   // Empty on purpose, all four of them. A prefilled payslip would be someone
   // else's figures compared against the reader's pay, and the first thing they
   // would see is a difference that is not theirs.
-  const [slipAfp, setSlipAfp] = useState("");
-  const [slipIsss, setSlipIsss] = useState("");
-  const [slipIsr, setSlipIsr] = useState("");
-  const [slipNet, setSlipNet] = useState("");
+  const [slipAfp, setSlipAfp] = useState(shared.bafp ?? "");
+  const [slipIsss, setSlipIsss] = useState(shared.bisss ?? "");
+  const [slipIsr, setSlipIsr] = useState(shared.bisr ?? "");
+  const [slipNet, setSlipNet] = useState(shared.bnet ?? "");
+
+  const shareValues: ShareValues = tool === "settlement"
+    ? {
+      cau: termination, de: startDate, ha: endDate, sal: monthlySalary,
+      sec: sector, dp: pendingDays, vac: unusedVacation, agp: aguinaldoPaid ? "1" : "0",
+    }
+    : {
+      mo: payrollMode, br: gross, fr: frequency, an: annualGross,
+      afp: includeAfp ? "1" : "0", isss: includeIsss ? "1" : "0",
+      ded: applyFixedDeduction ? "1" : "0",
+      pe: recalcPeriod, fu: accSource, asa: accSalary, aba: accTaxable, are: accWithheld,
+      bafp: slipAfp, bisss: slipIsss, bisr: slipIsr, bnet: slipNet,
+    };
 
   const settlement = useMemo(() => calculateSettlement({
     startDate, endDate, monthlySalary: number(monthlySalary), sector, termination,
@@ -471,7 +544,8 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
     accumulatedWithheld: estimating ? estimate.accumulatedWithheld : number(accWithheld),
     applyFixedDeduction,
     annualGross: estimating ? estimate.annualGross : number(annualGross),
-  }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, estimate, estimating, recalcPeriod]);
+    includeAfp,
+  }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, estimate, estimating, includeAfp, recalcPeriod]);
   // The same pay run the panel above already priced, read against what the
   // payslip says. It reuses every input of the calculate mode, so a reader who
   // set up their pay there and then switches has nothing to type again.
@@ -694,11 +768,13 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
       {/* Exportar un error no le sirve a nadie, así que la acción sólo existe
           cuando hay un resultado que defender — el mismo criterio de la
           calculadora de horas extras. */}
+      {fromLink && <SharedNotice lang={lang} />}
       {!settlement.invalid && settlement.total > 0 && <div className="shell-toolbar export-toolbar">
         <div className="export-actions">
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportSettlement}><i>PDF</i>{t.exportPdf}</button>
         </div>
+        <ShareButton lang={lang} schema={shareSchema} values={shareValues} />
       </div>}
       <div className="calculator-grid">
         <div className="form-panel">
@@ -740,6 +816,13 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
             {settlement.quincena25OutsideWindow && <div className="callout"><span>?</span><p>{t.quincena25OutsideLead} <b>{money.format(settlement.quincena25Alternative)}</b> {t.quincena25OutsideTail} <DisputeLink rule="quincena25Window" /></p></div>}
             <div className={`callout ${termination === "resignation" && !settlement.eligibleForResignationBenefit ? "warn" : ""}`}><span>{termination === "dismissal" ? "§" : "i"}</span><p>{termination === "dismissal" ? t.dismissalNote : settlement.eligibleForResignationBenefit ? `${t.resignationOk} ${t.resignationRule}` : t.resignationNo}</p></div>
           </>}
+          {/* The two questions a finished settlement leaves behind, and no
+              more than two: what payroll takes off this, and whether the bonus
+              inside it is the whole bonus. */}
+          {!settlement.invalid && settlement.total > 0 && <>
+            <NextStep href={ROUTES[lang].withholding} cta={t.nextSettlementWithholdingCta}>{t.nextSettlementWithholding}</NextStep>
+            {settlement.aguinaldo > 0 && <NextStep href={ROUTES[lang].aguinaldo} cta={t.nextSettlementAguinaldoCta}>{t.nextSettlementAguinaldo}</NextStep>}
+          </>}
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>
@@ -764,6 +847,13 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           onClick={() => setPayrollMode("recalc")} aria-pressed={payrollMode === "recalc"}>
           <span className="mode-icon">Σ</span><span><b>{t.modeRecalc}</b><small>{t.modeRecalcSub}</small></span>
         </button>
+      </div>
+      {fromLink && <SharedNotice lang={lang} />}
+      {/* Under the switch rather than inside one mode: the three modes share
+          the pay details, so the link carries them whichever one is open, and
+          only the check mode has a PDF for it to stand beside. */}
+      <div className="shell-toolbar">
+        <ShareButton lang={lang} schema={shareSchema} values={shareValues} />
       </div>
       {payrollMode === "calculate" ? <>
       <div className="calculator-grid">
@@ -851,7 +941,13 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           {/* Negative is a result, not an error state, so it is explained
               whether or not it happened: a reader who never sees a saldo a
               favor should still learn that the arithmetic can produce one. */}
-          <div className={recalc.excess > 0 ? "callout warn" : "callout"}><span>{recalc.excess > 0 ? "!" : "−"}</span><p>{recalc.excess > 0 ? t.excessNote : t.recalcExplainNegative}</p></div>
+          <div className={recalc.excess > 0 ? "callout warn" : "callout"}><span>{recalc.excess > 0 ? "!" : "−"}</span><p>{recalc.excess > 0 ? t.excessNote : t.recalcExplainNegative}</p>
+            {/* Only when there is an excess and only in December. In June the
+                next recalculation is still ahead and can absorb it, so sending
+                that reader to the annual return would be premature. */}
+            {recalc.excess > 0 && recalcPeriod === "december"
+              && <NextStep href={ROUTES[lang].annualTax} cta={t.nextAnnualCta}>{t.nextAnnual}</NextStep>}
+          </div>
           <div className="callout"><span>i</span><p>{t.recalcEmployerNote}</p></div>
         </div>
       </section>

@@ -6,8 +6,11 @@ import {
 import DisputePanel from "./DisputePanel";
 import { CheckField, DateField, MoneyField, SegmentedField } from "./fields";
 import { isoAfterMonths, todayIso } from "./loan";
+import NextStep from "./NextStep";
 import { downloadPdf } from "./pdf";
 import { reviewedLineFor } from "./reviewed";
+import { readShare, type ShareSchema } from "./share";
+import { ShareButton, SharedNotice } from "./ShareLink";
 import {
   aguinaldoExemptionFor, aguinaldoScale, AGUINALDO_EXEMPTION_HISTORY, citationsFor, currentValue,
   reviewedFor, RULE_USAGE, type RuleId,
@@ -88,6 +91,8 @@ const copy = {
     taxHistoryTitle: "Decretos transitorios anteriores", taxHistoryYear: "Ejercicio", taxHistoryAmount: "Monto exento", taxHistoryNorm: "Decreto",
     taxOpenTitle: "Lo que esta página no calcula",
     taxOpenNote: "Cuánto se retiene sobre la base gravada. Ni el numeral 16) ni los decretos transitorios dicen con qué tabla se retiene el excedente del aguinaldo, y un aguinaldo no es un período de pago: aplicarle la tabla mensual sería una lectura nuestra, no una cita. Por eso la porción exenta y la base gravada sí aparecen, y la retención no.",
+    nextAnnual: "Ese impuesto no desaparece: la base gravada entra a la renta del año y ahí sí la alcanza el artículo 37.",
+    nextAnnualCta: "Mirá qué saldo deja en la declaración",
   },
   en: {
     heroTitle: "How much year-end bonus you are owed.",
@@ -153,6 +158,8 @@ const copy = {
     taxHistoryTitle: "Earlier transitory decrees", taxHistoryYear: "Tax year", taxHistoryAmount: "Exempt amount", taxHistoryNorm: "Decree",
     taxOpenTitle: "What this page does not calculate",
     taxOpenNote: "How much is withheld on the taxable base. Neither numeral 16) nor the transitory decrees say which table withholds on the excess of a bonus, and a bonus is not a pay period: applying the monthly table to it would be our reading, not a citation. That is why the exempt portion and the taxable base appear here and the withholding does not.",
+    nextAnnual: "The tax does not vanish: the taxable base joins the year's income, where article 37 does reach it.",
+    nextAnnualCta: "See the balance it leaves on the return",
   },
 } as const;
 
@@ -162,6 +169,15 @@ const number = (value: string) => {
 };
 
 const LATEST_END_DATE = `${Number(todayIso().slice(0, 4)) + 1}-12-31`;
+
+/** The reader's own answers, and nothing this page worked out from them. */
+const SHARE_SCHEMA: ShareSchema = {
+  si: { kind: "option", values: ["employed", "ended"] },
+  de: { kind: "date" },
+  ha: { kind: "date" },
+  sal: { kind: "money" },
+  pg: { kind: "flag" },
+};
 
 export default function AguinaldoPage({ lang }: { lang: Lang }) {
   const t = copy[lang];
@@ -173,11 +189,19 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
   }), [lang]);
   const date = (iso: string) => longDate.format(new Date(`${iso}T00:00:00Z`));
 
-  const [standing, setStanding] = useState<Standing>("employed");
-  const [startDate, setStartDate] = useState(() => isoAfterMonths(-36));
-  const [endDate, setEndDate] = useState(todayIso);
-  const [monthlySalary, setMonthlySalary] = useState("900");
-  const [alreadyPaid, setAlreadyPaid] = useState(false);
+  const [shared] = useState(() => readShare(SHARE_SCHEMA));
+  const fromLink = Object.keys(shared).length > 0;
+
+  const [standing, setStanding] = useState<Standing>((shared.si as Standing) ?? "employed");
+  const [startDate, setStartDate] = useState(() => shared.de ?? isoAfterMonths(-36));
+  const [endDate, setEndDate] = useState(() => shared.ha ?? todayIso());
+  const [monthlySalary, setMonthlySalary] = useState(shared.sal ?? "900");
+  const [alreadyPaid, setAlreadyPaid] = useState(shared.pg === "1");
+
+  const shareValues = {
+    si: standing, de: startDate, ha: endDate, sal: monthlySalary,
+    pg: alreadyPaid ? "1" : "0",
+  };
 
   const bonus = useMemo(() => {
     const thisYear = Number(todayIso().slice(0, 10).slice(0, 4));
@@ -292,11 +316,13 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
     <SiteHeader lang={lang} page="aguinaldo" />
     <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLineFor(lang, "aguinaldo")} />
     <section className="statutory-tools standalone-tools" id="tools">
+      {fromLink && <SharedNotice lang={lang} />}
       {!bonus.invalid && bonus.amount > 0 && <div className="shell-toolbar export-toolbar">
         <div className="export-actions">
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
+        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />
       </div>}
       <div className="calculator-grid">
         <div className="form-panel">
@@ -368,7 +394,12 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
           {/* The claim that a 2026 decree is likely, and roughly when, is made
               of the five entries below rather than of an adjective. */}
           <div className="callout"><span>◷</span><p>{t.taxDecreeNote}</p></div>
-          <div className="callout warn"><span>?</span><p><b>{t.taxOpenTitle}:</b> {t.taxOpenNote}</p></div>
+          <div className="callout warn"><span>?</span><p><b>{t.taxOpenTitle}:</b> {t.taxOpenNote}</p>
+            {/* Where the unwithheld excess actually surfaces. Only when there
+                is an excess: for a bonus wholly inside the exempt slice there
+                is no open question to follow up. */}
+            {tax.taxable > 0 && <NextStep href={ROUTES[lang].annualTax} cta={t.nextAnnualCta}>{t.nextAnnual}</NextStep>}
+          </div>
         </div>
         <details className="tax-history">
           <summary>{t.taxHistoryTitle}</summary>

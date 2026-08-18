@@ -314,6 +314,15 @@ export const resignationMinimumService = rule<number>({
  * 937.54/30 x (15 x 54/365) x 1.30 gives the $90.16 the statement prints, where
  * 30.42 would give $88.92. So the 30 is anchored empirically, to the official
  * service, and not to a text. Changing it breaks that reconciliation.
+ *
+ * UNSOURCED, and the widest-reaching one in the registry. It is not DISPUTED:
+ * there are no two readings to set against each other, there is a text that
+ * says nothing and an official practice that fixes the figure. That is a
+ * different kind of gap and /reglas-en-disputa/ now publishes it in a section of
+ * its own rather than leaving it unmarked — which is what it was, on the
+ * argument that a silence is not a disagreement. The argument was right about
+ * the category and wrong about the consequence: every daily figure the site
+ * prints is divided by this number.
  */
 export const dailySalaryDivisor = rule<number>({
   id: "dailySalaryDivisor",
@@ -324,7 +333,8 @@ export const dailySalaryDivisor = rule<number>({
     norm: "Código de Trabajo arts. 142 y 183 (ninguno fija el divisor)",
     source: "laborService",
     reviewed: "2026-08-16",
-    note: "Anchored empirically to the MTPS calculator, not to a statutory text: article 183 sets the base and article 142 defines the daily wage from the hourly one, so neither settles the divisor.",
+    status: ["UNSOURCED"],
+    note: "UNSOURCED. No text fixes it: article 183 sets the base and article 142 defines the daily wage from the hourly one, so neither settles the divisor. The 30 is anchored empirically to the MTPS calculator — 30.42 stops reconciling with the official statement — and it multiplies into every daily figure the site prints: severance, vacation, the year-end bonus and every overtime hour.",
   }],
 });
 
@@ -1001,10 +1011,10 @@ export const afpEmployeeRate = rule<number>({
   versions: [{
     from: "2023-01-01",
     value: 0.0725,
-    norm: "Ley Integral del Sistema de Pensiones arts. 14 y 16",
+    norm: "Ley Integral del Sistema de Pensiones arts. 14, 16 y 26",
     source: "pensions",
-    reviewed: "2026-08-14",
-    note: "Of the monthly contributory salary, with no maximum base: the previous ceiling was repealed, so a high salary is not capped.",
+    reviewed: "2026-08-17",
+    note: "Of the monthly contributory salary, with no maximum base: the previous ceiling was repealed, so a high salary is not capped. Article 26 is why the contribution leaves the income tax base at all — it declares the compulsory contributions of the affiliated \"rentas no gravables para efectos de Impuesto sobre la Renta\", which is an express exemption and not an inference from the withholding tables.",
   }],
 });
 
@@ -1051,7 +1061,7 @@ export const fixedDeduction = rule<number>({
     value: 1600,
     norm: "Ley de Impuesto sobre la Renta art. 29 numeral 7",
     source: "incomeTax",
-    reviewed: "2026-08-14",
+    reviewed: "2026-08-17",
     note: "An annual figure. The payroll calculation divides it by the pay periods in a year and the recalculation scales it to the months each period covers, which is why it is stored annually and never per period.",
   }],
 });
@@ -1064,8 +1074,207 @@ export const fixedDeductionIncomeLimit = rule<number>({
     value: 9100,
     norm: "Ley de Impuesto sobre la Renta art. 29 numeral 7",
     source: "incomeTax",
-    reviewed: "2026-08-14",
-    note: "Measured on \"renta obtenida\", which article 2 defines as the salary and remuneration received — the gross, not the base left after pension and health contributions.",
+    reviewed: "2026-08-17",
+    note: "Measured on \"renta obtenida\", which is the taxable pay less the AFP and nothing else. Article 26 of the pension law makes the compulsory contribution a renta no gravable and article 4 of this law excludes those \"del cómputo de la renta obtenida\", so the pension money never enters the figure; the ISSS has no article of its own and leaves later, as a deduction on the way to the renta imponible. A gross of $9,400 is therefore under this limit and a gross of $9,900 is over it.",
+  }],
+});
+
+// --- The annual return ------------------------------------------------------
+//
+// THE TABLE THE WITHHOLDING TABLES ARE AN APPROXIMATION OF. Everything in the
+// block above settles tax inside a payroll; this is the settlement the payroll
+// was estimating, and the two only agree under a condition that is worth
+// writing down because the whole /renta-anual/ page is about the cases where it
+// does not hold.
+//
+// Article 37 is applied to the renta imponible (arts. 34 and 37). The December
+// recalculation table is the same function evaluated at (base - 1,600):
+//
+//   band III of December: 20% x (base - 10,742.86) + 720
+//   article 37 at base - 1,600: 20% x (base - 1,600 - 9,142.86) + 720
+//
+// which are the same expression, and `tests/annual.test.mjs` checks it over the
+// whole range rather than at a point. So the withholding tables hand every band
+// III and IV taxpayer a $1,600 deduction, and article 37 grants it only to
+// somebody who is entitled to it: the $1,600 of article 29 numeral 7 below
+// $9,100 of renta obtenida, or the article 33 receipts above it. A worker over
+// $9,100 with no receipts is therefore under-withheld by 20% or 30% of $1,600 —
+// which is a balance DUE at the annual return, not a refund, and the reason the
+// page is not written as a refund calculator.
+//
+// A CHECK THAT LOOKS LIKE A BUG AND IS NOT. Comparing the two tables band by
+// band shows the $1,600 displacement in three places and none in the first:
+// band I of the December table closes at $6,600 and not at $8,200. That is the
+// decree's own design. D.L. 293 set the exempt base at "$6,600.00 de ingresos
+// anuales, equivalente a un ingreso mensual de hasta $550.00", and literal e)
+// of Executive Decree 10/2025 says the values of band II "no contienen las
+// deducciones" — so bands I and II carry the raw article 37 limits and only
+// bands III and IV carry them displaced.
+
+export const annualTaxTable = rule<WithholdingBand[]>({
+  id: "annualTaxTable",
+  unit: "usd-bands",
+  versions: [{
+    // Eight days after publication in Diario Oficial 79, Tomo 447, of 30 April
+    // 2025, per article 3 of the decree itself. The exercise is priced at its
+    // close — article 13 letter c) presumes the renta obtained at midnight on
+    // the last day of the period — so this version governs exercise 2025
+    // onward, and a return for 2024 resolves through `predatesRule`.
+    from: "2025-05-08",
+    value: [
+      { from: 0.01, to: 6600, rate: 0, excess: 0, fixed: 0 },
+      { from: 6600.01, to: 9142.86, rate: 0.10, excess: 6600, fixed: 212.12 },
+      { from: 9142.87, to: 22857.14, rate: 0.20, excess: 9142.86, fixed: 720 },
+      { from: 22857.15, to: null, rate: 0.30, excess: 22857.14, fixed: 3462.86 },
+    ],
+    norm: "Ley de Impuesto sobre la Renta arts. 34 y 37 (tabla reformada por el D.L. 293 del 30 de abril de 2025)",
+    source: "incomeTax",
+    reviewed: "2026-08-17",
+    note: "Read back against the consolidated text and against D.L. 293 itself, whose article 1 reprints the whole table. Only bands I and II changed — the first recital of Executive Decree 10/2025 says so in as many words — and bands III and IV still carry the figures D.L. 957 of 14 December 2011 gave them. The $212.12 fixed amount of band II is a step, not a slope: the tax jumps by that much at $6,600.01, and it is in the published table.",
+  }],
+});
+
+/**
+ * The two gaps of /renta-anual/, written down instead of left silent.
+ *
+ * Neither has a value this project applies, and that is the point: article 460
+ * of nothing says a calculator must model everything, but a calculator that
+ * quietly omits a deduction is telling the reader their balance is bigger than
+ * it is. They are rules in the registry so that the staleness check keeps them
+ * under review with the ones that are applied, and so that a reader looking for
+ * either one finds out it is missing on purpose — the same contract
+ * `vacationUnmodelled` gives the settlement.
+ */
+export const annualDonationsUnmodelled = rule<string[]>({
+  id: "annualDonationsUnmodelled",
+  unit: "not-modelled",
+  versions: [{
+    // The date of the neighbouring articles of this law, not a reading of this
+    // article's own history: nothing here depends on the date, because there is
+    // no value to pick a version of.
+    from: "2011-12-30",
+    value: ["donaciones del artículo 32"],
+    norm: "Ley de Impuesto sobre la Renta art. 32",
+    source: "incomeTax",
+    reviewed: "2026-08-17",
+    status: ["NOT MODELLED"],
+    note: "NOT MODELLED. Article 29 numeral 7 sends everyone above $9,100 of renta obtenida to articles 32 AND 33, and /renta-anual/ models only 33. A reader who donated is therefore shown a balance larger than the one they will file — an error that flatters the page on screen and costs the reader nothing, which is precisely why it is easy to leave unwritten. The ceiling article 32 sets is deliberately NOT transcribed here: nobody has read that article back against the consolidated text for this project, and a figure carried from memory is the one thing this registry exists to prevent. Modelling it starts by reading it.",
+  }],
+});
+
+export const annualTablePriorExercises = rule<{ firstExercise: number }>({
+  id: "annualTablePriorExercises",
+  unit: "not-modelled",
+  versions: [{
+    from: "2011-12-30",
+    value: { firstExercise: 2025 },
+    norm: "Ley de Impuesto sobre la Renta art. 37 (texto anterior al D.L. 293 del 30 de abril de 2025)",
+    source: "incomeTax",
+    reviewed: "2026-08-17",
+    status: ["NOT MODELLED"],
+    note: "NOT MODELLED. D.L. 293 changed bands I and II of article 37, and this registry carries only the table that resulted. The superseded figures are not here, so an exercise that closed before 2025 cannot be priced — /renta-anual/ offers 2025 as its first year rather than applying today's table to a year it did not govern, and `annualTableFor` reports `predatesRule` for anything earlier. The gap is a reading that has not been done, not a limit of the code: the older band I and II figures would be one more entry in `annualTaxTable.versions`, and the exercise close of article 13 letter c) already picks the right one.",
+  }],
+});
+
+/**
+ * Above this, a salaried worker files whatever the withholding did.
+ *
+ * Article 38 exempts the salaried from filing, and then names three cases that
+ * put the obligation back: renta above this figure, no withholding made at all,
+ * and withholding that "no guarda correspondencia" with the article 37 table.
+ * The third one is the page's own result, which is why the calculator can tell
+ * a reader they have to file without asking them anything else.
+ */
+export const annualFilingThreshold = rule<number>({
+  id: "annualFilingThreshold",
+  unit: "usd/year",
+  versions: [{
+    from: "2011-12-30",
+    value: 60000,
+    norm: "Ley de Impuesto sobre la Renta art. 38",
+    source: "incomeTax",
+    reviewed: "2026-08-17",
+    note: "Measured on \"rentas\", the same renta obtenida the $9,100 test of article 29 numeral 7 is measured on: taxable pay less the AFP, which article 26 of the pension law puts outside the cómputo de la renta obtenida. The ISSS stays inside it.",
+  }],
+});
+
+/**
+ * The article 33 deductions, which no withholding table can know about.
+ *
+ * $800 for each of two concepts, so $1,600 at most — the same figure as the
+ * fixed deduction, and not by accident: the two are alternatives. Article 33
+ * excludes "la comprendida en el numeral 7) del artículo 29", and article 29
+ * numeral 7 sends everyone above $9,100 to articles 32 and 33. Below that
+ * limit, the flat $1,600 with no receipts; above it, up to $1,600 but only for
+ * money actually spent, "sujetas a comprobación".
+ */
+export const annualDeductionLimit = rule<number>({
+  id: "annualDeductionLimit",
+  unit: "usd/year",
+  versions: [{
+    from: "2011-12-30",
+    value: 800,
+    norm: "Ley de Impuesto sobre la Renta art. 33 literales a) y b)",
+    source: "incomeTax",
+    reviewed: "2026-08-17",
+    note: "Per concept and per exercise: medical and hospital services under literal a), schooling of children under 25 or the taxpayer's own studies under literal b). The receipts are not attached to the return and have to be kept for six years.",
+  }],
+});
+
+/**
+ * How long after the exercise the return is due.
+ *
+ * Stored as the months article 48 grants rather than as "30 April", because the
+ * date is a derivation: article 13 letter a) closes the exercise on 31 December
+ * and four months from there is the deadline. Writing the date down would be
+ * writing down an answer instead of the rule that produces it.
+ */
+export const annualFilingWindowMonths = rule<number>({
+  id: "annualFilingWindowMonths",
+  unit: "months",
+  versions: [{
+    from: "1991-12-21",
+    value: 4,
+    norm: "Ley de Impuesto sobre la Renta arts. 13 literal a) y 48",
+    source: "incomeTax",
+    reviewed: "2026-08-17",
+    note: "Article 48: the return is filed \"dentro de los cuatro meses siguientes al vencimiento del ejercicio o período de imposición\". Article 13 letter a) fixes that exercise at 1 January to 31 December for natural persons.",
+  }],
+});
+
+/**
+ * What leaves the gross before the table is applied.
+ *
+ * The pension contribution is settled: article 26 of the Ley Integral del
+ * Sistema de Pensiones declares the compulsory contributions "rentas no
+ * gravables para efectos de Impuesto sobre la Renta", so it never enters the
+ * base in the first place. THE TWO ARE NOT INTERCHANGEABLE, which is the whole
+ * reason this rule names them separately: article 4 of the Ley de Impuesto
+ * sobre la Renta excludes a renta no gravable "del cómputo de la renta
+ * obtenida", so the pension money is out of the figure the $9,100 and $60,000
+ * thresholds are read against, while the health contribution is only a
+ * subtraction on the way to the renta imponible and is still inside it. The
+ * renta imponible comes out the same either way; the thresholds do not. The health contribution has no article of its own
+ * saying that, and what carries it is the third recital of Executive Decree
+ * 10/2025, which describes the withholding tables as built on the renta neta
+ * "una vez deducidos de los ingresos brutos [...] las cotizaciones
+ * previsionales, remuneraciones no gravadas y las deducciones legales de
+ * seguridad social, educación y salud, reguladas en los artículos 29, numeral
+ * 7) y 33". That is the tax administration stating how the base is built, in a
+ * decree, and it is the citation this project prints — a recital rather than an
+ * article, which is why it is named here instead of being left implicit in the
+ * arithmetic of two calculators.
+ */
+export const contributionsExcludedFromBase = rule<string[]>({
+  id: "contributionsExcludedFromBase",
+  unit: "exclusions",
+  versions: [{
+    from: "2025-05-01",
+    value: ["cotización previsional (AFP)", "cotización de seguridad social (ISSS)"],
+    norm: "Decreto Ejecutivo 10/2025, considerando III",
+    source: "withholding",
+    reviewed: "2026-08-17",
+    note: "The employer's share is not in this list and never was: only what is withheld from the worker leaves the worker's base.",
   }],
 });
 
@@ -1188,6 +1397,9 @@ export const RULES = {
   withholdingTables, recalcTables, recalcMonths,
   afpEmployeeRate, isssEmployeeRate, isssMonthlyCeiling,
   fixedDeduction, fixedDeductionIncomeLimit,
+  annualTaxTable, annualFilingThreshold, annualDeductionLimit, annualFilingWindowMonths,
+  annualDonationsUnmodelled, annualTablePriorExercises,
+  contributionsExcludedFromBase,
   nightWindow, shiftLimits, minorOvertimeLimit, overtimeFactors,
 } satisfies Record<string, AnyRule>;
 
@@ -1204,12 +1416,28 @@ export const ALL_RULES: AnyRule[] = Object.values(RULES);
  * and forgetting to list one it does use would make the claim better than it
  * is. Both are wrong, and the second is the dangerous one.
  *
- * `loans` is empty on purpose: nothing in the loan calculator comes from
- * Salvadoran statute, which is why it makes no freshness claim at all.
+ * `loans` and `creditCard` are empty on purpose: nothing in either calculator
+ * comes from Salvadoran statute — the arithmetic is interest on a balance —
+ * which is why neither makes a freshness claim at all. An empty list here is a
+ * statement, not an omission, and the test suite asserts it stays one.
  */
 export const RULE_USAGE: Record<Page, RuleId[]> = {
   home: Object.keys(RULES) as RuleId[],
   loans: [],
+  creditCard: [],
+  // The annual return applies the article 37 table itself, not the withholding
+  // tables: it settles the year, it does not estimate a payroll. What it shares
+  // with /retenciones/ are the two article 29 figures, the contribution rates
+  // that leave the base, and — through the bonus — the exemption of article 4
+  // numeral 16 and the minimum wage it is measured in.
+  annualTax: [
+    "annualTaxTable", "annualFilingThreshold", "annualDeductionLimit",
+    "annualFilingWindowMonths", "contributionsExcludedFromBase",
+    "annualDonationsUnmodelled", "annualTablePriorExercises",
+    "fixedDeduction", "fixedDeductionIncomeLimit",
+    "afpEmployeeRate", "isssEmployeeRate", "isssMonthlyCeiling",
+    "aguinaldoTaxExemption", "minimumWage",
+  ],
   settlement: [
     "minimumWage", "severanceDaysPerYear", "severanceMinimumDays", "severanceWageCap",
     "resignationDaysPerYear", "resignationWageCap", "resignationMinimumService",
@@ -1238,6 +1466,10 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "withholdingTables", "recalcTables", "recalcMonths",
     "afpEmployeeRate", "isssEmployeeRate", "isssMonthlyCeiling",
     "fixedDeduction", "fixedDeductionIncomeLimit", "quincena25Exempt",
+    // The page subtracts both contributions from every base it prints and
+    // measures the $9,100 limit on the renta obtenida the AFP has left, so the
+    // rule that says which of the two is an exclusion is one this page applies.
+    "contributionsExcludedFromBase",
   ],
   // Whatever is in dispute, and nothing else. Written as a derivation rather
   // than a list because the page is one too: a rule marked DISPUTED that this
@@ -1265,25 +1497,48 @@ export function reviewedFor(page: Page): string | undefined {
 }
 
 /**
- * Every version of every rule that claims something beyond a reading of its
- * text, in registry order.
+ * The two halves of /reglas-en-disputa/, which are not the same kind of thing.
  *
- * This is what /reglas-en-disputa/ is built from. Marking a rule DISPUTED is
- * therefore the only step needed to publish it: there is no second list to
- * remember, which is exactly the failure this replaces — a divergence recorded
- * in a comment nobody outside the repository will ever read.
+ *   disputed   a text and a practice, or two articles, say different things.
+ *              There are two readings and this project applies one of them.
+ *   unsourced  nothing says anything. No two readings to set against each
+ *              other: a silence, and a figure somebody had to choose.
  *
- * `NOT MODELLED` is not a disagreement about what the law says; it is a gap in
- * what this project computes, and it belongs in the limitations a calculator
- * states rather than on a page about contested readings.
+ * Publishing both under one heading was the mistake this splits. A reader shown
+ * "two readings" for a rule that has none is being handed a manufactured
+ * counter-argument, and a silence filed under "disputes" reads as the weaker
+ * problem of the two when it is usually the stronger one.
+ *
+ * A version flagged both ways is disputed: `quincena25Window` has two live
+ * readings of article 3 AND an invented lower bound, and the disagreement is
+ * the part a reader has to decide about first.
  */
-export function disputedVersions() {
+export type ContestedSection = "disputed" | "unsourced";
+
+export function sectionFor(version: RuleVersion<unknown>): ContestedSection {
+  return version.status?.includes("DISPUTED") ? "disputed" : "unsourced";
+}
+
+/**
+ * Every version of every rule that claims something beyond a reading of its
+ * text, in registry order, optionally narrowed to one section.
+ *
+ * This is what /reglas-en-disputa/ is built from. Marking a rule DISPUTED or
+ * UNSOURCED is therefore the only step needed to publish it: there is no second
+ * list to remember, which is exactly the failure this replaces — a divergence
+ * recorded in a comment nobody outside the repository will ever read.
+ *
+ * `NOT MODELLED` is neither a disagreement about what the law says nor a
+ * silence this project filled; it is a gap in what it computes, and it belongs
+ * in the limitations a calculator states rather than on this page.
+ */
+export function disputedVersions(section?: ContestedSection) {
   const contested: { rule: AnyRule; version: RuleVersion<unknown> }[] = [];
   for (const rule of ALL_RULES) {
     for (const version of rule.versions) {
-      if (version.status?.some((flag) => flag === "DISPUTED" || flag === "UNSOURCED")) {
-        contested.push({ rule, version });
-      }
+      if (!version.status?.some((flag) => flag === "DISPUTED" || flag === "UNSOURCED")) continue;
+      if (section !== undefined && sectionFor(version) !== section) continue;
+      contested.push({ rule, version });
     }
   }
   return contested;

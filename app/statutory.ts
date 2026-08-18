@@ -365,7 +365,12 @@ export function calculateSettlement(input: {
   };
 }
 
-function applyBands(taxable: number, table: WithholdingBand[]) {
+/**
+ * Exported for the annual return, which applies the article 37 table with the
+ * same arithmetic the withholding tables use. Two implementations of "find the
+ * band, add the fixed amount, apply the rate to the excess" is one too many.
+ */
+export function applyBands(taxable: number, table: WithholdingBand[]) {
   const amount = Math.max(0, round2(taxable));
   const band = table.find((item) => item.to === null || amount <= item.to) ?? table.at(-1)!;
   return {
@@ -377,6 +382,31 @@ function applyBands(taxable: number, table: WithholdingBand[]) {
 
 export function withholdingForTaxable(taxable: number, frequency: PayFrequency) {
   return applyBands(taxable, WITHHOLDING_TABLES[frequency]);
+}
+
+/**
+ * The renta obtenida behind a figure of taxable pay, which is the pay less the
+ * pension contribution and nothing else.
+ *
+ * WHY THE AFP AND NOT THE ISSS. Article 26 of the Ley Integral del Sistema de
+ * Pensiones declares the compulsory contributions "rentas no gravables para
+ * efectos de Impuesto sobre la Renta", and article 4 of the Ley de Impuesto
+ * sobre la Renta attaches the consequence to that status: a renta no gravable
+ * is "excluida del cómputo de la renta obtenida". The health contribution has
+ * no article giving it that character — what carries it is a recital of
+ * Executive Decree 10/2025 describing it as deducted from the ingresos brutos —
+ * so it leaves the base later, on the way to the renta imponible, and is still
+ * inside the renta obtenida when the $9,100 limit is measured.
+ *
+ * The rate is applied to the whole figure because article 14 of the pension law
+ * sets no maximum contributory base: the previous ceiling was repealed, so a
+ * high salary contributes the same 7.25% as a low one. If a ceiling ever comes
+ * back this stops being a multiplication and the rule note is where it lands.
+ */
+function rentaObtenidaFrom(taxablePay: number, includeAfp?: boolean) {
+  const pay = round2(Math.max(0, taxablePay || 0));
+  if (includeAfp === false) return pay;
+  return round2(Math.max(0, pay - round2(pay * AFP_RATE)));
 }
 
 /**
@@ -400,6 +430,7 @@ export function withholdingForTaxable(taxable: number, frequency: PayFrequency) 
  * extending that same band II rule to the two recalculation tables by name.
  */
 function fixedDeductionFor(input: {
+  /** Renta obtenida for the year: taxable pay with the AFP already excluded. */
   annualIncome: number;
   bandBeforeFixedDeduction: number;
   months: number;
@@ -446,11 +477,12 @@ export function calculatePayrollWithholding(input: {
   const isssCap = ISSS_MONTHLY_CEILING * monthsPerPeriod;
   const isss = input.includeIsss === false ? 0 : round2(Math.min(gross, isssCap) * ISSS_RATE);
   const taxableBeforeFixedDeduction = round2(Math.max(0, gross - afp - isss));
-  // Article 29 caps the fixed deduction by "renta obtenida", which article 2
-  // defines as the salary and remuneration received — the gross, not the base
-  // left after pension and health contributions.
+  // Article 29 caps the fixed deduction by "renta obtenida", and the pension
+  // contribution is not part of that figure: see `rentaObtenidaFrom`. The
+  // health contribution is, so this is the gross less the AFP and nothing else.
   const declaredAnnual = round2(Math.max(0, input.annualGross || 0));
-  const annualIncome = declaredAnnual > 0 ? declaredAnnual : round2(gross * periods);
+  const annualPay = declaredAnnual > 0 ? declaredAnnual : round2(gross * periods);
+  const annualIncome = rentaObtenidaFrom(annualPay, input.includeAfp);
   // The band is read from the base before the deduction, which is the figure
   // the table's own limits are written in. A base that band II then drops below
   // $550 still withholds nothing, which is what the annual liquidation gives.
@@ -464,7 +496,7 @@ export function calculatePayrollWithholding(input: {
   const net = round2(gross - afp - isss - withholding.amount);
   return {
     gross, afp, isss, fixedDeduction, qualifiesForFixedDeduction, bandBeforeFixedDeduction,
-    annualIncome, annualIncomeDeclared: declaredAnnual > 0,
+    annualPay, annualIncome, annualIncomeDeclared: declaredAnnual > 0,
     taxableBeforeFixedDeduction, taxable, isr: withholding.amount,
     band: withholding.band, marginalRate: withholding.rate, net,
   };
@@ -835,8 +867,14 @@ export function calculateRecalculation(input: {
   /** Withholding already made in the preceding monthly periods. */
   accumulatedWithheld: number;
   applyFixedDeduction?: boolean;
-  /** Annual figure for the $9,100 test; estimated from the period when absent. */
+  /**
+   * Taxable pay for the year, gross. The $9,100 test is measured on the renta
+   * obtenida derived from it, not on the figure itself — the AFP comes out
+   * first. Estimated from the period when absent.
+   */
   annualGross?: number;
+  /** False when the pay carries no pension contribution to exclude. */
+  includeAfp?: boolean;
 }) {
   const months = RECALC_MONTHS[input.period];
   const table = RECALC_TABLES[input.period];
@@ -844,11 +882,13 @@ export function calculateRecalculation(input: {
   const accumulatedWithheld = round2(Math.max(0, input.accumulatedWithheld || 0));
 
   const declaredAnnual = round2(Math.max(0, input.annualGross || 0));
-  // Scaling the accumulated base to a year measures the limit on taxable pay
-  // rather than on the gross the decree names, so a declared figure is always
-  // the better one and the interface asks for it.
+  // Scaling the accumulated base to a year measures the limit on a figure the
+  // ISSS has already left, which the renta obtenida has not, so a declared
+  // figure is always the better one and the interface asks for it. The AFP is
+  // out of both: out of the declared one by `rentaObtenidaFrom`, and out of the
+  // accumulated base before it ever got here.
   const annualIncome = declaredAnnual > 0
-    ? declaredAnnual
+    ? rentaObtenidaFrom(declaredAnnual, input.includeAfp)
     : round2(accumulatedTaxable * MONTHS_IN_A_YEAR / months);
 
   const bandBeforeFixedDeduction = applyBands(accumulatedTaxable, table).band;
@@ -871,7 +911,7 @@ export function calculateRecalculation(input: {
 
   return {
     period: input.period, months, accumulatedTaxable, accumulatedWithheld,
-    annualIncome, annualIncomeDeclared: declaredAnnual > 0,
+    annualPay: declaredAnnual, annualIncome, annualIncomeDeclared: declaredAnnual > 0,
     qualifiesForFixedDeduction, bandBeforeFixedDeduction, fixedDeduction,
     taxable, settledTax: settled.amount,
     band: settled.band, marginalRate: settled.rate,

@@ -1,12 +1,12 @@
 // Extensions written out: the test suite imports this module through Node's
 // type stripping, which resolves specifiers literally. See tsconfig.json.
-import { RULE_USAGE, type RuleId } from "./rules.ts";
+import { RULE_USAGE, type ContestedSection, type RuleId } from "./rules.ts";
 import type { Page } from "./routes.ts";
 
 /**
- * The reader's half of every contested rule.
+ * The reader's half of every unsettled rule, in the two kinds it comes in.
  *
- * `rules.ts` records WHAT is in dispute — the value, the article, the source and
+ * `rules.ts` records WHAT is unsettled — the value, the article, the source and
  * the `status` that marks it — in one language, for whoever maintains the
  * registry. This file is the other side of the same fact, written for the person
  * whose money it moves, in both languages the site is published in.
@@ -16,7 +16,14 @@ import type { Page } from "./routes.ts";
  * prose inside it would bury the figures. And the split is enforced rather than
  * trusted: `disputedVersions()` drives /reglas-en-disputa/, and the test suite
  * fails when a rule marked DISPUTED or UNSOURCED has no entry here — so a rule
- * cannot be quietly contested in the code and settled on screen.
+ * cannot be quietly unsettled in the code and settled on screen.
+ *
+ * TWO SHAPES, BECAUSE THERE ARE TWO PROBLEMS. A `Dispute` is a text and a
+ * practice, or two articles, saying different things: two readings, one of them
+ * applied. An `Assumption` is a silence: no text, nothing to set against
+ * anything, and a figure this project chose. Writing the second in the shape of
+ * the first would mean inventing an opposing reading to fill the slot, which is
+ * the one thing a page about honesty cannot do.
  *
  * WHAT AN ENTRY MAY NOT DO. It may not resolve anything. Every reading gets the
  * same voice, the applied one is marked as applied and not as correct, and
@@ -53,6 +60,29 @@ export type Dispute = {
   stakes: Bilingual;
   readings: [Reading, Reading];
   /** Why this project applies the one it applies. */
+  why: Bilingual;
+};
+
+/**
+ * A figure no document fixes, and which this project therefore chose.
+ *
+ * It has no `readings`, and that absence is the point: there is no second
+ * position to be fair to. What it has instead is `reach` — how far the choice
+ * travels through the site — because that is the thing a reader cannot work out
+ * for themselves and the thing that decides how much the silence matters. It is
+ * a field and not a sentence buried in `why` so that it cannot be left out.
+ */
+export type Assumption = {
+  rule: RuleId;
+  /** The question the law does not answer. */
+  question: Bilingual;
+  /** What the texts do say, and where they stop. */
+  silence: Bilingual;
+  /** The value applied, and whatever it is anchored to when it is anchored. */
+  choice: Bilingual;
+  /** How far the choice travels: which figures move if it moves. */
+  reach: Bilingual;
+  /** Why this value and not another. */
   why: Bilingual;
 };
 
@@ -199,10 +229,46 @@ export const DISPUTES: Dispute[] = [
   },
 ];
 
+export const ASSUMPTIONS: Assumption[] = [
+  {
+    rule: "dailySalaryDivisor",
+    question: {
+      es: "¿Entre cuántos días se divide el salario mensual para obtener el diario?",
+      en: "How many days is a monthly salary divided by to get a daily one?",
+    },
+    silence: {
+      es: "El artículo 183 fija la base —«el salario básico que devengue», para el salario estipulado por unidad de tiempo— y no nombra divisor. El artículo 142 define el salario diario en la dirección contraria: la hora pactada por las horas de la jornada ordinaria. Ninguno de los dos dice entre cuánto se divide un salario mensual, y el decreto de salarios mínimos usa 30.42 para su propio equivalente mensual sin ordenar que ese número se use aquí.",
+      en: "Article 183 fixes the base — \"el salario básico que devengue\", for pay stipulated by unit of time — and names no divisor. Article 142 defines the daily wage in the other direction: the agreed hourly rate times the hours of the ordinary shift. Neither says what a monthly salary is divided by, and the minimum-wage decree uses 30.42 for its own monthly equivalent without ordering that number to be used here.",
+    },
+    choice: {
+      es: "Treinta. No sale de un texto: sale de la constancia del MTPS que este proyecto reproduce al centavo. Con 937.54/30, la vacación proporcional de 54 días da los $90.16 que imprime el documento oficial; con 30.42 daría $88.92 y el sitio dejaría de coincidir con el ministerio.",
+      en: "Thirty. It does not come from a text: it comes from the MTPS statement this project reproduces to the cent. At 937.54/30, the proportional vacation of 54 days gives the $90.16 the official document prints; at 30.42 it would give $88.92 and the site would stop agreeing with the ministry.",
+    },
+    reach: {
+      es: "Es el supuesto de mayor alcance del sitio. Toda cifra diaria pasa por él: la indemnización, la prestación por renuncia, la vacación, el aguinaldo y cada hora extra, porque la hora sale del día. Cambiarlo a 30.42 baja un 1.4% cada una de esas líneas —sobre un salario de $937.54, el día pasa de $31.25 a $30.82— y ese 1.4% corre por todas a la vez, no por una.",
+      en: "It is the widest-reaching assumption on the site. Every daily figure passes through it: severance, the resignation benefit, vacation, the year-end bonus and every overtime hour, because the hour is derived from the day. Moving it to 30.42 lowers each of those lines by 1.4% — on a salary of $937.54 the day goes from $31.25 to $30.82 — and that 1.4% runs through all of them at once, not through one.",
+    },
+    why: {
+      es: "Porque hay una cifra oficial contra la cual anclarlo, y anclarla a algo comprobable es mejor que elegir el número que parece más razonable. La decisión es la misma del artículo 187: donde el texto calla y el ministerio actúa, se sigue al ministerio y se dice que es lo que se está haciendo. La diferencia es que allá hay dos lecturas y aquí no hay ninguna: nadie sostiene que la ley diga 30, y este proyecto tampoco. Si un decreto o un criterio publicado fijara el divisor, mandaría el documento y esta ficha desaparecería.",
+      en: "Because there is an official figure to anchor it to, and anchoring to something checkable beats picking the number that looks most reasonable. It is the same decision as article 187's: where the text is silent and the ministry acts, the ministry is followed and the page says that is what is happening. The difference is that there two readings exist and here there are none — nobody claims the law says 30, and this project does not claim it either. If a decree or a published criterion fixed the divisor, the document would govern and this entry would disappear.",
+    },
+  },
+];
+
 const BY_RULE = new Map(DISPUTES.map((dispute) => [dispute.rule, dispute]));
+const ASSUMED_BY_RULE = new Map(ASSUMPTIONS.map((item) => [item.rule, item]));
 
 export function disputeFor(rule: RuleId) {
   return BY_RULE.get(rule);
+}
+
+export function assumptionFor(rule: RuleId) {
+  return ASSUMED_BY_RULE.get(rule);
+}
+
+/** The reader-facing question of an unsettled rule, whichever kind it is. */
+export function questionFor(rule: RuleId): Bilingual | undefined {
+  return BY_RULE.get(rule)?.question ?? ASSUMED_BY_RULE.get(rule)?.question;
 }
 
 /**
@@ -217,16 +283,30 @@ export function pagesApplying(rule: RuleId): Page[] {
     .map(([page]) => page);
 }
 
+/** One line of the panel a calculator carries: which section, and the question. */
+export type Unsettled = { rule: RuleId; question: Bilingual; section: ContestedSection };
+
 /**
- * The contested rules a calculator applies, for the panel it carries at the
+ * The unsettled rules a calculator applies, for the panel it carries at the
  * foot of its results.
  *
  * The deep-linked callouts only appear for the cases they touch — a dismissal
  * never meets the article 187 divergence — so on their own they leave the
- * existence of these disagreements dependent on the reader having typed the
- * right dates. This is the unconditional half: the page states which of its
- * figures rest on an unsettled reading before anybody asks.
+ * existence of these gaps dependent on the reader having typed the right dates.
+ * This is the unconditional half: the page states which of its figures rest on
+ * an unsettled reading, or on a figure nothing fixes, before anybody asks.
+ *
+ * Both kinds are listed. The divisor is not a disagreement, but it moves every
+ * daily figure on the page it appears on, and a panel that named the arguable
+ * readings while staying quiet about the invented ones would be the more
+ * flattering half of the truth.
  */
-export function disputesForPage(page: Page): Dispute[] {
-  return DISPUTES.filter((dispute) => RULE_USAGE[page].includes(dispute.rule));
+export function unsettledForPage(page: Page): Unsettled[] {
+  const applied = RULE_USAGE[page];
+  return [
+    ...DISPUTES.filter((item) => applied.includes(item.rule))
+      .map((item) => ({ rule: item.rule, question: item.question, section: "disputed" as const })),
+    ...ASSUMPTIONS.filter((item) => applied.includes(item.rule))
+      .map((item) => ({ rule: item.rule, question: item.question, section: "unsourced" as const })),
+  ];
 }

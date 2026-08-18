@@ -21,6 +21,7 @@
     "og": "node scripts/og-image.mjs",
     "test": "npm run build && node --test",
     "check:rules": "node scripts/check-rules.mjs",
+    "inventory": "node scripts/inventory.mjs",
     "lint": "npm run typecheck",
     "typecheck": "tsc --noEmit"
   },

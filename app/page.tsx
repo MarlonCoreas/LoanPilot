@@ -5,8 +5,11 @@ import {
   monthlyIrr, n, parseDate, solveRate, today,
   type ExtraPayment, type InsuranceMode, type RateChange, type Row,
 } from "./loan";
+import NextStep from "./NextStep";
+import { readShare, type ShareSchema } from "./share";
+import { ShareButton, SharedNotice } from "./ShareLink";
 import { downloadPdf } from "./pdf";
-import type { Lang } from "./routes";
+import { ROUTES, type Lang } from "./routes";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import UtilityHero from "./UtilityHero";
@@ -35,6 +38,8 @@ const copy = {
     results: "Tu estimación", bankPayment: "Cuota del préstamo", firstTotal: "Primera cuota con seguro",
     totalInterest: "Intereses totales", totalCost: "Total que pagarías", effective: "Costo efectivo anual estimado",
     cashReceived: "Efectivo que recibes", totalInsurance: "Seguro estimado", totalFees: "Cargos iniciales", yearly: "Costo por año",
+    nextCard: "Una tarjeta no se amortiza así: el pago mínimo se recalcula sobre el saldo y el plazo lo ponés vos.",
+    nextCardCta: "Compará contra lo que te cuesta la tarjeta",
     principal: "Capital", interest: "Interés", charges: "Seguro", schedule: "Ver tabla completa", hideSchedule: "Ocultar tabla",
     paymentNo: "Cuota", date: "Fecha", payment: "Pago", balance: "Saldo",
     accuracy: "Qué hace precisa esta estimación",
@@ -111,6 +116,8 @@ const copy = {
     results: "Your estimate", bankPayment: "Loan payment", firstTotal: "First payment with insurance",
     totalInterest: "Total interest", totalCost: "Total you would pay", effective: "Estimated effective annual cost",
     cashReceived: "Cash you receive", totalInsurance: "Estimated insurance", totalFees: "Upfront charges", yearly: "Cost by year",
+    nextCard: "A credit card does not amortise like this: the minimum payment is recomputed on the balance and you set the term.",
+    nextCardCta: "Compare it against what the card costs",
     principal: "Principal", interest: "Interest", charges: "Insurance", schedule: "View full schedule", hideSchedule: "Hide schedule",
     paymentNo: "Payment", date: "Date", payment: "Payment", balance: "Balance",
     accuracy: "What makes this estimate accurate",
@@ -219,10 +226,41 @@ function NumericField({ label, value, suffix, onChange, onTouch, help, lang }: {
     {suffix && suffix !== "$" && <b className="suffix">{suffix}</b>}</div></Field>;
 }
 
+/**
+ * A quote, as the reader described it.
+ *
+ * ONLY THE NEW-LOAN MODE. The active-loan side of this page carries two
+ * ledgers — the prepayments already made and the rate changes along the way —
+ * and a flat `key=value` fragment cannot hold a list. Sharing the scalars and
+ * quietly dropping the ledger would send somebody a link that computes a
+ * different answer than the one the sender was looking at, which is worse than
+ * not offering the button, so the button is not offered there. Carrying the
+ * ledgers is a schema question, not a UI one, and it is written down as
+ * out-of-scope in the README rather than left as a surprise.
+ */
+const SHARE_SCHEMA: ShareSchema = {
+  mo: { kind: "money" },
+  ta: { kind: "decimal", max: 200 },
+  pl: { kind: "int", max: 40 },
+  fe: { kind: "date" },
+  sm: { kind: "option", values: ["balance", "fixed", "none"] },
+  sv: { kind: "decimal", max: 10000 },
+  co: { kind: "decimal", max: 100 },
+  ot: { kind: "money" },
+  cm: { kind: "option", values: ["deducted", "financed"] },
+};
+
 export default function Home({ lang }: { lang: Lang }) {
   const [mode, setMode] = useState<Mode>("new"); const [activeView, setActiveView] = useState<ActiveView>("future"); const [detailsOpen, setDetailsOpen] = useState(true); const [scheduleOpen, setScheduleOpen] = useState(false); const [demo, setDemo] = useState(true);
-  const [amount, setAmount] = useState("10000"); const [rate, setRate] = useState("11.5"); const [years, setYears] = useState("5"); const [firstDate, setFirstDate] = useState(isoAfterMonths(1));
-  const [insuranceMode, setInsuranceMode] = useState<InsuranceMode>("balance"); const [insuranceValue, setInsuranceValue] = useState("0.65"); const [commission, setCommission] = useState("1.5"); const [otherFees, setOtherFees] = useState("75"); const [feeMode, setFeeMode] = useState<"deducted" | "financed">("deducted");
+  const [shared] = useState(() => readShare(SHARE_SCHEMA));
+  const fromLink = Object.keys(shared).length > 0;
+  const [amount, setAmount] = useState(shared.mo ?? "10000"); const [rate, setRate] = useState(shared.ta ?? "11.5"); const [years, setYears] = useState(shared.pl ?? "5"); const [firstDate, setFirstDate] = useState(() => shared.fe ?? isoAfterMonths(1));
+  const [insuranceMode, setInsuranceMode] = useState<InsuranceMode>((shared.sm as InsuranceMode) ?? "balance"); const [insuranceValue, setInsuranceValue] = useState(shared.sv ?? "0.65"); const [commission, setCommission] = useState(shared.co ?? "1.5"); const [otherFees, setOtherFees] = useState(shared.ot ?? "75"); const [feeMode, setFeeMode] = useState<"deducted" | "financed">((shared.cm as "deducted" | "financed") ?? "deducted");
+
+  const shareValues = {
+    mo: amount, ta: rate, pl: years, fe: firstDate,
+    sm: insuranceMode, sv: insuranceValue, co: commission, ot: otherFees, cm: feeMode,
+  };
   const [activeBalance, setActiveBalance] = useState("7450"); const [activeRate, setActiveRate] = useState("11.5"); const [activePayment, setActivePayment] = useState("220"); const [nextDate, setNextDate] = useState(isoAfterMonths(1)); const [activeInsurance, setActiveInsurance] = useState("4.50"); const [originalAmount, setOriginalAmount] = useState("10000"); const [paidToDate, setPaidToDate] = useState("3600"); const [oneExtra, setOneExtra] = useState("1000"); const [extraDate, setExtraDate] = useState(isoAfterMonths(3)); const [monthlyExtra, setMonthlyExtra] = useState("35");
   const [historyFirstDate, setHistoryFirstDate] = useState(isoAfterMonths(-23));
   const [historyKnown, setHistoryKnown] = useState<KnownInput>("term");
@@ -375,9 +413,13 @@ export default function Home({ lang }: { lang: Lang }) {
     <UtilityHero title={<>{t.title1}<br /><em>{t.title2}</em></>} lead={t.subtitle} trust={t.free} />
     <section className="calculator-shell" id="calculator">
       <div className="mode-switch" role="group" aria-label={lang === "es" ? "Tipo de cálculo" : "Calculation type"}><button type="button" className={mode === "new" ? "selected" : ""} onClick={() => setMode("new")} aria-pressed={mode === "new"}><span className="mode-icon">◎</span><span><b>{t.newLoan}</b><small>{t.newLoanSub}</small></span></button><button type="button" className={mode === "active" ? "selected" : ""} onClick={() => setMode("active")} aria-pressed={mode === "active"}><span className="mode-icon">↗</span><span><b>{t.activeLoan}</b><small>{t.activeLoanSub}</small></span></button></div>
+      {fromLink && <SharedNotice lang={lang} />}
       <div className="shell-toolbar">
         {demo && <div className="demo-flag"><i />{t.demoLabel}<button onClick={clearSample}>{t.demoReset}</button></div>}
         <div className="export-actions"><span>{t.exportHint}</span><button onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button><button onClick={exportExcel}><i>XLS</i>{t.exportExcel}</button></div>
+        {/* See SHARE_SCHEMA: the active-loan ledgers do not fit a flat
+            fragment, and a link that drops them silently is worse than none. */}
+        {mode === "new" && <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} />}
       </div>
       {mode === "new" ? <div className="calculator-grid">
         <div className="form-panel"><div className="section-title"><span>01</span><div><h2>{t.basics}</h2><p>{lang === "es" ? "Lo mínimo para una buena estimación" : "The minimum for a useful estimate"}</p></div></div><div className="field-grid">{input(t.amount, amount, setAmount, "$", t.helpAmount)}{input(t.rate, rate, setRate, "%", t.helpRate)}{input(t.term, years, setYears, t.years, t.helpTerm)}{dateInput(t.firstDate, firstDate, setFirstDate, t.helpFirstDate)}</div>
@@ -388,6 +430,9 @@ export default function Home({ lang }: { lang: Lang }) {
         </div>
         <div className="results-panel"><div className="results-kicker">{t.results}</div><div className="result-headline"><span>{t.firstTotal}</span><strong>{money.format((quote.rows[0]?.payment ?? 0) + (quote.rows[0]?.insurance ?? 0))}</strong><small>{money.format(quote.payment)} {lang === "es" ? "de préstamo + seguro variable" : "loan payment + variable insurance"}</small></div><div className="result-tiles"><div><span>{t.totalInterest}</span><b>{money.format(quote.totalInterest)}</b></div><div><span>{t.totalInsurance}</span><b>{money.format(quote.totalInsurance)}</b></div><div><span>{t.totalCost}</span><b>{money.format(quote.totalPayments)}</b></div><div className="highlight"><span>{t.effective}</span><b>{quote.effective.toFixed(2)}%</b></div><div><span>{t.cashReceived}</span><b>{money.format(quote.net)}</b></div><div><span>{t.totalFees}</span><b>{money.format(quote.fees)}</b></div></div>
           <div className="year-chart"><div className="chart-head"><b>{t.yearly}</b><span><i className="dot interest" />{t.interest}<i className="dot insurance" />{t.charges}</span></div>{Object.entries(quote.yearly).map(([year, item]) => { const max = Math.max(...Object.values(quote.yearly).map((v) => v.interest + v.insurance), 1); return <div className="bar-row" key={year}><span>{year}</span><div className="bar-track"><i className="bar-int" style={{ width: `${(item.interest / max) * 100}%` }} /><i className="bar-ins" style={{ width: `${(item.insurance / max) * 100}%` }} /></div><b>{money.format(item.interest + item.insurance)}</b></div>; })}</div><button className="schedule-button" onClick={() => setScheduleOpen(!scheduleOpen)}>{scheduleOpen ? t.hideSchedule : t.schedule}<span>→</span></button>
+          {/* The comparison a fixed-instalment quote invites and cannot make:
+              revolving debt has no schedule until the reader decides on one. */}
+          <NextStep href={ROUTES[lang].creditCard} cta={t.nextCardCta}>{t.nextCard}</NextStep>
         </div>
       </div> : <>
         <div className="active-view-switch" role="group" aria-label={lang === "es" ? "Vista del préstamo" : "Loan view"}>

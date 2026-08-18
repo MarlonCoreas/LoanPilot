@@ -11,17 +11,35 @@ Sitio: [loanpilot.marloncoreas.com](https://loanpilot.marloncoreas.com)
 
 - `/`: portada y directorio de herramientas.
 - `/prestamos/`: préstamos, amortización y abonos a capital.
+- `/tarjeta-credito/`: pago mínimo, interés total y el contraste contra un abono
+  adicional mensual. No aplica ninguna regla salvadoreña —es interés sobre
+  saldo— y por eso no lleva insignia de verificación, igual que `/prestamos/`.
+  Reutiliza el motor de amortización de `app/loan.ts`: el saldo rotativo es ese
+  mismo cálculo con dos parámetros más, un pago que es porcentaje del saldo y un
+  cargo fijo que se capitaliza.
 - `/finiquito/`: finiquito, indemnización y renuncia voluntaria.
 - `/aguinaldo/`: días según antigüedad, parte proporcional y fecha límite de pago.
 - `/horas-extras/`: horas extras, recargo nocturno, día de descanso y asueto.
 - `/retenciones/`: AFP, ISSS, ISR y tablas oficiales de retención, el recálculo
   acumulado de junio y diciembre, y revisión de una boleta de pago contra ellas.
+- `/renta-anual/`: el impuesto del ejercicio contra lo retenido, con el saldo a
+  favor o en contra. **No es una calculadora de devoluciones**: el saldo sale en
+  contra tan a menudo como a favor, y por una razón estructural —ver abajo—. Es
+  la página que más se acerca a la asesoría fiscal, así que el aviso de
+  estimación educativa va sobre la calculadora y no al pie, y el lenguaje es
+  siempre «estimación del saldo», nunca un monto prometido.
 - `/reglas-en-disputa/`: las reglas que el sitio aplica sin poder afirmar que su
-  lectura sea la única defendible. No es una calculadora: es la página que
-  publica cada desacuerdo con sus dos lecturas, la que se aplica y por qué.
+  lectura sea la única defendible. No es una calculadora. Tiene dos secciones,
+  porque son dos problemas distintos: **reglas en disputa**, donde un texto y
+  una práctica oficial —o dos artículos— no dicen lo mismo y se aplica una de
+  las dos lecturas, y **supuestos sin fuente**, donde ningún documento fija el
+  dato, no hay dos lecturas que contraponer y el proyecto eligió la cifra. Cada
+  ficha de la segunda declara además hasta dónde llega la elección.
 
-Cada página existe en inglés bajo `/en/`: `/en/`, `/en/loans/`, `/en/settlement/`,
-`/en/year-end-bonus/`, `/en/overtime/`, `/en/withholding/` y `/en/disputed-rules/`. El idioma lo determina
+Cada página existe en inglés bajo `/en/`: `/en/`, `/en/loans/`, `/en/credit-card/`,
+`/en/settlement/`,
+`/en/year-end-bonus/`, `/en/overtime/`, `/en/withholding/`, `/en/annual-tax-return/`
+y `/en/disputed-rules/`. El idioma lo determina
 la URL, no una preferencia
 guardada, así que cada traducción es indexable y se puede compartir. La tabla de
 rutas, sus metadatos y el `sitemap.xml` salen todos de `app/routes.ts`; el
@@ -76,6 +94,26 @@ puede afirmar algo que la página no diga.
   el enlace a la regla que la explica. Describe diferencias; no afirma
   incumplimiento, y cierra advirtiendo que hay descuentos legítimos que la
   calculadora no conoce.
+- Comparador de deudas, bajo la calculadora de `/tarjeta-credito/`: varias
+  deudas con saldo, tasa y pago mínimo contra un solo presupuesto mensual, y las
+  dos formas de ordenarlas —primero la más cara y primero la más pequeña— con su
+  interés total, sus meses hasta quedar libre y el orden sugerido de cada una.
+  No es un motor nuevo: cada dólar de interés sale del mismo
+  `buildActiveSchedule` que usan préstamos y tarjeta, y lo único que agrega es a
+  quién le toca el excedente cada mes. **No descalifica ninguna estrategia**: la
+  más cara primero paga menos intereses y eso es aritmética, y la más pequeña
+  primero cierra una cuenta antes y es la que más gente sostiene.
+- Enlaces contextuales entre calculadoras, junto al resultado que levanta la
+  pregunta y nunca como lista al pie: máximo dos por página.
+- Compartir un cálculo por URL, con botón explícito junto a la exportación a
+  PDF. Sólo viajan las entradas del usuario —montos, fechas y opciones—, jamás un
+  resultado ni nada que identifique a nadie, y van en el fragmento (después del
+  `#`), que el navegador nunca manda al servidor. El botón dice qué lleva el
+  enlace **antes** de copiarlo, porque quien lo comparte tiene que saber que va
+  con sus cifras. Al abrir una URL con fragmento las cifras se precargan y la
+  página avisa en pantalla que vinieron del enlace. Todo lo que entra se valida
+  contra una forma declarada (`app/share.ts`): no hay ninguna forma que acepte
+  texto libre, así que un nombre no cabe aunque alguien lo escriba en la URL.
 - Interfaz responsive en español e inglés.
 - Todos los cálculos se ejecutan localmente en el navegador.
 
@@ -160,9 +198,9 @@ Cada regla lleva seis campos, y ninguno es decorativo:
 Cada página muestra la **más antigua** de las reglas que realmente aplica, no la
 más nueva: una página que cita diez reglas es tan fresca como la más rezagada
 de ellas, y tomar la más nueva dejaría que una edición de hoy refrescara una
-afirmación sobre cifras que nadie ha mirado en un año. `/prestamos/` no aplica
-ninguna regla salvadoreña y por eso no muestra insignia: no tener afirmación es
-la respuesta correcta, no una omisión.
+afirmación sobre cifras que nadie ha mirado en un año. `/prestamos/` y
+`/tarjeta-credito/` no aplican ninguna regla salvadoreña y por eso no muestran
+insignia: no tener afirmación es la respuesta correcta, no una omisión.
 
 `npm run check:rules` avisa cuando una regla **en uso** lleva más de seis meses
 sin verificarse, y CI lo ejecuta en cada cambio. Avisa y no rompe el build a
@@ -175,6 +213,113 @@ Ninguna fecha se escribe ya a mano en dos sitios. `RULES_REVIEWED` —el que usa
 el `sitemap.xml` y los datos estructurados— se calcula como la más antigua del
 registro completo, y `OVERTIME_REVIEWED` como la más antigua de las reglas de su
 página.
+
+### Calendario de mantenimiento
+
+Qué se revisa, cada cuánto, y qué fechas del año importan. Lo de abajo no
+sustituye a `npm run check:rules`: ese avisa cuando una regla **en uso** lleva
+seis meses sin verificarse y CI lo corre en cada cambio. Esta sección es lo que
+el aviso no puede saber —cuándo es probable que algo cambie afuera— y por eso va
+por fechas y no por antigüedad.
+
+**Cada cambio (automático).** `npm test`, `npm run typecheck` y
+`npm run check:rules` en CI. Si el aviso nombra una regla, se abre el documento
+de su campo `source` y se lee el valor de vuelta. Nunca se mueve `reviewed` sin
+abrir el documento: la fecha *es* la afirmación.
+
+**Cada seis meses (a mano).** Barrer el registro completo, no sólo lo que el
+aviso marca: las reglas sin `RULE_USAGE` no entran en el aviso, y las dos
+entradas `NOT MODELLED` —artículo 32 y los ejercicios anteriores a 2025— son
+huecos declarados que sólo se cierran leyendo.
+
+**Sin fecha fija.** El salario mínimo se mueve por decreto ejecutivo y no tiene
+calendario: el disparador es la publicación, no el mes. Igual las tasas de AFP e
+ISSS y el techo cotizable. Para estos, el aviso de seis meses es toda la red que
+hay, y por eso conviene que nadie lo silencie.
+
+| Cuándo | Qué se revisa | Qué se toca si cambió |
+| ------ | ------------- | --------------------- |
+| **Desde finales de octubre** | **El decreto transitorio que exime el aguinaldo del ejercicio en curso.** Es lo más previsible del año y lo único que hay que ir a buscar: se aprueban en las semanas de cierre —7 dic 2021, 7 dic 2022, 29 nov 2023, 26 nov 2024, y 15 oct 2025 sólo porque acababa de moverse la ventana de pago—. Se busca en el [listado de decretos de la Asamblea](https://www.asamblea.gob.sv/decretos). Si no aparece ninguno, no hay vacío: rige el piso permanente del numeral 16) del artículo 4, que nunca fue derogado. | Una entrada nueva en `aguinaldoTaxExemption.versions` con su propio `exercise` y su `from` en la fecha del decreto. **No se edita la del año anterior**: cada decreto gobierna su ejercicio y expira con él, y `/renta-anual/` necesita las viejas para declarar años cerrados. Ningún cambio de código: para eso está el campo. |
+| **20 de octubre** | Abre la ventana de pago del aguinaldo (art. 200 reformado por el D.L. 433). Sube el tráfico de `/aguinaldo/`. | Nada, si nada cambió. Es la fecha en que un error en esa página se ve. |
+| **20 de diciembre** | Cierra la ventana de pago. | Nada. |
+| **Junio y diciembre** | Los recálculos del literal f) del D.E. 10/2025, que es cuando `/retenciones/` recibe a quien vio un descuento distinto ese mes. | Nada, salvo que el decreto se reforme. |
+| **31 de diciembre** | Cierra el ejercicio fiscal (art. 13 letra c). A partir de acá `/renta-anual/` puede declarar el año que terminó. | Nada. Es la fecha con la que se lee la tabla: el ejercicio se cotiza a su cierre, no con la tabla de hoy. |
+| **Enero** | La Quincena 25 (D.L. 499): el artículo 3 la sitúa antes del 25 de enero o en esa fecha, y para el sector privado es exigible desde el 1 de enero de 2027. | La fecha privada de `quincena25MandatoryFrom` cuando llegue 2027, y la ventana si algún texto por fin dice cuándo abre. |
+| **Hasta el 30 de abril** | Plazo de la declaración anual (arts. 13 y 48). Es el pico de `/renta-anual/`. | Antes de que empiece: comprobar que la tabla del artículo 37 del ejercicio que se declara es la correcta y que hay una versión que lo cubre. |
+
+### La tabla anual y las tablas de retención
+
+Las tablas de retención del D.E. 10/2025 son el artículo 37 con $1,600 de
+deducciones ya incorporados en los tramos III y IV: la de diciembre evaluada en
+una base es idéntica al artículo 37 evaluado en esa base menos $1,600, y
+`tests/annual.test.mjs` lo comprueba dólar por dólar entre $5,000 y $60,000, no
+en un punto suelto.
+
+De ahí sale lo que la página tiene que explicar: **el artículo 37 no regala esos
+$1,600**. Se los da a quien gana hasta $9,100 —deducción fija del art. 29 num.
+7— o a quien pasa de ahí y tiene comprobantes del art. 33. Quien pasa de $9,100
+y no gastó en médico ni colegiatura fue retenido de menos todo el año, y la
+diferencia —20% o 30% de $1,600— aparece como saldo en contra al declarar. No es
+error de nadie: es cómo están construidas las tablas.
+
+Un contraste que parece error y no lo es: comparando las dos tablas tramo por
+tramo, el desplazamiento de $1,600 aparece en tres lugares y en el primero no.
+El tramo I de la tabla de diciembre cierra en $6,600 y no en $8,200, porque el
+D.L. 293 fijó la base exenta en «$6,600.00 de ingresos anuales, equivalente a un
+ingreso mensual de hasta $550.00» y el literal e) del D.E. 10/2025 deja los
+tramos I y II sin la deducción incorporada. Hay una prueba dedicada a que nadie
+lo «corrija» después.
+
+### Inventario del registro
+
+```bash
+npm run inventory            # markdown, para pegar en un issue o un PR
+npm run inventory -- --terse # una línea por regla
+```
+
+Sale de `app/rules.ts` y de nada más: cada regla con su unidad, su norma, la
+fecha en que alguien la leyó por última vez, su estado y las páginas que la
+aplican; y después las tres listas que importan —lo que sigue sin fuente, lo que
+está en disputa, y lo que quedó fuera de alcance—, cada una con la nota completa
+de la regla.
+
+**No hay tabla de inventario escrita a mano en este README, y es deliberado.**
+Una segunda copia del registro es un segundo registro, y un segundo registro se
+desfasa: el primer decreto que agregue una regla deja la tabla atrás, y quien la
+lea le va a creer a la mitad vieja porque tiene forma de documentación. Al 17 de
+agosto de 2026 son **43 reglas en 50 versiones**, de las cuales 8 llevan estado:
+4 en disputa, 2 sin fuente y 3 fuera de alcance. Ese conteo puede quedar
+desactualizado; el comando, no.
+
+Lo que queda **fuera de alcance** —las tres `NOT MODELLED`— no cabe en una
+insignia y conviene tenerlo escrito entero:
+
+- **`vacationUnmodelled`** (Código de Trabajo arts. 180 y 184). El artículo 180
+  exige 200 días trabajados en el año para devengar vacación, y el formulario
+  nunca pregunta cuántos días se trabajaron. El 184 suma 25% por alojamiento y
+  25% por alimentación proporcionados por el patrono, y no hay campo para
+  ninguno. Los dos vuelven el renglón de vacaciones una sobrestimación para
+  quien los toca.
+- **`annualDonationsUnmodelled`** (Ley de Impuesto sobre la Renta art. 32). El
+  numeral 7 del artículo 29 manda a quien pasa de $9,100 de renta obtenida a los
+  artículos 32 **y** 33, y `/renta-anual/` modela sólo el 33. A quien donó se le
+  muestra un saldo mayor que el que va a declarar. El tope del artículo 32 no
+  está transcrito a propósito: nadie lo ha leído contra el texto vigente para
+  este proyecto, y una cifra de memoria es lo único que este registro existe
+  para impedir. Modelarlo empieza por leerlo.
+- **`annualTablePriorExercises`** (art. 37, texto anterior al D.L. 293). El
+  registro sólo carga la tabla que resultó de la reforma, así que un ejercicio
+  cerrado antes de 2025 no se puede cotizar: `/renta-anual/` ofrece 2025 como
+  primer año en vez de aplicarle a un año pasado una tabla que no lo gobernó.
+  Cerrar el hueco es una entrada más en `annualTaxTable.versions`; el cierre del
+  ejercicio del artículo 13 letra c) ya elige sola la correcta.
+
+Y una limitación que no es una regla y por eso no aparece en el inventario: el
+**enlace para compartir** de `/prestamos/` sólo existe en el modo de préstamo
+nuevo. El modo de préstamo activo lleva dos libros —los abonos ya hechos y los
+cambios de tasa—, y un fragmento `clave=valor` no guarda listas. Mandar los
+montos sueltos y descartar el libro en silencio daría, del otro lado, un número
+distinto al que vio quien lo mandó; eso es peor que no ofrecer el botón.
 
 ### De dónde puede salir una cifra
 
@@ -203,21 +348,30 @@ aplica.
 
 Esa primera palabra es además un campo, `status`, y de él sale
 `/reglas-en-disputa/`: toda versión marcada `DISPUTED` o `UNSOURCED` aparece en
-esa página automáticamente, con las dos lecturas que escribe `app/disputes.ts`
-en los dos idiomas. Marcar una regla es lo único que hace falta para
-publicarla; `tests/rules.test.mjs` falla si el campo y la palabra se separan, y
-`tests/build-output.test.mjs` falla si una regla marcada no llega al HTML. El
-`NOT MODELLED` no va a esa página: no es un desacuerdo sobre lo que dice la ley,
-sino un hueco en lo que este proyecto calcula.
+esa página automáticamente, con el texto que escribe `app/disputes.ts` en los
+dos idiomas. La marca decide también **en qué sección** aparece: `DISPUTED` va a
+«Reglas en disputa» con sus dos lecturas (`DISPUTES`), y `UNSOURCED` a solas va
+a «Supuestos sin fuente» con el silencio del texto, la cifra elegida y su
+alcance (`ASSUMPTIONS`). Una versión marcada de las dos formas —el
+`quincena25Window`— va a la primera: el desacuerdo es lo que el lector tiene que
+decidir primero. Marcar una regla es lo único que hace falta para publicarla;
+`tests/rules.test.mjs` falla si el campo y la palabra se separan, y
+`tests/build-output.test.mjs` falla si una regla marcada no llega al HTML o cae
+bajo el encabezado equivocado. El `NOT MODELLED` no va a esa página: no es un
+desacuerdo sobre lo que dice la ley, sino un hueco en lo que este proyecto
+calcula.
 
 - **`dailySalaryDivisor`.** El divisor 30 no sale de ningún texto. El art. 183
   fija la base y el art. 142 define el salario diario en la dirección contraria
   —hora pactada por horas de la jornada—, pero ninguno fija el divisor. El 30
   está anclado empíricamente a la constancia del MTPS: con 30.42 el cálculo deja
-  de coincidir con el ministerio. Es el único de esta lista que no lleva
-  `status` y por eso no sale en `/reglas-en-disputa/`: no hay dos lecturas que
-  contraponer, hay un texto que calla y una práctica oficial que sí fija la
-  cifra. Marcarlo es una decisión pendiente, no un olvido.
+  de coincidir con el ministerio. Va marcado `UNSOURCED` y se publica en la
+  segunda sección de `/reglas-en-disputa/`, no en la primera: no hay dos
+  lecturas que contraponer, hay un texto que calla y una práctica oficial que sí
+  fija la cifra. Es el supuesto de mayor alcance del sitio —toda cifra diaria
+  pasa por él: indemnización, vacación, aguinaldo y cada hora extra, porque la
+  hora sale del día— y esa frase va en la ficha, en pantalla, no en un
+  comentario del repositorio.
 - **`aguinaldoCycleStart`.** Los arts. 196 a 202 fijan la fecha de corte y la
   ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado»,
   pero ninguno dice sobre qué período corre esa proporción. Ya no es sólo una

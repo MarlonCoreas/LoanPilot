@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { DISPUTES, disputeFor, pagesApplying } from "../app/disputes.ts";
+import { ASSUMPTIONS, DISPUTES, assumptionFor, disputeFor, pagesApplying } from "../app/disputes.ts";
 import {
   ALL_RULES, citationsFor, disputedVersions, oldestReviewed, reviewedFor, ruleAt, RULES,
-  RULE_USAGE, RULES_REVIEWED,
+  RULE_USAGE, RULES_REVIEWED, sectionFor,
 } from "../app/rules.ts";
 import { LANGS, PAGES } from "../app/routes.ts";
 import { OFFICIAL } from "../app/sources.ts";
@@ -89,7 +89,7 @@ test("a date resolves to the version in force, and an older one is flagged", () 
   assert.equal(tooEarly.predatesRule, true);
 });
 
-test("every page's rules exist, and only the loan page applies none", () => {
+test("every page's rules exist, and only the credit pages apply none", () => {
   assert.deepEqual(Object.keys(RULE_USAGE).sort(), [...PAGES].sort(),
     "a page missing from RULE_USAGE would make no freshness claim at all");
 
@@ -98,9 +98,14 @@ test("every page's rules exist, and only the loan page applies none", () => {
     for (const id of ids) assert.ok(id in RULES, `${page} uses "${id}", which is not a rule`);
   }
 
-  assert.deepEqual(RULE_USAGE.loans, [],
-    "loan arithmetic depends on no Salvadoran rule; claiming one would be a claim it cannot back");
-  assert.equal(reviewedFor("loans"), undefined);
+  // Interest on a balance is arithmetic, not statute. Both credit calculators
+  // apply nothing Salvadoran and so claim nothing: `reviewedFor` returns
+  // undefined and the pages render no verification badge at all.
+  for (const page of ["loans", "creditCard"]) {
+    assert.deepEqual(RULE_USAGE[page], [],
+      `${page} depends on no Salvadoran rule; claiming one would be a claim it cannot back`);
+    assert.equal(reviewedFor(page), undefined, page);
+  }
   for (const page of ["settlement", "aguinaldo", "overtime", "withholding", "disputed"]) {
     assert.ok(RULE_USAGE[page].length > 0, `${page} rests on statutory rules and lists none`);
     assert.match(reviewedFor(page), ISO_DATE, page);
@@ -295,11 +300,11 @@ test("the word a note shouts and the status it carries cannot drift apart", () =
 });
 
 test("every contested rule is published, in both languages", () => {
-  // THE TEST THE PAGE EXISTS FOR. A rule marked DISPUTED or UNSOURCED with no
-  // entry in `disputes.ts` would render as nothing at all on the page that is
-  // supposed to carry it — contested in the code and settled on screen, which
-  // is worse than never having claimed the transparency in the first place.
-  const contested = disputedVersions();
+  // THE TEST THE PAGE EXISTS FOR. A rule marked DISPUTED with no entry in
+  // `disputes.ts` would render as nothing at all on the page that is supposed
+  // to carry it — contested in the code and settled on screen, which is worse
+  // than never having claimed the transparency in the first place.
+  const contested = disputedVersions("disputed");
   assert.ok(contested.length > 0, "an empty list would make every check below vacuous");
 
   for (const { rule, version } of contested) {
@@ -336,8 +341,54 @@ test("every contested rule is published, in both languages", () => {
   for (const dispute of DISPUTES) {
     assert.ok(dispute.rule in RULES, `${dispute.rule} is not a rule`);
     assert.ok(contested.some(({ rule }) => rule.id === dispute.rule),
-      `${dispute.rule} has an entry but is marked neither DISPUTED nor UNSOURCED`);
+      `${dispute.rule} has two readings written for it and is not marked DISPUTED`);
   }
+});
+
+test("every unsourced assumption is published, and says how far it reaches", () => {
+  // The other half of the same guarantee, and the one with a field the disputes
+  // do not have. `reach` is what a reader cannot work out alone: a figure no
+  // document fixes matters exactly as much as the number of lines it moves, and
+  // an entry that left it out would be a confession with the size filed off.
+  const contested = disputedVersions("unsourced");
+  assert.ok(contested.length > 0, "an empty list would make every check below vacuous");
+
+  for (const { rule, version } of contested) {
+    const assumption = assumptionFor(rule.id);
+    assert.ok(assumption, `${rule.id} is marked ${version.status.join(" + ")} and is on no page`);
+    // No reading is invented to fill a slot: a silence has no opposing position,
+    // and manufacturing one is the failure the second section exists to avoid.
+    assert.equal(disputeFor(rule.id), undefined,
+      `${rule.id} is unsourced and carries two readings, which it cannot have`);
+
+    for (const lang of LANGS) {
+      assert.ok(assumption.question[lang]?.length > 20, `${rule.id}: no question in ${lang}`);
+      assert.ok(assumption.silence[lang]?.length > 40, `${rule.id}: the texts are not quoted in ${lang}`);
+      assert.ok(assumption.choice[lang]?.length > 40, `${rule.id}: no value stated in ${lang}`);
+      assert.ok(assumption.reach[lang]?.length > 40, `${rule.id}: no reach stated in ${lang}`);
+      assert.ok(assumption.why[lang]?.length > 40, `${rule.id}: no reasoning in ${lang}`);
+    }
+
+    assert.ok(version.source in OFFICIAL, `${rule.id}: ${version.source}`);
+  }
+
+  for (const assumption of ASSUMPTIONS) {
+    assert.ok(assumption.rule in RULES, `${assumption.rule} is not a rule`);
+    assert.ok(contested.some(({ rule }) => rule.id === assumption.rule),
+      `${assumption.rule} has an entry but is not marked UNSOURCED`);
+  }
+});
+
+test("a version flagged both ways is published as a dispute, not as a silence", () => {
+  // `quincena25Window` is DISPUTED in which terminations it covers and
+  // UNSOURCED in where its window opens. It belongs in the first section: the
+  // disagreement is the part a reader has to decide about, and filing it under
+  // silences would bury two live readings of article 3.
+  const both = RULES.quincena25Window.versions.find((version) => version.status?.length === 2);
+  assert.ok(both, "the rule this test is about no longer carries two flags");
+  assert.equal(sectionFor(both), "disputed");
+  assert.equal(sectionFor({ status: ["UNSOURCED"] }), "unsourced");
+  assert.equal(sectionFor({}), "unsourced");
 });
 
 test("the disputed page claims exactly the rules it publishes", () => {
@@ -352,14 +403,30 @@ test("the disputed page claims exactly the rules it publishes", () => {
   }
 });
 
-test("the four known disputes are the four on the page", () => {
-  // Named rather than counted. A fifth is welcome and this line is where it is
-  // acknowledged; what this catches is one QUIETLY DISAPPEARING — a status
-  // dropped in a refactor takes the entry off the page with it, and nothing
-  // else here would notice.
+test("the known disputes and the known assumptions are the ones on the page", () => {
+  // Named rather than counted, and named PER SECTION, because the sections are
+  // what the page promises: a rule that slid from one to the other would change
+  // what the site claims about it — a disagreement demoted to a silence, or a
+  // silence dressed up as an argument — while a combined list stayed green.
+  //
+  // A new entry in either is welcome and this is where it is acknowledged; what
+  // this catches is one QUIETLY DISAPPEARING. A status dropped in a refactor
+  // takes the entry off the page with it, and nothing else here would notice.
+  assert.deepEqual(
+    disputedVersions("disputed").map(({ rule }) => rule.id).sort(),
+    ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"],
+    "the rules where a text and a practice, or two articles, disagree");
+  assert.deepEqual(
+    disputedVersions("unsourced").map(({ rule }) => rule.id).sort(),
+    ["dailySalaryDivisor"],
+    "the rules no document fixes at all");
+
+  // And the two together are everything the registry marks: a section neither
+  // list covers would be published under no heading.
   assert.deepEqual(
     disputedVersions().map(({ rule }) => rule.id).sort(),
-    ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"]);
+    ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "dailySalaryDivisor", "quincena25Window",
+      "vacationProportionalOnExit"]);
 });
 
 test("no rule claims to have been reviewed before it existed, or in the future", () => {

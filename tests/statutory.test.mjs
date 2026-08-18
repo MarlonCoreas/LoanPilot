@@ -124,28 +124,49 @@ test("the $1,600 employee deduction reduces the tax base but not take-home pay d
   assert.equal(result.net, 628.25);
 });
 
-test("the $9,100 eligibility limit is measured on gross income, not on the base after contributions", () => {
-  // Article 29 caps the deduction by "renta obtenida", which article 2 defines
-  // as the remuneration received. Measuring it after AFP and ISSS would let
-  // salaries of up to roughly $845 a month qualify.
-  const inLimit = calculatePayrollWithholding({ gross: 758.33, frequency: "monthly" });
-  assert.equal(inLimit.qualifiesForFixedDeduction, true, "$9,099.96 a year is inside the limit");
+test("the $9,100 eligibility limit is measured on the renta obtenida, which the AFP is outside of", () => {
+  // Article 29 caps the deduction by "renta obtenida". Article 26 of the
+  // pension law makes the compulsory contribution a renta no gravable and
+  // article 4 excludes those "del cómputo de la renta obtenida", so the limit
+  // is read against the pay less the AFP — and only the AFP. Measuring it on
+  // the pay moves the border down to $758 a month; measuring it after the ISSS
+  // as well would move it up past $845.
+  const inLimit = calculatePayrollWithholding({ gross: 817.61, frequency: "monthly" });
+  assert.equal(inLimit.annualPay, 9811.32);
+  assert.equal(inLimit.annualIncome, 9100, "the pay less the pension contribution");
+  assert.equal(inLimit.qualifiesForFixedDeduction, true, "exactly on the limit is inside it");
   assert.equal(inLimit.fixedDeduction, 133.33);
-  const atLimit = calculatePayrollWithholding({ gross: 758.34, frequency: "monthly" });
-  assert.equal(atLimit.qualifiesForFixedDeduction, false, "$9,100.08 a year is outside it");
+  const atLimit = calculatePayrollWithholding({ gross: 817.62, frequency: "monthly" });
+  assert.equal(atLimit.annualIncome, 9100.11);
+  assert.equal(atLimit.qualifiesForFixedDeduction, false, "a cent of renta obtenida over is over");
 
-  const overLimit = calculatePayrollWithholding({ gross: 800, frequency: "monthly" });
-  assert.equal(overLimit.qualifiesForFixedDeduction, false, "$9,600 a year is above the limit even though the taxable base is not");
+  // The reader the old reading got wrong: $9,600 of pay is $8,904 of renta
+  // obtenida, which is inside the limit and takes the deduction.
+  const nearLimit = calculatePayrollWithholding({ gross: 800, frequency: "monthly" });
+  assert.equal(nearLimit.annualIncome, 8904);
+  assert.equal(nearLimit.qualifiesForFixedDeduction, true);
+  assert.equal(nearLimit.fixedDeduction, 133.33);
+  assert.equal(nearLimit.taxableBeforeFixedDeduction, 718);
+  assert.equal(nearLimit.taxable, 584.67);
+  assert.equal(nearLimit.isr, 21.14);
+
+  // Well clear of it, and the deduction is gone.
+  const overLimit = calculatePayrollWithholding({ gross: 1000, frequency: "monthly" });
+  assert.equal(overLimit.annualIncome, 11130);
+  assert.equal(overLimit.qualifiesForFixedDeduction, false);
   assert.equal(overLimit.fixedDeduction, 0);
-  assert.equal(overLimit.taxableBeforeFixedDeduction, 718);
-  assert.equal(overLimit.taxable, 718);
-  assert.equal(overLimit.isr, 34.47);
 
-  const fortnightly = calculatePayrollWithholding({ gross: 379.16, frequency: "fortnightly" });
+  const fortnightly = calculatePayrollWithholding({ gross: 408.80, frequency: "fortnightly" });
   assert.equal(fortnightly.qualifiesForFixedDeduction, true);
   assert.equal(fortnightly.fixedDeduction, 66.67);
-  const overFortnightly = calculatePayrollWithholding({ gross: 400, frequency: "fortnightly" });
+  const overFortnightly = calculatePayrollWithholding({ gross: 408.81, frequency: "fortnightly" });
   assert.equal(overFortnightly.qualifiesForFixedDeduction, false);
+
+  // Pay with no pension contribution has nothing to exclude, so there the
+  // limit does fall on the pay itself.
+  const noAfp = calculatePayrollWithholding({ gross: 800, frequency: "monthly", includeAfp: false });
+  assert.equal(noAfp.annualIncome, 9600);
+  assert.equal(noAfp.qualifiesForFixedDeduction, false);
 });
 
 test("the $1,600 deduction is only applied in band II, the one the decree leaves it out of", () => {
@@ -611,15 +632,19 @@ test("service is reported in whole calendar months, not thirtieths of a year", (
 });
 
 test("a declared annual income overrides annualising a single pay period", () => {
-  // $750 a month annualises to $9,000 and qualifies, but the year-end bonus
-  // pushes the real renta obtenida over the limit.
+  // $750 a month annualises to $9,000 of pay and qualifies, but a $900 year-end
+  // bonus pushes the real renta obtenida over the limit. The field takes the
+  // gross figure and the exclusion happens here, so the reader types what they
+  // can actually read off their payslips.
   const annualised = calculatePayrollWithholding({ gross: 750, frequency: "monthly" });
-  assert.equal(annualised.annualIncome, 9000);
+  assert.equal(annualised.annualPay, 9000);
+  assert.equal(annualised.annualIncome, 8347.50);
   assert.equal(annualised.annualIncomeDeclared, false);
   assert.equal(annualised.qualifiesForFixedDeduction, true);
 
-  const declared = calculatePayrollWithholding({ gross: 750, frequency: "monthly", annualGross: 9375 });
-  assert.equal(declared.annualIncome, 9375);
+  const declared = calculatePayrollWithholding({ gross: 750, frequency: "monthly", annualGross: 9900 });
+  assert.equal(declared.annualPay, 9900);
+  assert.equal(declared.annualIncome, 9182.25);
   assert.equal(declared.annualIncomeDeclared, true);
   assert.equal(declared.qualifiesForFixedDeduction, false);
   assert.equal(declared.fixedDeduction, 0);
@@ -628,7 +653,8 @@ test("a declared annual income overrides annualising a single pay period", () =>
   // An empty or zero field must not be read as "zero income, so it qualifies".
   for (const annualGross of [0, undefined, Number.NaN]) {
     const blank = calculatePayrollWithholding({ gross: 3000, frequency: "monthly", annualGross });
-    assert.equal(blank.annualIncome, 36000);
+    assert.equal(blank.annualPay, 36000);
+    assert.equal(blank.annualIncome, 33390);
     assert.equal(blank.qualifiesForFixedDeduction, false);
   }
 });
