@@ -289,16 +289,19 @@ aplican; y después las tres listas que importan —lo que sigue sin fuente, lo 
 está en disputa, y lo que quedó fuera de alcance—, cada una con la nota completa
 de la regla.
 
-**No hay tabla de inventario escrita a mano en este README, y es deliberado.**
-Una segunda copia del registro es un segundo registro, y un segundo registro se
-desfasa: el primer decreto que agregue una regla deja la tabla atrás, y quien la
-lea le va a creer a la mitad vieja porque tiene forma de documentación. Al 18 de
-agosto de 2026 son **44 reglas en 51 versiones**, de las cuales 9 llevan estado:
-4 en disputa, 2 sin fuente y 4 fuera de alcance. Ese conteo puede quedar
-desactualizado; el comando, no.
+**No hay tabla de inventario ni conteos escritos a mano en este README, y es
+deliberado.** Una segunda copia del registro es un segundo registro, y un
+segundo registro se desfasa: el primer decreto que agregue una regla deja la
+tabla atrás, y quien la lea le va a creer a la mitad vieja porque tiene forma de
+documentación. Cuántas reglas hay, cuántas versiones y cuántas llevan estado lo
+dice el encabezado de `npm run inventory`, derivado del registro. Ahí también se
+declara el traslape: una regla puede llevar más de un estado —la ventana de la
+Quincena 25 es a la vez `DISPUTED` y `UNSOURCED`—, así que las tres listas no
+suman el total de reglas marcadas.
 
-Lo que queda **fuera de alcance** —las cuatro `NOT MODELLED`— no cabe en una
-insignia y conviene tenerlo escrito entero:
+Lo que queda **fuera de alcance** —las `NOT MODELLED`— no cabe en una insignia
+y conviene tenerlo escrito entero, porque es lo único del inventario que un
+lector necesita en prosa:
 
 - **`vacationUnmodelled`** (Código de Trabajo arts. 180 y 184). El artículo 180
   exige 200 días trabajados en el año para devengar vacación, y el formulario
@@ -306,13 +309,15 @@ insignia y conviene tenerlo escrito entero:
   25% por alimentación proporcionados por el patrono, y no hay campo para
   ninguno. Los dos vuelven el renglón de vacaciones una sobrestimación para
   quien los toca.
-- **`annualDonationsUnmodelled`** (Ley de Impuesto sobre la Renta art. 32). El
-  numeral 7 del artículo 29 manda a quien pasa de $9,100 de renta obtenida a los
-  artículos 32 **y** 33, y `/renta-anual/` modela sólo el 33. A quien donó se le
-  muestra un saldo mayor que el que va a declarar. El tope del artículo 32 no
-  está transcrito a propósito: nadie lo ha leído contra el texto vigente para
-  este proyecto, y una cifra de memoria es lo único que este registro existe
-  para impedir. Modelarlo empieza por leerlo.
+- **`annualDonationsUnmodelled`** (art. 32 numeral 4). El numeral 7 del artículo
+  29 manda a quien pasa de $9,100 de renta obtenida a los artículos 32 **y** 33,
+  y `/renta-anual/` modela sólo el 33. Leído el 32, resulta más angosto de lo que
+  su número sugiere: sus tres primeros numerales son del lado patronal y no
+  alcanzan a un asalariado. El que sí lo alcanza es el numeral 4, las donaciones
+  a las entidades del art. 6, con tope del 20% del valor que resulta de restarle
+  a la renta neta el valor de la donación —un tope definido sobre el neto de la
+  propia donación, que hay que resolver, no multiplicar—. A quien donó se le
+  muestra un saldo mayor que el que va a declarar.
 - **`voluntaryPensionUnmodelled`** (Ley Integral del Sistema de Pensiones,
   ahorro previsional voluntario). El art. 26 hace renta no gravable la
   cotización **obligatoria**; el ahorro voluntario no entra ahí, y en cambio
@@ -320,15 +325,30 @@ insignia y conviene tenerlo escrito entero:
   proyecto no aplica ninguno de los dos. Solo puede morder en un campo: el modo
   «Las tengo» de `/renta-anual/`, donde la cifra de AFP la escribe el lector.
   Por eso el campo pide la cotización obligatoria por su nombre y la ayuda
-  explica qué pasa si se suman los aportes voluntarios. Ni el artículo ni el
-  tope se escriben en el registro: una fuente secundaria los ubica, y una
-  fuente secundaria no basta para entrar acá.
+  explica qué pasa si se suman los aportes voluntarios. El art. 138 fija dos
+  topes distintos —10% del ingreso base de cotización para el afiliado, 10% de
+  la renta imponible del ejercicio anterior para quien no lo es—, así que
+  modelarlo obliga a preguntar cuál de los dos aplica, además de darle su
+  propia entrada y su propio renglón bajo la renta obtenida.
+- **`contributoryBaseFloor`** (Ley Integral del Sistema de Pensiones art. 14).
+  El mismo artículo que saca el aguinaldo de la base de cotización le pone un
+  piso: no puede ser inferior al salario mínimo legal mensual, salvo las
+  excepciones que fija el Banco Central por normativa técnica. La página aplica
+  la tasa a la base que recibe, así que para un pago bajo el mínimo reporta una
+  cotización menor a la que pide la ley —la dirección contraria a la de las
+  exclusiones, que sí se aplican—. Modelarlo pide el sector, que
+  `/retenciones/` no pregunta, y la normativa técnica del Banco Central, que no
+  está en el registro.
 - **`annualTablePriorExercises`** (art. 37, texto anterior al D.L. 293). El
   registro sólo carga la tabla que resultó de la reforma, así que un ejercicio
   cerrado antes de 2025 no se puede cotizar: `/renta-anual/` ofrece 2025 como
   primer año en vez de aplicarle a un año pasado una tabla que no lo gobernó.
-  Cerrar el hueco es una entrada más en `annualTaxTable.versions`; el cierre del
-  ejercicio del artículo 13 letra c) ya elige sola la correcta.
+  **Este hueco no lo cierra otra lectura de la misma fuente**: un texto
+  consolidado trae la ley como está, así que imprime la tabla nueva y las cifras
+  viejas de los tramos I y II sencillamente no están ahí. Hace falta otro
+  documento —el consolidado anterior a 2025, o el decreto que fijó esos dos
+  tramos antes del D.L. 293—. El código ya está listo: es una entrada más en
+  `annualTaxTable.versions`.
 
 Y una limitación que no es una regla y por eso no aparece en el inventario: el
 **enlace para compartir** de `/prestamos/` sólo existe en el modo de préstamo

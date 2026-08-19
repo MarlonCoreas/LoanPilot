@@ -1013,8 +1013,8 @@ export const afpEmployeeRate = rule<number>({
     value: 0.0725,
     norm: "Ley Integral del Sistema de Pensiones arts. 14, 16 y 26",
     source: "pensions",
-    reviewed: "2026-08-17",
-    note: "Of the monthly contributory salary, with no maximum base: the previous ceiling was repealed, so a high salary is not capped.\n\nARTICLE 26 IS WHY THE CONTRIBUTION LEAVES THE INCOME TAX BASE AT ALL. It declares the compulsory contributions of the affiliated — alongside the returns on the Pension Funds' investments, the excedente de libre disponibilidad and the permanence incentives — \"rentas no gravables para efectos del Impuesto sobre la Renta\". That is an express exemption, not an inference from the withholding tables, and it is what makes the contribution an EXCLUSION from the renta obtenida rather than a deduction from the renta imponible. Article 4 of the Ley de Impuesto sobre la Renta supplies the consequence.\n\nIN THE REPEALED LEY SAP THIS WAS ARTICLE 22, and it is worth knowing: anything written before the 2022 Ley Integral del Sistema de Pensiones — an older commentary, a resolution, case law — cites article 22 SAP for the same text. The renumbering runs four articles apart and the neighbour confirms the pairing: LISP article 27 governs the Administradoras de Fondos de Pensiones, as SAP article 23 did.\n\nTHIS RULE IS THE ONLY PLACE THE EXEMPTING ARTICLE IS NAMED. Everything downstream (`fixedDeductionIncomeLimit`, `annualFilingThreshold`, `contributionsExcludedFromBase`, and the copy on /renta-anual/ and /retenciones/) points here instead of repeating the citation, so a correction is one edit and cannot drift into seven. No user-facing string names an article at all.\n\nONLY THE COMPULSORY CONTRIBUTION IS COVERED. Voluntary pension saving is not renta no gravable and this project does not model it: see `voluntaryPensionUnmodelled`."
+    reviewed: "2026-08-18",
+    note: "Of the monthly contributory salary, with no maximum base: the previous ceiling was repealed, so a high salary is not capped. Article 16 sets the split in words as well as figures — 16% of the ingreso base de cotización, \"correspondiendo el siete punto veinticinco por ciento (7.25%) al trabajador y el ocho punto setenta y cinco por ciento (8.75%) al empleador\" — which is where this value comes from.\n\nARTICLE 26 IS WHY THE CONTRIBUTION LEAVES THE INCOME TAX BASE AT ALL, and it is worth having in full because every threshold on /renta-anual/ hangs off one word in it: \"Los rendimientos por inversiones de los Fondos de Pensiones, las cotizaciones OBLIGATORIAS de los afiliados al Sistema, el excedente de libre disponibilidad cuando estos existan, así como los ingresos provenientes de los incentivos por permanencia serán considerados rentas no gravables para efectos de Impuesto sobre la Renta.\" (Emphasis added; the article is headed \"Tratamiento Tributario\".) An express exemption, not an inference from the withholding tables, which is what makes the contribution an EXCLUSION from the renta obtenida rather than a deduction from the renta imponible — article 4 of the Ley de Impuesto sobre la Renta supplies the consequence. And \"obligatorias\" is the word: voluntary saving has its own article and its own, weaker treatment. See `voluntaryPensionUnmodelled`.\n\nIN THE REPEALED LEY SAP THIS WAS ARTICLE 22, and it is worth knowing: anything written before the 2022 Ley Integral del Sistema de Pensiones — an older commentary, a resolution, case law — cites article 22 SAP for the same text. The renumbering runs four articles apart, and the neighbour confirms the pairing in this very PDF: LISP article 27 opens Chapter IV, \"DE LAS ADMINISTRADORAS DE FONDOS DE PENSIONES\", as SAP article 23 did. The SAP itself is not in this source, so that half rests on the maintainer's reading rather than on this document.\n\nTHIS RULE IS THE ONLY PLACE THE EXEMPTING ARTICLE IS NAMED. Everything downstream (`fixedDeductionIncomeLimit`, `annualFilingThreshold`, `contributionsExcludedFromBase`, and the copy on /renta-anual/ and /retenciones/) points here instead of repeating the citation, so a correction is one edit and cannot drift into seven. No user-facing string names an article at all.\n\nTHE RATE IS NOT APPLIED TO THE GROSS. Article 14 builds the ingreso base de cotización and then takes concepts back out of it, and it sets a floor under what is left. Both live in rules of their own — `contributoryBaseExclusions`, which the withholding page now applies, and `contributoryBaseFloor`, which it does not — so neither is a paragraph here that nobody re-reads.",
   }],
 });
 
@@ -1061,8 +1061,8 @@ export const fixedDeduction = rule<number>({
     value: 1600,
     norm: "Ley de Impuesto sobre la Renta art. 29 numeral 7",
     source: "incomeTax",
-    reviewed: "2026-08-17",
-    note: "An annual figure. The payroll calculation divides it by the pay periods in a year and the recalculation scales it to the months each period covers, which is why it is stored annually and never per period.",
+    reviewed: "2026-08-18",
+    note: "Read back against the consolidated text, which writes it as a \"DEDUCCIÓN FIJA DE US$1,600.00, LA CUAL NO ESTARÁ SUJETA A COMPROBACIÓN\". An annual figure. The payroll calculation divides it by the pay periods in a year and the recalculation scales it to the months each period covers, which is why it is stored annually and never per period.",
   }],
 });
 
@@ -1074,8 +1074,8 @@ export const fixedDeductionIncomeLimit = rule<number>({
     value: 9100,
     norm: "Ley de Impuesto sobre la Renta art. 29 numeral 7",
     source: "incomeTax",
-    reviewed: "2026-08-17",
-    note: "THE BASE FOR BOTH INCOME THRESHOLDS OF THIS PROJECT, and the note the other one points at.\n\nrenta obtenida = taxable pay - COMPULSORY pension contribution.\n\nArticle 29 numeral 7 caps the flat deduction by \"renta obtenida\", and article 4 of this law opens by excluding every renta no gravable \"del cómputo de la renta obtenida\". The compulsory pension contribution is one of those: THE STATUTORY BASIS IS ON `afpEmployeeRate`, which is the single place in this registry that names the exempting article, and reading it is the first step before changing anything here. So the pension money is not subtracted from the renta obtenida: it was never in it. That is an exclusion, and calling it a deduction puts it in the wrong place by one step, which is invisible in the renta imponible and decisive at this limit.\n\nTHE ISSS IS NOT EXCLUDED HERE, AND THE ASYMMETRY IS DELIBERATE. No statute makes the health contribution a renta no gravable; what carries it is a recital of Executive Decree 10/2025 describing it as deducted from the ingresos brutos when the base is built. A deduction reduces the renta imponible and leaves the renta obtenida untouched, so the ISSS is still inside the figure this limit is read against. See `contributionsExcludedFromBase`, which holds the two citations side by side.\n\nONLY THE COMPULSORY PART IS EXCLUDED, and this project does not tell the two apart: that gap is declared in `voluntaryPensionUnmodelled` rather than left in prose here.\n\nThe limit therefore bites at $9,811.32 of taxable pay, not at $9,100 of it: a gross of $9,400 is renta obtenida of $8,718.50 and is inside the limit.",
+    reviewed: "2026-08-18",
+    note: "Read back against the consolidated text: numeral 7 grants the flat deduction to those \"CUYA RENTA OBTENIDA PROVENGA EXCLUSIVAMENTE DE SALARIOS Y CUYO MONTO SEA IGUAL O INFERIOR A US$9,100.00\" — \"igual o inferior\", so exactly $9,100 is inside — and sends those \"CON RENTAS MAYORES DE US$9,100.00\" to articles 32 and 33. Article 33 says the same from its side: the receipts are for \"LOS ASALARIADOS CUYA RENTA OBTENIDA EXCEDA A US$9,100.00\".\n\nTHE BASE FOR BOTH INCOME THRESHOLDS OF THIS PROJECT, and the note the other one points at.\n\nrenta obtenida = taxable pay - COMPULSORY pension contribution.\n\nArticle 29 numeral 7 caps the flat deduction by \"renta obtenida\", and article 4 of this law opens by excluding every renta no gravable \"del cómputo de la renta obtenida\". The compulsory pension contribution is one of those: THE STATUTORY BASIS IS ON `afpEmployeeRate`, which is the single place in this registry that names the exempting article, and reading it is the first step before changing anything here. So the pension money is not subtracted from the renta obtenida: it was never in it. That is an exclusion, and calling it a deduction puts it in the wrong place by one step, which is invisible in the renta imponible and decisive at this limit.\n\nTHE ISSS IS NOT EXCLUDED HERE, AND THE ASYMMETRY IS DELIBERATE. No statute makes the health contribution a renta no gravable; what carries it is a recital of Executive Decree 10/2025 describing it as deducted from the ingresos brutos when the base is built. A deduction reduces the renta imponible and leaves the renta obtenida untouched, so the ISSS is still inside the figure this limit is read against. See `contributionsExcludedFromBase`, which holds the two citations side by side.\n\nONLY THE COMPULSORY PART IS EXCLUDED — article 26 says \"obligatorias\" — and voluntary saving is a deduction under article 138 rather than an exclusion, which lands one step further down and is not modelled either way: see `voluntaryPensionUnmodelled`.\n\nThe limit therefore bites at $9,811.32 of taxable pay, not at $9,100 of it: a gross of $9,400 is renta obtenida of $8,718.50 and is inside the limit.",
   }],
 });
 
@@ -1129,8 +1129,8 @@ export const annualTaxTable = rule<WithholdingBand[]>({
     ],
     norm: "Ley de Impuesto sobre la Renta arts. 34 y 37 (tabla reformada por el D.L. 293 del 30 de abril de 2025)",
     source: "incomeTax",
-    reviewed: "2026-08-17",
-    note: "Read back against the consolidated text and against D.L. 293 itself, whose article 1 reprints the whole table. Only bands I and II changed — the first recital of Executive Decree 10/2025 says so in as many words — and bands III and IV still carry the figures D.L. 957 of 14 December 2011 gave them. The $212.12 fixed amount of band II is a step, not a slope: the tax jumps by that much at $6,600.01, and it is in the published table.",
+    reviewed: "2026-08-18",
+    note: "Re-read against the consolidated text on 18 August 2026: the four bands transcribe exactly, and the reform marker (25) beside the table resolves in the law's own index to \"D. L. No. 293, 30 DE ABRIL DE 2025\". Read back against the consolidated text and against D.L. 293 itself, whose article 1 reprints the whole table. Only bands I and II changed — the first recital of Executive Decree 10/2025 says so in as many words — and bands III and IV still carry the figures D.L. 957 of 14 December 2011 gave them. The $212.12 fixed amount of band II is a step, not a slope: the tax jumps by that much at $6,600.01, and it is in the published table.",
   }],
 });
 
@@ -1151,11 +1151,11 @@ export const voluntaryPensionUnmodelled = rule<string[]>({
   versions: [{
     from: "2023-01-01",
     value: ["ahorro previsional voluntario"],
-    norm: "Ley Integral del Sistema de Pensiones — régimen de ahorro previsional voluntario",
+    norm: "Ley Integral del Sistema de Pensiones art. 138",
     source: "pensions",
     reviewed: "2026-08-18",
     status: ["NOT MODELLED"],
-    note: "NOT MODELLED. Article 26 makes the COMPULSORY contribution a renta no gravable — see `afpEmployeeRate` — and voluntary pension saving is not covered by it. Voluntary saving is instead said to reduce the renta imponible up to a ceiling expressed as a share of the contributory salary, which is a different mechanism landing one step further down: a deduction, not an exclusion. This project applies neither.\n\nWHERE IT CAN ACTUALLY BITE, which is one field. Every calculation that derives the contribution from the statutory rate is unaffected by definition — /retenciones/ in both its payroll and recalculation panels, and the salary estimate of /renta-anual/. The exposure is the direct mode of /renta-anual/, where the reader types the year's contribution: money that is voluntary would be excluded from the renta obtenida along with the compulsory part, which is too much, and it moves the $9,100 and $60,000 tests. The field therefore asks for the compulsory contribution by name and its help text says why, so the wrong figure is unlikely to be entered rather than silently mishandled.\n\nNO ARTICLE AND NO CEILING ARE WRITTEN HERE ON PURPOSE. A secondary source places the deduction and its ceiling in the Ley Integral del Sistema de Pensiones, and this registry does not accept a figure or an article from a secondary source — that is the rule that keeps everything else in this file trustworthy. Modelling this starts by opening the SSF text, identifying the article, and reading the ceiling out of it; then this rule is replaced by a real one. It is also a larger piece of work than it looks: voluntary saving interacts with the renta imponible rather than the renta obtenida, so it needs its own input, its own cap and its own line in the chain on screen.",
+    note: "NOT MODELLED. Article 26 makes the COMPULSORY contribution a renta no gravable — see `afpEmployeeRate` — and voluntary saving is not covered by it. Article 138, also headed \"Tratamiento Tributario\", gives it a different and weaker treatment, and the difference is the whole reason this rule exists: an exclusion leaves the renta obtenida, a deduction only reduces the renta imponible.\n\nWHAT ARTICLE 138 ACTUALLY SAYS, in three parts, because only the first is what a secondary source usually reports. The RETURNS of a Fondo de Ahorro Previsional Voluntario are \"rentas no gravables para efectos de Impuestos sobre la Renta\". The CONTRIBUTIONS are not: the aportes that employers and afiliados make \"serán considerados como gastos deducibles de la renta imponible hasta por el diez por ciento del ingreso base de cotización del afiliado\". And there is a SECOND ceiling on a different base for a different taxpayer — \"Otras personas naturales no afiliadas que realicen aportes a los mismos, podrán deducir hasta un diez por ciento de la renta imponible declarada en el ejercicio fiscal inmediato anterior\". Two ceilings, both ten per cent, measured on two different things. Anybody modelling this has to pick the right one per reader, which is a question the form does not currently ask.\n\nWHERE IT CAN ACTUALLY BITE, which is one field. Every calculation that derives the contribution from the statutory rate is unaffected by definition — /retenciones/ in both its payroll and recalculation panels, and the salary estimate of /renta-anual/. The exposure is the direct mode of /renta-anual/, where the reader types the year's contribution: money that is voluntary would be excluded from the renta obtenida along with the compulsory part, which is both too much and the wrong mechanism, and it moves the $9,100 and $60,000 tests. The field therefore asks for the compulsory contribution by name and its help text says why, so the wrong figure is unlikely to be entered rather than silently mishandled.\n\nWHY IT IS STILL NOT MODELLED NOW THAT THE TEXT IS READ. It is a larger piece of work than the missing number made it look: voluntary saving is a deduction against the renta imponible, so it needs its own input, its own ceiling — chosen between the two above — and its own line in the chain on screen, below the renta obtenida rather than above it. The ingreso base de cotización it is measured against is itself defined by article 14, which excludes the aguinaldo and occasional bonuses, so the ceiling is not simply ten per cent of the salary this page already knows."
   }],
 });
 
@@ -1168,11 +1168,11 @@ export const annualDonationsUnmodelled = rule<string[]>({
     // no value to pick a version of.
     from: "2011-12-30",
     value: ["donaciones del artículo 32"],
-    norm: "Ley de Impuesto sobre la Renta art. 32",
+    norm: "Ley de Impuesto sobre la Renta art. 32 numeral 4",
     source: "incomeTax",
-    reviewed: "2026-08-17",
+    reviewed: "2026-08-18",
     status: ["NOT MODELLED"],
-    note: "NOT MODELLED. Article 29 numeral 7 sends everyone above $9,100 of renta obtenida to articles 32 AND 33, and /renta-anual/ models only 33. A reader who donated is therefore shown a balance larger than the one they will file — an error that flatters the page on screen and costs the reader nothing, which is precisely why it is easy to leave unwritten. The ceiling article 32 sets is deliberately NOT transcribed here: nobody has read that article back against the consolidated text for this project, and a figure carried from memory is the one thing this registry exists to prevent. Modelling it starts by reading it.",
+    note: "NOT MODELLED, and now read rather than assumed. Article 29 numeral 7 sends everyone above $9,100 of renta obtenida to articles 32 AND 33, and /renta-anual/ models only 33.\n\nWHAT ARTICLE 32 TURNS OUT TO CONTAIN. Its first three numerals are employer-side and cannot reach a salaried filer: erogaciones for workers' housing, schools, hospitals and medical services provided free and across the workforce; sanitation works; and employer contributions to workers' associations and cooperatives. THE ONE THAT REACHES THIS PAGE'S READER IS NUMERAL 4, donations to the entities of article 6, deductible \"HASTA UN LÍMITE MÁXIMO DEL VEINTE POR CIENTO DEL VALOR RESULTANTE DE RESTAR A LA RENTA NETA DEL DONANTE EN EL PERIODO O EJERCICIO DE IMPOSICIÓN RESPECTIVO, EL VALOR DE LA DONACIÓN\" — a ceiling defined on the net of the donation itself, not a flat share of income, and one that would need its own solve.\n\nSo the gap is narrower than the article number suggests and still real: a reader who donated is shown a balance larger than the one they will file. The error flatters the page on screen and costs the reader at the window, which is precisely why it is easy to leave unwritten. Modelling it needs an input, the article 6 qualification the page cannot check, and the circular ceiling above."
   }],
 });
 
@@ -1184,9 +1184,9 @@ export const annualTablePriorExercises = rule<{ firstExercise: number }>({
     value: { firstExercise: 2025 },
     norm: "Ley de Impuesto sobre la Renta art. 37 (texto anterior al D.L. 293 del 30 de abril de 2025)",
     source: "incomeTax",
-    reviewed: "2026-08-17",
+    reviewed: "2026-08-18",
     status: ["NOT MODELLED"],
-    note: "NOT MODELLED. D.L. 293 changed bands I and II of article 37, and this registry carries only the table that resulted. The superseded figures are not here, so an exercise that closed before 2025 cannot be priced — /renta-anual/ offers 2025 as its first year rather than applying today's table to a year it did not govern, and `annualTableFor` reports `predatesRule` for anything earlier. The gap is a reading that has not been done, not a limit of the code: the older band I and II figures would be one more entry in `annualTaxTable.versions`, and the exercise close of article 13 letter c) already picks the right one.",
+    note: "NOT MODELLED, and the search for the missing figures has now been done. D.L. 293 changed bands I and II of article 37, and this registry carries only the table that resulted, so an exercise that closed before 2025 cannot be priced: /renta-anual/ offers 2025 as its first year rather than applying today's table to a year it did not govern, and `annualTableFor` reports `predatesRule` for anything earlier.\n\nTHE CONSOLIDATED TEXT CANNOT CLOSE THIS, which is the useful finding. A consolidated text carries the law as it stands, so `sources.incomeTax` prints the post-reform table and nothing else; the superseded band I and II figures are simply not in it, and the reform index only names the decree that replaced them. Closing the gap therefore needs a different document — the pre-2025 consolidated text, or whichever decree last set those two bands before D.L. 293 — and not another reading of the one this rule points at.\n\nThe code is ready for it either way: the older figures would be one more entry in `annualTaxTable.versions`, and the exercise close of article 13 letter c) already picks the right one."
   }],
 });
 
@@ -1207,8 +1207,8 @@ export const annualFilingThreshold = rule<number>({
     value: 60000,
     norm: "Ley de Impuesto sobre la Renta art. 38",
     source: "incomeTax",
-    reviewed: "2026-08-17",
-    note: "Measured on the same renta obtenida as the $9,100 test of article 29 numeral 7. The reasoning is written once, on `fixedDeductionIncomeLimit`, and this note deliberately does not restate it: two copies of a legal argument drift apart, and the one that drifts is always the one nobody is looking at. Read that note before changing anything here.\n\nOne thing that IS specific to this article: the threshold is \"mayores a\", so a renta obtenida of exactly $60,000 does not trigger the filing obligation.",
+    reviewed: "2026-08-18",
+    note: "Read back against the consolidated text: article 38 exempts the salaried from filing \"SALVO AQUELLAS PERSONAS CON RENTAS MAYORES A US$60,000.00 ANUALES\", plus the two other cases it names. Measured on the same renta obtenida as the $9,100 test of article 29 numeral 7. The reasoning is written once, on `fixedDeductionIncomeLimit`, and this note deliberately does not restate it: two copies of a legal argument drift apart, and the one that drifts is always the one nobody is looking at. Read that note before changing anything here.\n\nOne thing that IS specific to this article: the threshold is \"mayores a\", so a renta obtenida of exactly $60,000 does not trigger the filing obligation.",
   }],
 });
 
@@ -1230,8 +1230,8 @@ export const annualDeductionLimit = rule<number>({
     value: 800,
     norm: "Ley de Impuesto sobre la Renta art. 33 literales a) y b)",
     source: "incomeTax",
-    reviewed: "2026-08-17",
-    note: "Per concept and per exercise: medical and hospital services under literal a), schooling of children under 25 or the taxpayer's own studies under literal b). The receipts are not attached to the return and have to be kept for six years.",
+    reviewed: "2026-08-18",
+    note: "Read back against the consolidated text, where the figure is spelled out in words and not digits — \"UN MONTO MÁXIMO DE OCHOCIENTOS DÓLARES DE LOS ESTADOS UNIDOS DE AMÉRICA, EN CADA EJERCICIO O PERÍODO IMPOSITIVO, POR CADA UNO DE LOS CONCEPTOS SIGUIENTES\" — which is why searching the PDF for \"800\" finds nothing. The same sentence excludes \"LA COMPRENDIDA EN EL NUMERAL 7) DEL ARTÍCULO 29\", which is what makes the two branches alternatives. Per concept and per exercise: medical and hospital services under literal a), schooling of children under 25 or the taxpayer's own studies under literal b). The receipts are not attached to the return and have to be kept for six years.",
   }],
 });
 
@@ -1253,6 +1253,62 @@ export const annualFilingWindowMonths = rule<number>({
     source: "incomeTax",
     reviewed: "2026-08-17",
     note: "Article 48: the return is filed \"dentro de los cuatro meses siguientes al vencimiento del ejercicio o período de imposición\". Article 13 letter a) fixes that exercise at 1 January to 31 December for natural persons.",
+  }],
+});
+
+/**
+ * The ingreso base de cotización, which is not the gross and is not the income
+ * tax base either.
+ *
+ * THREE BASES, AND THIS IS THE ONE NOBODY EXPECTS. Article 14 of the pension
+ * law builds the contributory base out of "el salario mensual que devenguen"
+ * and then takes things back out of it: "No forman parte del Ingreso Base de
+ * Cotización" the occasional gratifications and bonuses, THE AGUINALDO,
+ * viáticos, gastos de representación and the prestaciones sociales the law
+ * establishes. So a December payslip that carries the year-end bonus
+ * contributes on the salary alone.
+ *
+ * It matters because the money is still pay. The excluded concepts leave the
+ * pension base and nothing else: they stay in the income tax base and they stay
+ * in the net, so this cannot be modelled by simply lowering the gross.
+ * `calculatePayrollWithholding` takes the excluded part as its own input for
+ * that reason.
+ *
+ * The list is what a caller has to be able to recognise, so it is the value.
+ */
+export const contributoryBaseExclusions = rule<string[]>({
+  id: "contributoryBaseExclusions",
+  unit: "exclusions",
+  versions: [{
+    from: "2023-01-01",
+    value: [
+      "gratificaciones y bonificaciones ocasionales",
+      "aguinaldo",
+      "viáticos",
+      "gastos de representación",
+      "prestaciones sociales establecidas por la ley",
+    ],
+    norm: "Ley Integral del Sistema de Pensiones art. 14",
+    source: "pensions",
+    reviewed: "2026-08-18",
+    note: "Read straight out of the SSF PDF. Charging the rate on a gross that includes the aguinaldo doubles the contribution of somebody whose bonus equals a month of pay — $130.50 instead of $65.25 on a $900 salary — which is what this rule exists to stop.\n\nWHAT THE PAGE STILL DOES NOT DO WITH THAT MONEY. Taking the bonus out of the pension base does not give it its own income tax treatment: the exempt slice of article 4 numeral 16 and the transitory decrees is worked out on /aguinaldo/ and in the annual return, not inside a pay period, because no text names the table that withholds on a bonus. A period priced here with the aguinaldo inside it therefore has the right AFP and an income tax figure that taxes the whole bonus. The interface says so where the field is.",
+  }],
+});
+
+/**
+ * The floor of that same base, which this project does not apply.
+ */
+export const contributoryBaseFloor = rule<string[]>({
+  id: "contributoryBaseFloor",
+  unit: "not-modelled",
+  versions: [{
+    from: "2023-01-01",
+    value: ["salario mínimo legal mensual en vigencia"],
+    norm: "Ley Integral del Sistema de Pensiones art. 14",
+    source: "pensions",
+    reviewed: "2026-08-18",
+    status: ["NOT MODELLED"],
+    note: "NOT MODELLED. The same article that lists the exclusions of `contributoryBaseExclusions` sets a floor under the base: it \"no podrá ser inferior al salario mínimo legal mensual en vigencia\", with exceptions for apprentices, agricultural and domestic workers and others whose income falls below it, determined by technical rules the Banco Central issues. This project applies the rate to whatever base it is given, so for pay under the minimum wage it reports a contribution smaller than the one the law asks for — the opposite direction from the exclusions above, and a case /retenciones/ can reach whenever somebody prices a part-time or partial month.\n\nModelling it needs the sector, which the withholding page does not ask for — `minimumWage` is per sector — and the Banco Central's technical rules for the exceptions, which are not in this registry. Neither is a reading of the article; both are documents nobody here has opened.",
   }],
 });
 
@@ -1418,6 +1474,7 @@ export const RULES = {
   quincena25MandatoryFrom,
   withholdingTables, recalcTables, recalcMonths,
   afpEmployeeRate, isssEmployeeRate, isssMonthlyCeiling,
+  contributoryBaseExclusions, contributoryBaseFloor,
   fixedDeduction, fixedDeductionIncomeLimit,
   annualTaxTable, annualFilingThreshold, annualDeductionLimit, annualFilingWindowMonths,
   annualDonationsUnmodelled, annualTablePriorExercises, voluntaryPensionUnmodelled,
@@ -1491,7 +1548,7 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     // The page subtracts both contributions from every base it prints and
     // measures the $9,100 limit on the renta obtenida the AFP has left, so the
     // rule that says which of the two is an exclusion is one this page applies.
-    "contributionsExcludedFromBase",
+    "contributionsExcludedFromBase", "contributoryBaseExclusions", "contributoryBaseFloor",
   ],
   // Whatever is in dispute, and nothing else. Written as a derivation rather
   // than a list because the page is one too: a rule marked DISPUTED that this

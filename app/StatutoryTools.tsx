@@ -73,7 +73,14 @@ const copy = {
     monthly: "Mensual", fortnightly: "Quincenal", weekly: "Semanal", includeAfp: "Descontar AFP (7.25%)",
     includeIsss: "Descontar ISSS (3%, techo mensual $1,000)", fixedDeduction: "Aplicar deducción fija de renta cuando corresponda",
     isssApprox: "El ISSS se liquida en planilla mensual. Para pagos quincenales y semanales el techo se prorratea, así que el resultado puede diferir en centavos del descuento real.",
-    annualGross: "Renta anual gravada estimada", annualGrossHint: "Opcional. Suma solo lo gravado con renta: aguinaldo y bonificaciones sí, la Quincena 25 no. Escribilo en bruto: el umbral se mide sobre la renta obtenida (ingresos gravados menos la cotización obligatoria de AFP), y esa resta se hace acá. El ISSS no se excluye en este punto. Vacío, se anualiza el período.",
+    annualGross: "Renta anual gravada estimada", annualGrossHint: "Opcional. Suma solo lo gravado con renta: aguinaldo y bonificaciones sí, la Quincena 25 no. Vacío, se anualiza el período.",
+    nonContributory: "De ese bruto, cuánto no cotiza", nonContributoryHint: "Opcional. Aguinaldo, bonificaciones ocasionales, viáticos y gastos de representación: el art. 14 los deja fuera de la base de AFP, pero siguen siendo pago.",
+    helpNonContributory: "El artículo 14 de la Ley Integral del Sistema de Pensiones dice qué no forma parte del ingreso base de cotización: gratificaciones y bonificaciones ocasionales, el aguinaldo, viáticos, gastos de representación y las prestaciones sociales que la ley establece. Esa parte no paga AFP, pero sí sigue en el bruto y en el neto. Vacío, se cotiza sobre todo el bruto, que es lo correcto para un mes ordinario.",
+    nonContributoryNote: "La AFP se calculó sobre la base de cotización y no sobre el bruto. Ojo con la renta: si ese monto incluye aguinaldo, acá se grava completo. La porción exenta del aguinaldo se calcula en su propia página, no dentro de un período de pago.",
+    contributoryBase: "Base de cotización",
+    annualAfp: "AFP obligatoria del año", annualAfpHint: "Opcional. La suma de lo que te descontaron de AFP en el año, de tus boletas. Vacío, se estima con el 7.25%.",
+    afpDerived: "La AFP de esa cifra está estimada con el 7.25%, y el artículo 14 deja el aguinaldo y las bonificaciones ocasionales fuera de la base de cotización. Si tu renta anual los incluye, la estimación queda alta y la renta obtenida baja. Si tenés el dato de tus boletas, escribilo y el umbral se mide sobre la cifra real.",
+    helpAnnualAfp: "Lo que te descontaron de AFP en todo el año, sumando las boletas. Solo la cotización obligatoria: los aportes voluntarios tienen otro tratamiento y esta página no los modela. Sirve para medir el umbral de $9,100 sobre la renta obtenida real en vez de una estimación.",
     annualUsed: "Renta obtenida del año, para el límite de $9,100", annualEstimated: "estimada del período", annualDeclared: "de tu renta anual, menos la AFP",
     takeHome: "Pago neto estimado", isr: "Retención de renta", afp: "Aporte AFP", isss: "Aporte ISSS",
     taxableBefore: "Remuneración gravada antes de deducción fija", taxable: "Base usada en la tabla", band: "Tramo aplicado",
@@ -211,7 +218,14 @@ const copy = {
     monthly: "Monthly", fortnightly: "Twice monthly", weekly: "Weekly", includeAfp: "Deduct pension contribution (7.25%)",
     includeIsss: "Deduct ISSS (3%, $1,000 monthly ceiling)", fixedDeduction: "Apply fixed income-tax deduction when eligible",
     isssApprox: "ISSS is settled on a monthly planilla. For twice-monthly and weekly pay the ceiling is prorated, so the result can differ by a few cents from the actual deduction.",
-    annualGross: "Estimated annual taxable income", annualGrossHint: "Optional. Add up taxable pay only: the year-end bonus and bonuses count, the Quincena 25 does not. Enter it gross: the threshold is measured on the renta obtenida (taxable pay less the compulsory pension contribution), and that subtraction happens here. The ISSS is not excluded at this point. Left empty, the period is annualised.",
+    annualGross: "Estimated annual taxable income", annualGrossHint: "Optional. Add up taxable pay only: the year-end bonus and bonuses count, the Quincena 25 does not. Left empty, the period is annualised.",
+    nonContributory: "Of that gross, how much does not contribute", nonContributoryHint: "Optional. Year-end bonus, occasional bonuses, viáticos and gastos de representación: article 14 keeps them out of the pension base, but they are still pay.",
+    helpNonContributory: "Article 14 of the Ley Integral del Sistema de Pensiones says what is not part of the ingreso base de cotización: occasional gratifications and bonuses, the year-end bonus, viáticos, gastos de representación and the prestaciones sociales the law establishes. That part pays no pension contribution, but it stays in the gross and in the net. Left empty, the whole gross contributes, which is right for an ordinary month.",
+    nonContributoryNote: "The pension contribution was worked out on the contributory base, not on the gross. Watch the income tax: if that amount includes the year-end bonus, it is taxed here in full. The bonus's exempt slice is worked out on its own page, not inside a pay period.",
+    contributoryBase: "Contributory base",
+    annualAfp: "Compulsory pension contribution for the year", annualAfpHint: "Optional. What was deducted for your pension fund across the year, from your payslips. Left empty, it is estimated at 7.25%.",
+    afpDerived: "The pension contribution behind that figure is estimated at 7.25%, and article 14 keeps the year-end bonus and occasional bonuses out of the contributory base. If your annual figure includes them, the estimate runs high and the renta obtenida runs low. If you have the figure from your payslips, enter it and the threshold is measured on the real one.",
+    helpAnnualAfp: "What was deducted for your pension fund across the whole year, adding up your payslips. The compulsory contribution only: voluntary saving has a different treatment and this page does not model it. It lets the $9,100 threshold be measured on your real renta obtenida instead of an estimate.",
     annualUsed: "Renta obtenida for the year, for the $9,100 limit", annualEstimated: "annualised from the period", annualDeclared: "your annual figure, less the pension contribution",
     takeHome: "Estimated take-home pay", isr: "Income-tax withholding", afp: "Pension contribution", isss: "ISSS contribution",
     taxableBefore: "Taxable remuneration before fixed deduction", taxable: "Table tax base", band: "Applied band",
@@ -448,6 +462,8 @@ const PAYROLL_SHARE: ShareSchema = {
   br: { kind: "money" },
   fr: { kind: "option", values: ["monthly", "fortnightly", "weekly"] },
   an: { kind: "money" },
+  aa: { kind: "money" },
+  nc: { kind: "money" },
   afp: { kind: "flag" },
   isss: { kind: "flag" },
   ded: { kind: "flag" },
@@ -486,6 +502,8 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const [includeIsss, setIncludeIsss] = useState(shared.isss !== "0");
   const [applyFixedDeduction, setApplyFixedDeduction] = useState(shared.ded !== "0");
   const [annualGross, setAnnualGross] = useState(shared.an ?? "");
+  const [annualAfp, setAnnualAfp] = useState(shared.aa ?? "");
+  const [nonContributory, setNonContributory] = useState(shared.nc ?? "");
   const [recalcPeriod, setRecalcPeriod] = useState<RecalcPeriod>((shared.pe as RecalcPeriod) ?? "june");
   const [accSource, setAccSource] = useState<AccumulatedSource>((shared.fu as AccumulatedSource) ?? "estimated");
   const [accSalary, setAccSalary] = useState(shared.asa ?? "900");
@@ -506,7 +524,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
       sec: sector, dp: pendingDays, vac: unusedVacation, agp: aguinaldoPaid ? "1" : "0",
     }
     : {
-      mo: payrollMode, br: gross, fr: frequency, an: annualGross,
+      mo: payrollMode, br: gross, fr: frequency, an: annualGross, aa: annualAfp, nc: nonContributory,
       afp: includeAfp ? "1" : "0", isss: includeIsss ? "1" : "0",
       ded: applyFixedDeduction ? "1" : "0",
       pe: recalcPeriod, fu: accSource, asa: accSalary, aba: accTaxable, are: accWithheld,
@@ -517,7 +535,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
     startDate, endDate, monthlySalary: number(monthlySalary), sector, termination,
     pendingSalaryDays: number(pendingDays), unusedVacationPeriods: number(unusedVacation), aguinaldoPaid,
   }), [aguinaldoPaid, endDate, monthlySalary, pendingDays, sector, startDate, termination, unusedVacation]);
-  const payroll = useMemo(() => calculatePayrollWithholding({ gross: number(gross), frequency, includeAfp, includeIsss, applyFixedDeduction, annualGross: number(annualGross) }), [annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss]);
+  const payroll = useMemo(() => calculatePayrollWithholding({ gross: number(gross), frequency, includeAfp, includeIsss, applyFixedDeduction, annualGross: number(annualGross), annualAfp: number(annualAfp), nonContributoryPay: number(nonContributory) }), [annualAfp, annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss, nonContributory]);
   // What the same pay would withhold under the pre-2025 reading, where the
   // tables were said to already contain the $1,600. Shown only when it differs,
   // because that gap is what makes this calculator disagree with the ones that
@@ -544,20 +562,23 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
     accumulatedWithheld: estimating ? estimate.accumulatedWithheld : number(accWithheld),
     applyFixedDeduction,
     annualGross: estimating ? estimate.annualGross : number(annualGross),
+    annualAfp: estimating ? 0 : number(annualAfp),
     includeAfp,
-  }), [accTaxable, accWithheld, annualGross, applyFixedDeduction, estimate, estimating, includeAfp, recalcPeriod]);
+  }), [accTaxable, accWithheld, annualAfp, annualGross, applyFixedDeduction, estimate, estimating, includeAfp, recalcPeriod]);
   // The same pay run the panel above already priced, read against what the
   // payslip says. It reuses every input of the calculate mode, so a reader who
   // set up their pay there and then switches has nothing to type again.
   const verify = useMemo(() => verifyPayslip({
     gross: number(gross), frequency, includeAfp, includeIsss, applyFixedDeduction,
     annualGross: number(annualGross),
+    annualAfp: number(annualAfp),
+    nonContributoryPay: number(nonContributory),
     reported: {
       afp: reportedFigure(slipAfp), isss: reportedFigure(slipIsss),
       isr: reportedFigure(slipIsr), net: reportedFigure(slipNet),
     },
-  }), [annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss,
-    slipAfp, slipIsr, slipIsss, slipNet]);
+  }), [annualAfp, annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss,
+    nonContributory, slipAfp, slipIsr, slipIsss, slipNet]);
 
   const conceptLabels: Record<PayslipConcept, string> = {
     afp: t.afp, isss: t.isss, isr: t.isr, net: t.takeHome,
@@ -862,7 +883,9 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <div className="field-grid"><MoneyField label={t.gross} lang={lang} value={gross} onChange={setGross} help={t.helpGross} />
             <SelectField label={t.frequency} lang={lang} value={frequency} onChange={setFrequency} help={t.helpFrequency}
               options={[{ value: "monthly", label: t.monthly }, { value: "fortnightly", label: t.fortnightly }, { value: "weekly", label: t.weekly }] as const} />
-            <MoneyField label={t.annualGross} lang={lang} value={annualGross} onChange={setAnnualGross} note={t.annualGrossHint} help={t.helpAnnualGross} /></div>
+            <MoneyField label={t.annualGross} lang={lang} value={annualGross} onChange={setAnnualGross} note={t.annualGrossHint} help={t.helpAnnualGross} />
+            <MoneyField label={t.annualAfp} lang={lang} value={annualAfp} onChange={setAnnualAfp} note={t.annualAfpHint} help={t.helpAnnualAfp} />
+            <MoneyField label={t.nonContributory} lang={lang} value={nonContributory} onChange={setNonContributory} note={t.nonContributoryHint} help={t.helpNonContributory} /></div>
           <div className="payroll-checks">
             <CheckField label={t.includeAfp} checked={includeAfp} onChange={setIncludeAfp} />
             <CheckField label={t.includeIsss} checked={includeIsss} onChange={setIncludeIsss} />
@@ -881,6 +904,17 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <div className="result-tiles"><div className="highlight"><span>{t.isr}</span><b>{money.format(payroll.isr)}</b></div><div><span>{t.afp}</span><b>{money.format(payroll.afp)}</b></div><div><span>{t.isss}</span><b>{money.format(payroll.isss)}</b></div><div><span>{t.taxable}</span><b>{money.format(payroll.taxable)}</b></div></div>
           <div className="tax-base-flow"><span>{t.taxableBefore}<b>{money.format(payroll.taxableBeforeFixedDeduction)}</b></span><i>−</i><span>{t.fiscalDeduction}<b>{money.format(payroll.fixedDeduction)}</b><small>{t.notCash}</small></span><i>=</i><span>{t.taxable}<b>{money.format(payroll.taxable)}</b></span></div>
           <div className="result-facts"><div><span>{t.annualUsed}</span><b>{money.format(payroll.annualIncome)}</b><small>{payroll.annualIncomeDeclared ? t.annualDeclared : t.annualEstimated}</small></div></div>
+          {/* Only where it can be wrong: the reader gave an annual figure and
+              no contribution to go with it, so the 7.25% is running over a
+              base that article 14 does not contribute on. Annualising a single
+              period is an estimate end to end and says so elsewhere. */}
+          {/* Only when the reader used it: the AFP no longer matches the gross
+              on screen, and the income tax on that slice is the part this page
+              does not adjust. */}
+          {payroll.nonContributoryPay > 0 && <div className="callout"><span>§</span>
+            <p><b>{t.contributoryBase}: {money.format(payroll.contributoryBase)}.</b> {t.nonContributoryNote}</p></div>}
+          {payroll.annualIncomeDeclared && !payroll.annualAfpDeclared && includeAfp
+            && <div className="callout warn"><span>!</span><p>{t.afpDerived}</p></div>}
           {withoutFixedDeduction > payroll.isr && <div className="callout"><span>≠</span><p>{t.differsLead} <b>{money.format(withoutFixedDeduction)}</b> {t.differsTail}</p></div>}
         </div>
       </div>
@@ -968,6 +1002,8 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
               <SelectField label={t.frequency} lang={lang} value={frequency} onChange={setFrequency} help={t.helpFrequency}
                 options={[{ value: "monthly", label: t.monthly }, { value: "fortnightly", label: t.fortnightly }, { value: "weekly", label: t.weekly }] as const} />
               <MoneyField label={t.annualGross} lang={lang} value={annualGross} onChange={setAnnualGross} note={t.annualGrossHint} help={t.helpAnnualGross} />
+              <MoneyField label={t.annualAfp} lang={lang} value={annualAfp} onChange={setAnnualAfp} note={t.annualAfpHint} help={t.helpAnnualAfp} />
+              <MoneyField label={t.nonContributory} lang={lang} value={nonContributory} onChange={setNonContributory} note={t.nonContributoryHint} help={t.helpNonContributory} />
             </div>
             <div className="payroll-checks">
               <CheckField label={t.includeAfp} checked={includeAfp} onChange={setIncludeAfp} />

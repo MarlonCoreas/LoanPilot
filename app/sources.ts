@@ -89,7 +89,20 @@ export const OFFICIAL = {
   withholding: "https://www.transparenciafiscal.gob.sv/downloads/pdf/700-DGII-DC-2025-01.pdf",
   incomeTax: "https://transparencia.mh.gob.sv/downloads/pdf/DC5811.pdf",
   isss: "https://ovisss.isss.gob.sv/documentos_ofivi/Lineamiento_Mod_Salario_Maximo.pdf",
-  pensions: "https://ssf.gob.sv/estadisticas/marco-legal-y-normativo/leyes-2/",
+  // The law itself, not the index it used to point at. Every other source here
+  // opens the document a figure is read from, and this one opened a list of
+  // links — so the one rule the /renta-anual/ thresholds hang on could not be
+  // checked from the repository at all. A WordPress upload path is less stable
+  // than an index page and that is the trade: if this ever 404s, the index at
+  // ssf.gob.sv/estadisticas/marco-legal-y-normativo/leyes-2/ is where the
+  // current URL is found again. Nothing in the test suite fetches these, so a
+  // break surfaces at the six-month review and not before.
+  //
+  // Like the asamblea.gob.sv decrees above, the file arrives with eight bytes
+  // of rubbish before the `%PDF` header, so `file` calls it "data" and poppler
+  // refuses it until the prefix is cut. The text layer underneath is real, not
+  // a scan: arts. 14, 16, 26 and 138 were read straight out of it.
+  pensions: "https://ssf.gob.sv/wp-content/uploads/2023/02/Ley-Integral-del-Sistema-de-Pensiones.pdf",
   ssf: "https://ssf.gob.sv/servicios/tasas-de-interes-comisiones-y-recargos/",
   treasury: "https://www.mh.gob.sv/modificacion-a-las-tablas-de-retencion-del-impuesto-sobre-la-renta-decreto-ejecutivo-no-10/",
   issues: "https://github.com/MarlonCoreas/LoanPilot/issues/new?template=calculation.yml",

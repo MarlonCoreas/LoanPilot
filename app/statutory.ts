@@ -407,10 +407,28 @@ export function withholdingForTaxable(taxable: number, frequency: PayFrequency) 
  * maximum contributory base: the previous ceiling was repealed, so a
  * high salary contributes the same 7.25% as a low one. If a ceiling ever comes
  * back this stops being a multiplication and the rule note is where it lands.
+ *
+ * WHY A DECLARED FIGURE BEATS THE DERIVED ONE, and why the caller is asked for
+ * it. Article 14 defines the ingreso base de cotización and keeps the aguinaldo
+ * OUT of it, along with occasional bonuses, viáticos, gastos de representación
+ * and statutory prestaciones sociales. The annual figure this function is
+ * handed is a TAX figure and does include the bonus — it has to, because the
+ * excess above the exempt slice is renta gravada. Multiplying it by the rate
+ * therefore charges a contribution on money that does not contribute:
+ * it overstates the AFP, understates the renta obtenida, and hands the flat
+ * deduction of article 29 numeral 7 to readers who are over the limit. With a
+ * thirty-day bonus the wrong answer runs from about $750.21 to $754.71 of
+ * monthly salary.
+ *
+ * So the derivation is the fallback and not the answer. `declaredAfp` is the
+ * figure a reader can add up from their payslips, and the interface says what
+ * the fallback assumes whenever they have not.
  */
-function rentaObtenidaFrom(taxablePay: number, includeAfp?: boolean) {
+function rentaObtenidaFrom(taxablePay: number, includeAfp?: boolean, declaredAfp?: number) {
   const pay = round2(Math.max(0, taxablePay || 0));
   if (includeAfp === false) return pay;
+  const declared = round2(Math.max(0, declaredAfp || 0));
+  if (declared > 0) return round2(Math.max(0, pay - declared));
   return round2(Math.max(0, pay - round2(pay * AFP_RATE)));
 }
 
@@ -469,12 +487,39 @@ export function calculatePayrollWithholding(input: {
    * touches it either — see the `quincena25Exempt` rule.
    */
   annualGross?: number;
+  /**
+   * The compulsory pension contribution for that same year, as the payslips
+   * state it. Left out, it is derived from the rate — see `rentaObtenidaFrom`
+   * for why that derivation is only an approximation.
+   */
+  annualAfp?: number;
+  /**
+   * The part of this period's gross that article 14 keeps OUT of the ingreso
+   * base de cotización: the aguinaldo, occasional bonuses, viáticos, gastos de
+   * representación and statutory prestaciones sociales. It leaves the pension
+   * base and nothing else — it is still pay, so it stays in the income tax
+   * base and in the net.
+   */
+  nonContributoryPay?: number;
 }) {
   const gross = round2(Math.max(0, input.gross || 0));
   const periods = PAY_PERIODS[input.frequency];
   /** Months of a year this one pay period covers: 1, a half, or 12/52. */
   const monthsPerPeriod = MONTHS_IN_A_YEAR / periods;
-  const afp = input.includeAfp === false ? 0 : round2(gross * AFP_RATE);
+  // THE PENSION BASE IS NOT THE GROSS, and article 14 is where the difference
+  // lives: "No forman parte del Ingreso Base de Cotización" the aguinaldo,
+  // occasional bonuses and gratifications, viáticos, gastos de representación
+  // and the prestaciones sociales the law establishes. A December payslip that
+  // carries the year-end bonus therefore contributes on the salary alone, and
+  // charging the rate on the whole gross doubles the contribution of somebody
+  // whose bonus equals a month of pay.
+  //
+  // The caller declares the excluded part rather than this module guessing at
+  // it: nothing in a single gross figure says which of it was a viático. Left
+  // out, the base is the gross, which is right for an ordinary month.
+  const nonContributory = round2(Math.min(gross, Math.max(0, input.nonContributoryPay || 0)));
+  const contributoryBase = round2(Math.max(0, gross - nonContributory));
+  const afp = input.includeAfp === false ? 0 : round2(contributoryBase * AFP_RATE);
   // The monthly ISSS ceiling, spread over whatever period is being paid. That
   // spreading is an approximation and the interface says so: the institute
   // settles contributions on a monthly planilla, so a weekly run can land a few
@@ -487,7 +532,8 @@ export function calculatePayrollWithholding(input: {
   // health contribution is, so this is the gross less the AFP and nothing else.
   const declaredAnnual = round2(Math.max(0, input.annualGross || 0));
   const annualPay = declaredAnnual > 0 ? declaredAnnual : round2(gross * periods);
-  const annualIncome = rentaObtenidaFrom(annualPay, input.includeAfp);
+  const declaredAfp = round2(Math.max(0, input.annualAfp || 0));
+  const annualIncome = rentaObtenidaFrom(annualPay, input.includeAfp, declaredAfp);
   // The band is read from the base before the deduction, which is the figure
   // the table's own limits are written in. A base that band II then drops below
   // $550 still withholds nothing, which is what the annual liquidation gives.
@@ -501,7 +547,12 @@ export function calculatePayrollWithholding(input: {
   const net = round2(gross - afp - isss - withholding.amount);
   return {
     gross, afp, isss, fixedDeduction, qualifiesForFixedDeduction, bandBeforeFixedDeduction,
+    /** What the pension rate was applied to, once article 14 took its slice. */
+    contributoryBase, nonContributoryPay: nonContributory,
     annualPay, annualIncome, annualIncomeDeclared: declaredAnnual > 0,
+    annualAfp: declaredAfp,
+    /** False when the AFP behind `annualIncome` was estimated from the rate. */
+    annualAfpDeclared: declaredAfp > 0 && input.includeAfp !== false,
     taxableBeforeFixedDeduction, taxable, isr: withholding.amount,
     band: withholding.band, marginalRate: withholding.rate, net,
   };
@@ -611,6 +662,10 @@ export function verifyPayslip(input: {
   includeIsss?: boolean;
   applyFixedDeduction?: boolean;
   annualGross?: number;
+  /** The year's compulsory pension contribution, when the reader knows it. */
+  annualAfp?: number;
+  /** The part of the gross that does not contribute — see the calculation. */
+  nonContributoryPay?: number;
   /** What the payslip prints. A missing or empty figure is not compared. */
   reported: Partial<Record<PayslipConcept, number | null>>;
 }) {
@@ -633,8 +688,13 @@ export function verifyPayslip(input: {
     // ceiling produced it. The pension ceiling was repealed and this project
     // does not carry the repealed figure, so naming it would be inventing one;
     // a base the reader can compare against their own gross is checkable.
+    //
+    // Compared against the CONTRIBUTORY base and not the gross: on a payslip
+    // that carries the aguinaldo the two differ, and a payroll that got article
+    // 14 right would otherwise be reported as a discrepancy — the worst way for
+    // this tool to be wrong, because the reader takes it to human resources.
     const impliedBase = round2(reported / AFP_RATE);
-    if (near(impliedBase, gross)) return [];
+    if (near(impliedBase, expected.contributoryBase)) return [];
     return [{ id: "afpOtherBase", rule: "afpEmployeeRate", amount: impliedBase }];
   };
 
@@ -878,6 +938,8 @@ export function calculateRecalculation(input: {
    * first. Estimated from the period when absent.
    */
   annualGross?: number;
+  /** The year's compulsory pension contribution, when the reader knows it. */
+  annualAfp?: number;
   /** False when the pay carries no pension contribution to exclude. */
   includeAfp?: boolean;
 }) {
@@ -892,8 +954,9 @@ export function calculateRecalculation(input: {
   // figure is always the better one and the interface asks for it. The AFP is
   // out of both: out of the declared one by `rentaObtenidaFrom`, and out of the
   // accumulated base before it ever got here.
+  const declaredAfp = round2(Math.max(0, input.annualAfp || 0));
   const annualIncome = declaredAnnual > 0
-    ? rentaObtenidaFrom(declaredAnnual, input.includeAfp)
+    ? rentaObtenidaFrom(declaredAnnual, input.includeAfp, declaredAfp)
     : round2(accumulatedTaxable * MONTHS_IN_A_YEAR / months);
 
   const bandBeforeFixedDeduction = applyBands(accumulatedTaxable, table).band;
@@ -917,6 +980,8 @@ export function calculateRecalculation(input: {
   return {
     period: input.period, months, accumulatedTaxable, accumulatedWithheld,
     annualPay: declaredAnnual, annualIncome, annualIncomeDeclared: declaredAnnual > 0,
+    annualAfp: declaredAfp,
+    annualAfpDeclared: declaredAfp > 0 && input.includeAfp !== false,
     qualifiesForFixedDeduction, bandBeforeFixedDeduction, fixedDeduction,
     taxable, settledTax: settled.amount,
     band: settled.band, marginalRate: settled.rate,

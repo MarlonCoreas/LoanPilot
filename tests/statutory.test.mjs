@@ -169,6 +169,103 @@ test("the $9,100 eligibility limit is measured on the renta obtenida, which the 
   assert.equal(noAfp.qualifiesForFixedDeduction, false);
 });
 
+test("the aguinaldo does not contribute, so a December payslip is not priced on the gross", () => {
+  // ARTICLE 14 SAYS THE PENSION BASE IS NOT THE GROSS. "No forman parte del
+  // Ingreso Base de Cotización" the aguinaldo, occasional bonuses, viáticos,
+  // gastos de representación and statutory prestaciones sociales. A December
+  // payslip carrying a bonus equal to a month of pay contributes on the salary
+  // alone, and charging the rate on the whole gross doubles it.
+  const salary = 900;
+  const december = calculatePayrollWithholding({
+    gross: salary * 2, frequency: "monthly", nonContributoryPay: salary,
+  });
+  assert.equal(december.contributoryBase, 900);
+  assert.equal(december.nonContributoryPay, 900);
+  assert.equal(december.afp, 65.25, "7.25% of the salary, not of the gross");
+
+  const onTheGross = calculatePayrollWithholding({ gross: salary * 2, frequency: "monthly" });
+  assert.equal(onTheGross.afp, 130.50, "exactly double, which is the defect");
+  assert.equal(onTheGross.contributoryBase, 1800, "an ordinary month contributes on all of it");
+
+  // The excluded slice is still pay: it stays in the gross, in the income tax
+  // base and in the net. Only the pension base loses it.
+  assert.equal(december.gross, 1800);
+  assert.equal(december.isss, onTheGross.isss, "the ISSS ceiling is untouched by article 14");
+  assert.ok(december.taxableBeforeFixedDeduction > onTheGross.taxableBeforeFixedDeduction,
+    "a smaller pension deduction leaves a larger income tax base");
+  assert.equal(december.net,
+    Math.round((1800 - december.afp - december.isss - december.isr) * 100) / 100);
+
+  // It cannot take more than the gross, however the caller misuses it.
+  const silly = calculatePayrollWithholding({
+    gross: 900, frequency: "monthly", nonContributoryPay: 5000,
+  });
+  assert.equal(silly.contributoryBase, 0);
+  assert.equal(silly.afp, 0);
+});
+
+test("a payslip that got article 14 right is not reported as a discrepancy", () => {
+  // THE WORST WAY FOR THE CHECKER TO BE WRONG, because the reader takes its
+  // output to human resources. A December payroll contributing on the salary
+  // alone is correct, and comparing it against the gross would call it a
+  // difference and hand the reader a complaint that is not theirs to make.
+  const check = verifyPayslip({
+    gross: 1800, frequency: "monthly", nonContributoryPay: 900,
+    reported: { afp: 65.25 },
+  });
+  const afp = check.lines.find((line) => line.concept === "afp");
+  assert.equal(afp.status, "match", JSON.stringify(afp.causes));
+  assert.equal(check.differences, 0);
+});
+
+test("a declared pension contribution beats deriving it, because the bonus is not in the base", () => {
+  // THE DEFECT THIS CLOSES. The annual figure the reader is asked for is a TAX
+  // figure and includes the year-end bonus, because the excess above the exempt
+  // slice is renta gravada. Article 14 keeps the aguinaldo out of the ingreso
+  // base de cotización, so multiplying that figure by 7.25% charges a
+  // contribution on money that does not contribute: it overstates the AFP,
+  // understates the renta obtenida, and hands the flat deduction to somebody
+  // over the limit.
+  //
+  // $750 a month plus a thirty-day bonus is $9,750 of taxable pay. The real
+  // contribution is 7.25% of the salary alone.
+  const realAfp = Math.round(9000 * 0.0725 * 100) / 100;
+  assert.equal(realAfp, 652.50);
+
+  const derived = calculatePayrollWithholding({
+    gross: 750, frequency: "monthly", annualGross: 9750,
+  });
+  assert.equal(derived.annualAfpDeclared, false);
+  assert.equal(derived.annualIncome, 9043.12, "7.25% of the bonus as well");
+
+  const declared = calculatePayrollWithholding({
+    gross: 750, frequency: "monthly", annualGross: 9750, annualAfp: realAfp,
+  });
+  assert.equal(declared.annualAfpDeclared, true);
+  assert.equal(declared.annualIncome, 9097.50, "the pay less the contribution actually made");
+  assert.equal(Math.round((declared.annualIncome - derived.annualIncome) * 100) / 100, 54.38);
+
+  // And the case where the difference is not cosmetic: the two readings put
+  // this reader on opposite sides of the $9,100 limit.
+  const flipDerived = calculatePayrollWithholding({
+    gross: 750.21, frequency: "monthly", annualGross: 9752.73,
+  });
+  const flipDeclared = calculatePayrollWithholding({
+    gross: 750.21, frequency: "monthly", annualGross: 9752.73,
+    annualAfp: Math.round(750.21 * 12 * 0.0725 * 100) / 100,
+  });
+  assert.equal(flipDerived.qualifiesForFixedDeduction, true, "the derivation says yes");
+  assert.equal(flipDeclared.qualifiesForFixedDeduction, false, "the real contribution says no");
+
+  // Pay with no pension contribution has nothing to declare and nothing to
+  // derive, and a declared figure must not be subtracted twice.
+  const noAfp = calculatePayrollWithholding({
+    gross: 750, frequency: "monthly", annualGross: 9750, annualAfp: realAfp, includeAfp: false,
+  });
+  assert.equal(noAfp.annualIncome, 9750);
+  assert.equal(noAfp.annualAfpDeclared, false);
+});
+
 test("the $1,600 deduction is only applied in band II, the one the decree leaves it out of", () => {
   // Literal e) of Executive Decree 10/2025 exempts band II alone. Bands III and
   // IV displace the article 37 limits by exactly $1,600 ($9,142.86 + 1,600 =

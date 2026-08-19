@@ -55,6 +55,7 @@ if (terse) {
     ].join("  ").trimEnd());
   }
   console.log(`\n${ALL_RULES.length} reglas · ${versionCount} versiones · ${flagged.length} con estado`);
+  console.log(`en disputa ${disputed.length} · sin fuente ${unsourced.length} · fuera de alcance ${unmodelled.length}`);
   process.exit(0);
 }
 
@@ -64,10 +65,19 @@ const line = (rule) => {
   return `| \`${rule.id}\` | ${version.unit ?? rule.unit} | ${version.norm} | ${oldestReview(rule)} | ${flags.join(" + ") || "—"} | ${(pagesUsing.get(rule.id) ?? ["—"]).join(", ")} |`;
 };
 
+// A rule can carry more than one flag — `quincena25Window` is DISPUTED about
+// which terminations it covers AND UNSOURCED about when its window opens — so
+// the three lists below overlap and their sizes do not add up to the number of
+// flagged rules. Saying so beats printing three numbers that look like an error
+// in the arithmetic, which is exactly how this line was first read.
+const overlap = flagged.length - (disputed.length + unsourced.length + unmodelled.length);
+const overlapNote = overlap === 0 ? "" :
+  ` Las listas se traslapan: ${-overlap} ${-overlap === 1 ? "regla lleva" : "reglas llevan"} más de un estado, así que los tres números no suman ${flagged.length}.`;
+
 console.log(`# Inventario del registro
 
 ${ALL_RULES.length} reglas, ${versionCount} versiones. ${flagged.length} llevan estado:
-${disputed.length} en disputa, ${unsourced.length} sin fuente y ${unmodelled.length} fuera de alcance.
+${disputed.length} en disputa, ${unsourced.length} sin fuente y ${unmodelled.length} fuera de alcance.${overlapNote}
 
 Generado con \`npm run inventory\` desde \`app/rules.ts\`. No se edita a mano.
 

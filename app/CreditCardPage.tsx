@@ -581,9 +581,16 @@ export default function CreditCardPage({ lang }: { lang: Lang }) {
 
       {/* One card answers "how long does this take". The next question, for
           anybody who has more than one balance, is which of them to attack
-          first — and that one cannot be answered a card at a time. It is a
-          band under the calculator rather than a page of its own because the
-          arithmetic is the same schedule builder, seen from further back. */}
+          first — and that one cannot be answered a card at a time.
+
+          A BAND HERE AND NOT A ROUTE OF ITS OWN, decided rather than defaulted
+          to. The arithmetic is the same schedule builder seen from further
+          back, it reads no Salvadoran rule, and a route would owe an OG image,
+          page metadata and a sources card it has nothing to put in. THE SIGNAL
+          TO PROMOTE IT is demand that arrives without passing through the card
+          calculator — people looking for the comparator itself. Until that
+          shows up, a section of the page about expensive revolving debt is
+          where somebody with several balances already is. */}
       <DebtComparator lang={lang} rows={debts} total={debtTotal}
         setRows={(update) => { touch(); setDebts(update); }}
         setTotal={field(setDebtTotal)} />
