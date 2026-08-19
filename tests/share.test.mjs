@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { anchorId } from "../app/anchor.ts";
 import { decodeShare, encodeShare, sanitiseValue, shareUrl } from "../app/share.ts";
 
 const SCHEMA = {
@@ -72,6 +73,30 @@ test("nothing that could carry a name or a script gets through", () => {
   // And an oversized value is refused before it is even parsed.
   assert.equal(sanitiseValue(SCHEMA.sal, "9".repeat(64)), null);
   assert.deepEqual(decodeShare(SCHEMA, `sal=${"9".repeat(2000)}`), {});
+});
+
+test("an anchor and a shared calculation cannot be mistaken for each other", () => {
+  // THEY SHARE ONE FRAGMENT, and two modules read it: `share.ts` fills the form
+  // and `anchor.ts` scrolls to a section. A change to either test that nobody
+  // mirrored would swallow every anchor on the site, or blank a reader's form
+  // because they followed a link down the page. So the two are held together
+  // here rather than in a comment.
+  for (const id of ["tools", "guide", "deudas", "calculator", "aguinaldoScaleOnExit"]) {
+    assert.equal(anchorId(`#${id}`), id, "a plain id is an anchor");
+    assert.deepEqual(decodeShare(SCHEMA, `#${id}`), {}, `${id} must carry no inputs`);
+  }
+
+  const payload = `#${encodeShare(SCHEMA, { sal: "900", de: "2025-03-01" })}`;
+  assert.equal(anchorId(payload), null, "a payload is never an anchor");
+  assert.equal(Object.keys(decodeShare(SCHEMA, payload)).length, 2);
+
+  // Neither, and no exception: an empty fragment and a hand-typed one.
+  assert.equal(anchorId("#"), null);
+  assert.equal(anchorId(""), null);
+  assert.equal(anchorId("#no-existe-%zz"), null, "a stray percent is not an id");
+  assert.deepEqual(decodeShare(SCHEMA, "#no-existe-%zz"), {});
+  // An id that legitimately needs escaping still resolves.
+  assert.equal(anchorId("#secci%C3%B3n"), "sección");
 });
 
 test("an ordinary in-page anchor decodes to nothing", () => {

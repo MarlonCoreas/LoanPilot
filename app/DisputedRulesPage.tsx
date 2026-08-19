@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   assumptionFor, disputeFor, pagesApplying,
   type Backing, type Bilingual, type Reading,
@@ -250,32 +250,10 @@ function AssumptionSection({ contested, lang, t }: { contested: Contested[]; lan
   })}</>;
 }
 
-/**
- * Land on the entry the reader asked for.
- *
- * Every calculator links here as `/reglas-en-disputa/#<rule>`, and those links
- * were arriving at the top of the page: the anchor is in the prerendered HTML
- * and the browser does start its jump, but `scroll-behavior: smooth` makes that
- * jump an animation, and hydrating the page underneath it cancels the animation.
- * The reader then had to find one card among several — on the page whose whole
- * job is to answer one specific question they clicked on.
- *
- * So the scroll is repeated once, after hydration, when the layout is settled.
- * `instant` on purpose: a page that opens by gliding down from the top is a
- * different, sillier bug.
- */
-function useAnchoredEntry() {
-  useEffect(() => {
-    const id = decodeURIComponent(window.location.hash.slice(1));
-    if (id) document.getElementById(id)?.scrollIntoView({ behavior: "instant", block: "start" });
-  }, []);
-}
-
 export default function DisputedRulesPage({ lang }: { lang: Lang }) {
   const t = copy[lang];
   const disputed = disputedVersions("disputed");
   const unsourced = disputedVersions("unsourced");
-  useAnchoredEntry();
 
   return <main className="legal-page disputed-page">
     <SiteHeader lang={lang} page="disputed" />

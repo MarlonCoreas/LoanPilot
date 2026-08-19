@@ -1,3 +1,4 @@
+import { useAnchoredEntry } from "./anchor";
 import AguinaldoPage from "./AguinaldoPage";
 import AnnualTaxPage from "./AnnualTaxPage";
 import CreditCardPage from "./CreditCardPage";
@@ -11,6 +12,9 @@ import { resolveRoute } from "./routes";
 
 export default function App({ pathname }: { pathname: string }) {
   const { lang, page } = resolveRoute(pathname);
+  // Every page, once: see the note on the hook for why the browser's own jump
+  // does not survive this application's first render.
+  useAnchoredEntry();
   if (page === "notFound") return <NotFound lang={lang} />;
   if (page === "loans") return <LoanPage lang={lang} />;
   if (page === "creditCard") return <CreditCardPage lang={lang} />;
