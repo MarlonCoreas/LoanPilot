@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DateField, Field, SegmentedField, SelectField } from "./fields";
 import {
   addMonths, buildActiveSchedule, buildHistoricalSchedule, buildNewSchedule, isoAfterMonths,
-  monthlyIrr, n, parseDate, solveRate, today,
+  monthlyIrr, n, parseDate, solveRate, today, todayIso,
   type ExtraPayment, type InsuranceMode, type RateChange, type Row,
 } from "./loan";
 import NextStep from "./NextStep";
@@ -381,7 +381,11 @@ export default function Home({ lang }: { lang: Lang }) {
     const sheet = (name: string, rows: (string | number)[][]) => `<Worksheet ss:Name="${escapeXml(name.slice(0, 31))}"><Table>${rows.map((row, rowIndex) => `<Row>${row.map((cell) => `<Cell${rowIndex === 0 ? ' ss:StyleID="Header"' : ""}><Data ss:Type="${typeof cell === "number" ? "Number" : "String"}">${escapeXml(cell)}</Data></Cell>`).join("")}</Row>`).join("")}</Table></Worksheet>`;
     const workbook = `<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Default"><Alignment ss:Vertical="Center"/></Style><Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#102A2A" ss:Pattern="Solid"/></Style></Styles>${sheet(lang === "es" ? "Resumen" : "Summary", [[data.title, "LoanPilot"], ...data.summary])}${sheet(lang === "es" ? "Amortización" : "Schedule", data.schedule)}${data.extras.length ? sheet(lang === "es" ? "Abonos" : "Prepayments", data.extras) : ""}</Workbook>`;
     const url = URL.createObjectURL(new Blob([workbook], { type: "application/vnd.ms-excel;charset=utf-8" }));
-    const link = document.createElement("a"); link.href = url; link.download = `loanpilot-${data.name}-${new Date().toISOString().slice(0, 10)}.xls`;
+    // `todayIso` and not `toISOString`: the UTC day is a day ahead in El
+    // Salvador every evening after six, which named the spreadsheet with
+    // tomorrow's date while the PDF beside it carried today's. `pdf.ts` fixed
+    // this on its own side and left the sheet behind — see `localStamp` there.
+    const link = document.createElement("a"); link.href = url; link.download = `loanpilot-${data.name}-${todayIso()}.xls`;
     // Firefox needs the anchor in the document, and revoking the blob URL in the
     // same tick cancels the download before it starts.
     document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 30_000);
