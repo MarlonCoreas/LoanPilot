@@ -40,7 +40,7 @@ import UtilityHero from "./UtilityHero";
 
 const copy = {
   es: {
-    heroTitle: "Las reglas que no están resueltas.",
+    heroTitle: "Las reglas", heroAccent: "que no están resueltas.",
     heroLead: "Algunas cifras de este sitio salen de una lectura que no es la única posible; otras, de un dato que ningún documento fija. Están todas aquí, separadas por lo que les pasa, con lo que aplica LoanPilot, por qué, y el documento donde puede comprobarse.",
     introEyebrow: "POR QUÉ EXISTE ESTA PÁGINA",
     introTitle: "Una calculadora que no puede estar en desacuerdo consigo misma",
@@ -77,7 +77,7 @@ const copy = {
     repo: "Ver el registro de reglas en GitHub",
   },
   en: {
-    heroTitle: "The rules that are not settled.",
+    heroTitle: "The rules", heroAccent: "that are not settled.",
     heroLead: "Some figures on this site come from a reading that is not the only defensible one; others come from a value no document fixes. They are all here, separated by which of the two is wrong with them, with what LoanPilot applies, why, and the document where it can be checked.",
     introEyebrow: "WHY THIS PAGE EXISTS",
     introTitle: "A calculator that cannot disagree with itself",
@@ -257,7 +257,7 @@ export default function DisputedRulesPage({ lang }: { lang: Lang }) {
 
   return <main className="legal-page disputed-page">
     <SiteHeader lang={lang} page="disputed" />
-    <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLineFor(lang, "disputed")} />
+    <UtilityHero title={t.heroTitle} accent={t.heroAccent} lead={t.heroLead} trust={reviewedLineFor(lang, "disputed")} />
     <section className="statutory-tools standalone-tools" id="rules">
       <div className="dispute-intro">
         <div className="section-title"><span>00</span><div><h2>{t.introTitle}</h2><p>{t.introEyebrow}</p></div></div>

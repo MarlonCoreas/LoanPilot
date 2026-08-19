@@ -434,7 +434,7 @@ export default function CreditCardPage({ lang }: { lang: Lang }) {
 
   return <main>
     <SiteHeader lang={lang} page="creditCard" />
-    <UtilityHero title={<>{t.title1}<br /><em>{t.title2}</em></>} lead={t.subtitle} trust={t.free} />
+    <UtilityHero title={t.title1} accent={t.title2} lead={t.subtitle} trust={t.free} />
     <section className="calculator-shell" id="calculator">
       {fromLink && <SharedNotice lang={lang} />}
       <div className="shell-toolbar">

@@ -414,7 +414,7 @@ export default function Home({ lang }: { lang: Lang }) {
 
   return <main>
     <SiteHeader lang={lang} page="loans" />
-    <UtilityHero title={<>{t.title1}<br /><em>{t.title2}</em></>} lead={t.subtitle} trust={t.free} />
+    <UtilityHero title={t.title1} accent={t.title2} lead={t.subtitle} trust={t.free} />
     <section className="calculator-shell" id="calculator">
       <div className="mode-switch" role="group" aria-label={lang === "es" ? "Tipo de cálculo" : "Calculation type"}><button type="button" className={mode === "new" ? "selected" : ""} onClick={() => setMode("new")} aria-pressed={mode === "new"}><span className="mode-icon">◎</span><span><b>{t.newLoan}</b><small>{t.newLoanSub}</small></span></button><button type="button" className={mode === "active" ? "selected" : ""} onClick={() => setMode("active")} aria-pressed={mode === "active"}><span className="mode-icon">↗</span><span><b>{t.activeLoan}</b><small>{t.activeLoanSub}</small></span></button></div>
       {fromLink && <SharedNotice lang={lang} />}

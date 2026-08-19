@@ -52,7 +52,7 @@ const DEFAULT_EXERCISE = EXERCISES.find((year) => year < THIS_YEAR) ?? EXERCISES
 
 const copy = {
   es: {
-    heroTitle: "Tu renta del año, contra lo que ya te retuvieron.",
+    heroTitle: "Tu renta del año,", heroAccent: "contra lo que ya te retuvieron.",
     heroLead: "El impuesto que te corresponde por el ejercicio, comparado con lo que la planilla te descontó mes a mes. El saldo puede salir a tu favor o en contra: las dos cosas son normales.",
     noticeTitle: "Esto es una estimación educativa",
     noticeText: "No sustituye tu declaración oficial ante la DGII ni la revisión de un contador. Trabaja con las cifras que escribís y con la tabla del artículo 37; tu declaración real puede diferir por ingresos que esta página no modela, por retenciones definitivas o por deducciones que sí podés comprobar y aquí no aparecen. No tomes decisiones de pago sin contrastarla.",
@@ -159,7 +159,7 @@ const copy = {
     helpEmployers: "Marcalo si trabajaste para más de un patrono en el año. Cambia lo que dice el artículo 38 sobre tu obligación de declarar.",
   },
   en: {
-    heroTitle: "Your year's tax, against what was already withheld.",
+    heroTitle: "Your year's tax,", heroAccent: "against what was already withheld.",
     heroLead: "The tax the exercise leaves you owing, next to what payroll deducted month by month. The balance can land in your favour or against you: both are normal.",
     noticeTitle: "This is an educational estimate",
     noticeText: "It does not replace your official return to the DGII or a review by an accountant. It works from the figures you type and the article 37 table; your real return can differ because of income this page does not model, definitive withholding, or deductions you can prove and that are not here. Do not make a payment decision on it alone.",
@@ -436,7 +436,7 @@ export default function AnnualTaxPage({ lang }: { lang: Lang }) {
 
   return <main className="legal-page">
     <SiteHeader lang={lang} page="annualTax" />
-    <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLineFor(lang, "annualTax")} />
+    <UtilityHero title={t.heroTitle} accent={t.heroAccent} lead={t.heroLead} trust={reviewedLineFor(lang, "annualTax")} />
 
     {/* Above the calculator, not under it. A reader who takes this figure to a
         payment decision without filing is the failure this page has to guard
