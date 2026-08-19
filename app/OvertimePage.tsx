@@ -26,7 +26,7 @@ import UtilityHero from "./UtilityHero";
 
 const copy = {
   es: {
-    heroTitle: "Cada hora extra,", heroAccent: "pagada como manda la ley.",
+    heroTitle: "Calculadora de horas extras", heroAccent: "Pagadas como manda la ley.",
     heroLead: "Calcula horas extra diurnas y nocturnas, recargo nocturno y trabajo en descansos o asuetos sin mezclar sus tarifas.",
     data: "Tu jornada y tu salario",
     dataHint: "Sector privado regido por el Código de Trabajo",
@@ -213,7 +213,7 @@ const copy = {
     helpHelperShifts: "Cuántas veces repetiste ese mismo turno en el mes, para multiplicar el reparto que calcule.",
   },
   en: {
-    heroTitle: "Every extra hour,", heroAccent: "paid the way the law says.",
+    heroTitle: "Overtime calculator", heroAccent: "Paid the way the law says.",
     heroLead: "Work out daytime and night overtime, night premiums, rest days and public holidays without mixing their rates.",
     data: "Your shift and salary",
     dataHint: "Private sector governed by the Labour Code",

@@ -20,7 +20,7 @@ type KnownInput = "rate" | "term";
 
 const copy = {
   es: {
-    title1: "Entiende tu préstamo.",
+    title1: "Calculadora de préstamos",
     title2: "Decide con claridad.",
     subtitle: "Calcula el costo real antes de firmar o descubre cuánto puedes ahorrar con abonos a capital.",
     free: "Gratis · Sin registro · Tus datos no salen de tu dispositivo",
@@ -100,7 +100,7 @@ const copy = {
     helpHistoryInsurance: "El seguro que venías pagando en ese período, si aplica.",
   },
   en: {
-    title1: "Understand your loan.", title2: "Decide with clarity.",
+    title1: "Loan calculator", title2: "Decide with clarity.",
     subtitle: "Estimate the real cost before signing or see how much extra principal payments could save.",
     free: "Free · No signup · Your data stays on your device",
     exportPdf: "Export PDF", exportExcel: "Export Excel", exportHint: "Download results",

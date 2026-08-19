@@ -28,7 +28,7 @@ type Standing = "employed" | "ended";
 
 const copy = {
   es: {
-    heroTitle: "Cuánto aguinaldo", heroAccent: "te toca este año.",
+    heroTitle: "Calculadora de aguinaldo", heroAccent: "Cuánto te toca este año.",
     heroLead: "Los días que gana tu antigüedad al 20 de octubre, la parte proporcional si llevás menos de un año, y la fecha límite que tiene el patrono para pagarlo.",
     data: "Tus datos", dataHint: "Sector privado regido por el Código de Trabajo",
     standing: "Tu situación", employed: "Sigo laborando", ended: "Ya terminó la relación",
@@ -95,7 +95,7 @@ const copy = {
     nextAnnualCta: "Mirá qué saldo deja en la declaración",
   },
   en: {
-    heroTitle: "How much year-end bonus", heroAccent: "you are owed.",
+    heroTitle: "Year-end bonus calculator", heroAccent: "How much you are owed.",
     heroLead: "The days your length of service earns at 20 October, the proportional share if you have been there under a year, and the deadline your employer has to pay it.",
     data: "Your details", dataHint: "Private sector governed by the Labour Code",
     standing: "Where you stand", employed: "Still employed", ended: "The job has ended",
