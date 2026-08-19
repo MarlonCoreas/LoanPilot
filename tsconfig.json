@@ -9,6 +9,11 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
+    // The calculation modules are imported straight from `tests/*.test.mjs` and
+    // run through Node's type stripping, which resolves specifiers literally
+    // and does not add extensions. Writing "./rules.ts" is what lets one file
+    // be both the source Vite bundles and the module the tests import.
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "jsx": "react-jsx",

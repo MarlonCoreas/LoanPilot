@@ -4,18 +4,24 @@ import {
   calculateOvertime,
   NIGHT_ENDS_AT,
   NIGHT_STARTS_AT,
-  OVERTIME_REVIEWED,
   SHIFT_LIMITS,
   splitShiftHours,
   type OvertimeValidationIssue,
   type ShiftKind,
   type ShiftSplitIssue,
 } from "./overtime";
-import { reviewedLine } from "./reviewed";
+import { todayIso } from "./loan";
+import NextStep from "./NextStep";
+import { readShare, type ShareSchema } from "./share";
+import { ShareButton, SharedNotice } from "./ShareLink";
+import { downloadPdf } from "./pdf";
+import { reviewedLineFor } from "./reviewed";
+import { citationsFor, reviewedFor, RULE_USAGE } from "./rules";
+import DisputePanel from "./DisputePanel";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { OFFICIAL } from "./sources";
-import type { Lang } from "./routes";
+import { ROUTES, type Lang } from "./routes";
 import UtilityHero from "./UtilityHero";
 
 const copy = {
@@ -157,6 +163,8 @@ const copy = {
       minorDailyOvertimeLimit: "Una persona menor de 16 años no puede trabajar más de 2 horas extra en un día.",
     })[issue],
     grossNote: "Estimación bruta para salario mensual. AFP, ISSS e ISR pueden reducir el pago neto.",
+    nextWithholding: "Sumado a tu salario, este monto puede empujar el mes a otro tramo de la tabla.",
+    nextWithholdingCta: "Calculá qué te retienen ese mes",
     exportHint: "Llévate el cálculo",
     exportPdf: "Descargar PDF",
     pdfTitle: "Cálculo de horas extras",
@@ -166,8 +174,7 @@ const copy = {
     pdfAmount: "Monto",
     pdfTotal: "TOTAL A AGREGAR",
     pdfShift: "Tipo de jornada",
-    pdfSources: "Base legal: Código de Trabajo, arts. 116, 142, 161-170, 175-176 y 190-194. Explicaciones del MTPS sobre pago de horas extra, jornada nocturna y asuetos.",
-    pdfGenerated: "Generado",
+    pdfSlug: "horas-extras",
     emptyTitle: "Escribe tu salario para empezar",
     emptyLead: "Con el salario mensual y las horas de tu jornada ya podemos mostrarte cuánto vale tu hora extra, antes de que registres una sola hora.",
     nightIncluded: "Elegiste jornada nocturna. El 25% del art. 168 se calcula sobre el salario ordinario diurno, y en una jornada nocturna permanente ese recargo suele venir ya dentro del sueldo pactado. Si es tu caso, deja en cero las horas ordinarias de noche para no contarlo dos veces.",
@@ -341,6 +348,8 @@ const copy = {
       minorDailyOvertimeLimit: "A worker under 16 may not work more than 2 overtime hours in one day.",
     })[issue],
     grossNote: "Gross estimate for a monthly salary. Pension, ISSS and income tax may reduce net pay.",
+    nextWithholding: "Added to your salary, this can push the month into a different band of the table.",
+    nextWithholdingCta: "Work out what that month withholds",
     exportHint: "Take the calculation with you",
     exportPdf: "Download PDF",
     pdfTitle: "Overtime pay calculation",
@@ -350,8 +359,7 @@ const copy = {
     pdfAmount: "Amount",
     pdfTotal: "TOTAL TO BE ADDED",
     pdfShift: "Shift type",
-    pdfSources: "Legal basis: Labour Code, arts. 116, 142, 161-170, 175-176 and 190-194. MTPS guidance on overtime pay, night shifts and public holidays.",
-    pdfGenerated: "Generated",
+    pdfSlug: "overtime",
     emptyTitle: "Enter your salary to begin",
     emptyLead: "With your monthly salary and the hours in your working day we can already show what your overtime hour is worth, before you record a single hour.",
     nightIncluded: "You selected a night shift. The 25% in art. 168 is calculated on the ordinary daytime salary, and on a permanent night shift that premium is usually already inside the agreed salary. If that is your case, leave ordinary night hours at zero so it is not counted twice.",
@@ -458,6 +466,37 @@ function HourField(props: Omit<Parameters<typeof NumberField>[0], "step" | "max"
   return <NumberField step="0.5" max="744" {...props} />;
 }
 
+/**
+ * What a link for this page carries: sixteen answers, no result. Hours are
+ * `decimal` rather than `money` — same two places, and calling half an hour a
+ * money amount in the schema would be a lie the next reader has to unpick.
+ *
+ * The caps are the ones a month of work cannot exceed. They are not the
+ * calculator's rules — those live in `overtime.ts` and stay there — only a
+ * bound on what a hand-typed URL may hand the page.
+ */
+const SHARE_SCHEMA: ShareSchema = {
+  sal: { kind: "money" },
+  jor: { kind: "option", values: ["diurnal", "nocturnal", "dangerousDiurnal", "dangerousNocturnal", "minorUnder16", "minor16to17"] },
+  jd: { kind: "decimal", max: 24 },
+  ed: { kind: "decimal", max: 744 },
+  en: { kind: "decimal", max: 744 },
+  no: { kind: "decimal", max: 744 },
+  mn: { kind: "decimal", max: 744 },
+  tu: { kind: "int", max: 62 },
+  dd: { kind: "int", max: 31 },
+  do_: { kind: "decimal", max: 744 },
+  dxd: { kind: "decimal", max: 744 },
+  dxn: { kind: "decimal", max: 744 },
+  as: { kind: "int", max: 31 },
+  axd: { kind: "decimal", max: 744 },
+  axn: { kind: "decimal", max: 744 },
+  co: { kind: "int", max: 31 },
+};
+
+/** The fields the collapsed special-days panel holds, for deciding to open it. */
+const SPECIAL_DAY_KEYS = ["dd", "do_", "dxd", "dxn", "as", "axd", "axn", "co"] as const;
+
 export default function OvertimePage({ lang }: { lang: Lang }) {
   const t = copy[lang];
   const money = useMemo(
@@ -481,14 +520,16 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
   // Como en el finiquito, la página abre con un salario de muestra: así el
   // primer render enseña cuánto vale una hora extra en vez de recibir a quien
   // llega con una lista de errores por campos que todavía no ha visto.
-  const [monthlySalary, setMonthlySalary] = useState("900");
-  const [shiftKind, setShiftKind] = useState<ShiftKind>("diurnal");
-  const [dayHours, setDayHours] = useState(String(SHIFT_LIMITS.diurnal.day));
-  const [diurnal, setDiurnal] = useState("0");
-  const [nocturnal, setNocturnal] = useState("0");
-  const [nightOrdinary, setNightOrdinary] = useState("0");
-  const [minorDailyOvertime, setMinorDailyOvertime] = useState("0");
-  const [shifts, setShifts] = useState("0");
+  const [shared] = useState(() => readShare(SHARE_SCHEMA));
+  const fromLink = Object.keys(shared).length > 0;
+  const [monthlySalary, setMonthlySalary] = useState(shared.sal ?? "900");
+  const [shiftKind, setShiftKind] = useState<ShiftKind>((shared.jor as ShiftKind) ?? "diurnal");
+  const [dayHours, setDayHours] = useState(shared.jd ?? String(SHIFT_LIMITS.diurnal.day));
+  const [diurnal, setDiurnal] = useState(shared.ed ?? "0");
+  const [nocturnal, setNocturnal] = useState(shared.en ?? "0");
+  const [nightOrdinary, setNightOrdinary] = useState(shared.no ?? "0");
+  const [minorDailyOvertime, setMinorDailyOvertime] = useState(shared.mn ?? "0");
+  const [shifts, setShifts] = useState(shared.tu ?? "0");
   // Ocho de las trece casillas sólo importan a quien trabajó un domingo o un
   // asueto. Plegadas, la mayoría llena cinco campos y termina.
   const [showHelper, setShowHelper] = useState(false);
@@ -496,15 +537,26 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
   const [helperEnd, setHelperEnd] = useState("02:00");
   const [helperShifts, setHelperShifts] = useState("0");
   const [helperApplied, setHelperApplied] = useState(false);
-  const [showSpecialDays, setShowSpecialDays] = useState(false);
-  const [restDays, setRestDays] = useState("0");
-  const [restOrdinary, setRestOrdinary] = useState("0");
-  const [restExtraDay, setRestExtraDay] = useState("0");
-  const [restExtraNight, setRestExtraNight] = useState("0");
-  const [holidays, setHolidays] = useState("0");
-  const [holidayExtraDay, setHolidayExtraDay] = useState("0");
-  const [holidayExtraNight, setHolidayExtraNight] = useState("0");
-  const [coincident, setCoincident] = useState("0");
+  // The panel opens by itself when a link brought a figure that lives inside
+  // it: eight collapsed fields with a number in them and no way to see it is
+  // worse than the extra scroll.
+  const [showSpecialDays, setShowSpecialDays] = useState(
+    () => SPECIAL_DAY_KEYS.some((key) => shared[key] !== undefined && Number(shared[key]) > 0));
+  const [restDays, setRestDays] = useState(shared.dd ?? "0");
+  const [restOrdinary, setRestOrdinary] = useState(shared.do_ ?? "0");
+  const [restExtraDay, setRestExtraDay] = useState(shared.dxd ?? "0");
+  const [restExtraNight, setRestExtraNight] = useState(shared.dxn ?? "0");
+  const [holidays, setHolidays] = useState(shared.as ?? "0");
+  const [holidayExtraDay, setHolidayExtraDay] = useState(shared.axd ?? "0");
+  const [holidayExtraNight, setHolidayExtraNight] = useState(shared.axn ?? "0");
+  const [coincident, setCoincident] = useState(shared.co ?? "0");
+
+  const shareValues = {
+    sal: monthlySalary, jor: shiftKind, jd: dayHours, ed: diurnal, en: nocturnal,
+    no: nightOrdinary, mn: minorDailyOvertime, tu: shifts,
+    dd: restDays, do_: restOrdinary, dxd: restExtraDay, dxn: restExtraNight,
+    as: holidays, axd: holidayExtraDay, axn: holidayExtraNight, co: coincident,
+  };
 
   /**
    * El reparto del turno, en dos pasos por una circularidad aparente.
@@ -645,86 +697,59 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
    * PDF lleva la operación de cada línea y los artículos que la respaldan, para
    * que el número se pueda defender sin tener que reconstruirlo.
    */
-  const exportPdf = async () => {
-    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
-      import("jspdf"), import("jspdf-autotable"),
-    ]);
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
-    const finalY = () => (doc as typeof doc & { lastAutoTable?: { finalY: number } })
-      .lastAutoTable?.finalY ?? 40;
-
-    doc.setFillColor(16, 42, 42); doc.rect(0, 0, 216, 28, "F");
-    doc.setTextColor(169, 244, 207); doc.setFontSize(17); doc.text("LoanPilot", 14, 13);
-    doc.setTextColor(255, 255, 255); doc.setFontSize(9); doc.text(t.pdfTitle, 14, 21);
-
-    autoTable(doc, {
-      startY: 35,
-      head: [[t.pdfDataHead, ""]],
-      body: [
-        [t.salary, money.format(result.dailySalary * 30)],
-        [t.pdfShift, `${t.shifts[result.shiftKind]} · ${result.legalOrdinaryDayHours} h`],
-        [t.hourly, money.format(result.hourly)],
-        [t.daily, money.format(result.dailySalary)],
+  const exportPdf = () => {
+    const body = [
+      ...activeLines.map((line) => [line.label, line.formula, money.format(line.value)]),
+      [t.pdfTotal, "", money.format(result.total)],
+    ];
+    return downloadPdf({
+      slug: t.pdfSlug,
+      title: t.pdfTitle,
+      subtitle: `${t.shifts[result.shiftKind]} · ${result.legalOrdinaryDayHours} h`,
+      tables: [
+        {
+          head: [t.pdfDataHead, t.pdfAmount],
+          body: [
+            [t.salary, money.format(result.dailySalary * 30)],
+            [t.pdfShift, `${t.shifts[result.shiftKind]} · ${result.legalOrdinaryDayHours} h`],
+            [t.hourly, money.format(result.hourly)],
+            [t.daily, money.format(result.dailySalary)],
+          ],
+        },
+        {
+          head: [t.pdfConcept, t.pdfOperation, t.pdfAmount],
+          body,
+          totalRow: body.length - 1,
+          numeric: [2],
+        },
       ],
-      theme: "grid",
-      headStyles: { fillColor: [26, 127, 100] },
-      styles: { fontSize: 9, cellPadding: 2.5 },
-    });
-
-    autoTable(doc, {
-      startY: finalY() + 8,
-      head: [[t.pdfConcept, t.pdfOperation, t.pdfAmount]],
-      body: [
-        ...activeLines.map((line) => [line.label, line.formula, money.format(line.value)]),
-        [t.pdfTotal, "", money.format(result.total)],
-      ],
-      theme: "striped",
-      headStyles: { fillColor: [16, 42, 42] },
-      styles: { fontSize: 8.5, cellPadding: 2 },
-      columnStyles: { 2: { halign: "right" } },
-      // La última fila es el total, y tiene que leerse como tal.
-      didParseCell: (hook) => {
-        if (hook.section === "body" && hook.row.index === activeLines.length) {
-          hook.cell.styles.fontStyle = "bold";
-          hook.cell.styles.fillColor = [223, 248, 233];
-        }
-      },
-    });
-
-    // El nombre del archivo y el pie tienen que decir el mismo día: toISOString
-    // da UTC, que después de las 18:00 en El Salvador ya es el día siguiente.
-    const today = new Date();
-    const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-    let y = finalY() + 10;
-    doc.setFontSize(8); doc.setTextColor(60);
-    if (result.compensatoryDays > 0) {
-      y += doc.splitTextToSize(t.compensatory(result.compensatoryDays), 188)
-        .reduce((line: number, text: string) => (doc.text(text, 14, y + line * 4), line + 1), 0) * 4 + 2;
-    }
-    for (const note of [t.grossNote, t.pdfSources]) {
-      const wrapped = doc.splitTextToSize(note, 188) as string[];
-      wrapped.forEach((text, index) => doc.text(text, 14, y + index * 4));
-      y += wrapped.length * 4 + 2;
-    }
-    doc.setFontSize(7); doc.setTextColor(120);
-    doc.text(`${t.pdfGenerated}: ${today.toLocaleDateString(lang === "es" ? "es-SV" : "en-US")} · loanpilot.marloncoreas.com`,
-      14, doc.internal.pageSize.height - 8);
-
-    doc.save(`loanpilot-horas-extras-${stamp}.pdf`);
+      notes: result.compensatoryDays > 0 ? [t.compensatory(result.compensatoryDays)] : [],
+      // La lista de artículos ya no se escribe a mano aquí: sale de las mismas
+      // reglas que hicieron el cálculo, así que no puede quedarse atrás de ellas.
+      citations: citationsFor(RULE_USAGE.overtime, todayIso()),
+      reviewed: reviewedFor("overtime"),
+      disclaimer: t.grossNote,
+    }, lang);
   };
 
   return <main className="legal-page">
     <SiteHeader lang={lang} page="overtime" />
-    <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLine(lang, OVERTIME_REVIEWED)} />
+    <UtilityHero title={t.heroTitle} lead={t.heroLead} trust={reviewedLineFor(lang, "overtime")} />
     <section className="statutory-tools standalone-tools" id="tools">
       {/* Exportar un error no le sirve a nadie, así que la acción sólo existe
           cuando hay un resultado que defender. */}
-      {!result.invalid && result.total > 0 && <div className="shell-toolbar overtime-toolbar">
+      {fromLink && <SharedNotice lang={lang} />}
+      {!result.invalid && result.total > 0 && <div className="shell-toolbar export-toolbar">
         <div className="export-actions">
           <span>{t.exportHint}</span>
           <button type="button" onClick={exportPdf}><i>PDF</i>{t.exportPdf}</button>
         </div>
+        <ShareButton lang={lang} schema={SHARE_SCHEMA} values={shareValues} labels={{
+          sal: t.salary, jd: t.dayHours, ed: t.diurnal, en: t.nocturnal,
+          no: t.nightOrdinary, mn: t.minorDaily, tu: t.shiftCount,
+          dd: t.restDays, do_: t.restOrdinary, dxd: t.restExtraDay, dxn: t.restExtraNight,
+          as: t.holidays, axd: t.holidayExtraDay, axn: t.holidayExtraNight, co: t.coincident,
+        }} />
       </div>}
       <div className="calculator-grid">
         <div className="form-panel">
@@ -850,6 +875,11 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
           {result.nightPremiumMayBeIncluded && <div className="callout warn"><span>!</span><p>{t.nightIncluded}</p></div>}
           <div className="callout"><span>i</span><p>{t.occasional}</p></div>
           <div className="callout warn"><span>!</span><p>{t.forceMajeure}</p></div>
+          {/* The month, not the hours: overtime is paid inside a payroll run
+              and the table is progressive, so the interesting question this
+              result raises is what it does to that month's deductions. */}
+          {!result.invalid && result.total > 0
+            && <NextStep href={ROUTES[lang].withholding} cta={t.nextWithholdingCta}>{t.nextWithholding}</NextStep>}
           <p className="legal-disclaimer">{t.grossNote}</p>
         </div>
       </div>
@@ -862,6 +892,11 @@ export default function OvertimePage({ lang }: { lang: Lang }) {
         <a href={OFFICIAL.holidayPay} target="_blank" rel="noreferrer"><b>05</b>{t.mtpsHoliday}<span>↗</span></a>
         <a href={OFFICIAL.specialSchedules} target="_blank" rel="noreferrer"><b>06</b>{t.mtpsSchedules}<span>↗</span></a>
       </div></div>
+      {/* Every hour on this page is the daily wage divided by the hours of the
+          shift, and the daily wage is the monthly one divided by a number no
+          article fixes. Nobody disputes the 30 — which is exactly why the
+          reader would never think to ask about it. */}
+      <DisputePanel lang={lang} page="overtime" />
     </section>
 
     <section className="guide legal-guide">

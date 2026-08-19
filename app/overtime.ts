@@ -4,22 +4,31 @@
  * El cálculo separa las horas de días ordinarios de las trabajadas en descanso
  * semanal o asueto. Los arts. 175 y 192 ordenan usar el salario extraordinario
  * de esos días como base cuando, además, se trabajan horas extra.
+ *
+ * Las cifras salen de `rules.ts`, donde cada una lleva su artículo, el
+ * documento oficial y la fecha en que se verificó por última vez. Aquí queda la
+ * aritmética y las unidades: todo factor multiplica la HORA básica, salvo el
+ * recargo de asueto, que multiplica el día — y esa es la única excepción de
+ * unidad en el archivo, marcada en cada punto donde se aplica.
  */
+import {
+  currentValue, dailySalaryDivisor, minorOvertimeLimit, nightWindow,
+  overtimeFactors, reviewedFor, shiftLimits,
+} from "./rules.ts";
+import type { ShiftKind, ShiftLimit } from "./rules.ts";
 
-/** El día en que cada regla de este archivo se leyó contra su fuente. */
-export const OVERTIME_REVIEWED = "2026-08-11";
+export type { ShiftKind, ShiftLimit };
+
+/**
+ * El día en que se verificó la más antigua de las reglas que esta calculadora
+ * aplica. Ya no es una constante que alguien recuerde actualizar: sale de las
+ * reglas que la página de horas extras usa de verdad, según `RULE_USAGE`.
+ */
+export const OVERTIME_REVIEWED: string = reviewedFor("overtime")!;
 
 /** Artículo 161: las horas diurnas van de las 6:00 a las 19:00. */
-export const NIGHT_STARTS_AT = 19;
-export const NIGHT_ENDS_AT = 6;
-
-export type ShiftKind =
-  | "diurnal"
-  | "nocturnal"
-  | "dangerousDiurnal"
-  | "dangerousNocturnal"
-  | "minorUnder16"
-  | "minor16to17";
+export const NIGHT_STARTS_AT = currentValue(nightWindow).startsAt;
+export const NIGHT_ENDS_AT = currentValue(nightWindow).endsAt;
 
 /**
  * Límites de los arts. 116, 161 y 162, leídos contra el texto consolidado.
@@ -30,18 +39,7 @@ export type ShiftKind =
  * insalubres: el mismo horario puede ser diurno en una oficina y nocturno en
  * una labor peligrosa.
  */
-export const SHIFT_LIMITS: Record<ShiftKind, {
-  day: number; week: number; nocturnalFrom: number;
-}> = {
-  diurnal: { day: 8, week: 44, nocturnalFrom: 4 },
-  nocturnal: { day: 7, week: 39, nocturnalFrom: 4 },
-  dangerousDiurnal: { day: 7, week: 39, nocturnalFrom: 3.5 },
-  dangerousNocturnal: { day: 6, week: 36, nocturnalFrom: 3.5 },
-  // Art. 116: ninguna persona menor de dieciocho años puede trabajar de noche,
-  // así que el umbral nunca llega a usarse para estas jornadas.
-  minorUnder16: { day: 6, week: 34, nocturnalFrom: 4 },
-  minor16to17: { day: 8, week: 44, nocturnalFrom: 4 },
-};
+export const SHIFT_LIMITS: Record<ShiftKind, ShiftLimit> = currentValue(shiftLimits);
 
 /** Alias conservado para las referencias generales de la interfaz. */
 export const ORDINARY_LIMITS = {
@@ -49,45 +47,12 @@ export const ORDINARY_LIMITS = {
   nocturnal: SHIFT_LIMITS.nocturnal,
 };
 
-/**
- * Factores sobre la hora básica; expresan el pago total de esa hora.
- *
- * Los cuatro factores nocturnos salen de una misma regla, y conviene dejarla
- * escrita porque no está en ningún artículo suelto. Los arts. 175 y 192 dicen
- * que, en descanso y asueto, "el cálculo para el pago de los recargos
- * respectivos" se hace sobre el salario extraordinario de ese día. El 25% de
- * nocturnidad del art. 168 es uno de esos recargos, y el ejemplo publicado por
- * el MTPS fija el orden: sobre una hora de $1.50 la extra diurna da $3.00 y la
- * nocturna $3.74, o sea el 25% cae sobre la hora ya recargada al 100% y no
- * sobre la básica. Aplicar ese mismo orden a las bases de 3 y 4 es lo que
- * produce 3.75 y 5.
- */
-export const FACTORS = {
-  /** Art. 169: hora básica más recargo del 100%. */
-  overtimeDiurnal: 2,
-  /** Arts. 168-169, con el orden del ejemplo del MTPS: 2 × 1.25. */
-  overtimeNocturnal: 2.5,
-  /** Art. 168: recargo de nocturnidad sobre la hora ordinaria. */
-  nightSurcharge: 0.25,
-  /** Art. 175: "más una remuneración del 50% como mínimo, por las horas que trabajen". */
-  restDaySurcharge: 0.5,
-  /** Art. 175: la base es el salario extraordinario del día (150%), más el 100%. */
-  restDayOvertimeDiurnal: 3,
-  restDayOvertimeNocturnal: 3.75,
-  /**
-   * Art. 192: el asueto trabajado vale el doble.
-   *
-   * Se paga por el día y no por hora: el artículo habla del "salario ordinario
-   * más un recargo del ciento por ciento de éste", sin la coletilla "por las
-   * horas que trabajen" que el art. 175 sí lleva para el descanso. El contraste
-   * entre ambos textos es deliberado, así que un asueto trabajado a medias se
-   * paga completo.
-   */
-  holidaySurcharge: 1,
-  /** Art. 192: la base es el salario extraordinario del asueto (200%), más el 100%. */
-  holidayOvertimeDiurnal: 4,
-  holidayOvertimeNocturnal: 5,
-} as const;
+/** Factores sobre la hora básica; ver la regla `overtimeFactors`. */
+export const FACTORS = currentValue(overtimeFactors);
+
+/** Art. 116: tope de horas extra en un día para menores de dieciséis. */
+const MINOR_DAILY_OVERTIME_LIMIT = currentValue(minorOvertimeLimit);
+const DAILY_DIVISOR = currentValue(dailySalaryDivisor);
 
 /** Horas de solape entre dos intervalos abiertos por la derecha. */
 const overlap = (from: number, to: number, start: number, end: number) =>
@@ -246,7 +211,7 @@ export function calculateOvertime(input: OvertimeInput) {
   const shiftKind = input.shiftKind in SHIFT_LIMITS ? input.shiftKind : "diurnal";
   const shiftLimit = SHIFT_LIMITS[shiftKind];
   const ordinaryDayHours = clean(input.ordinaryDayHours);
-  const dailySalary = salary / 30;
+  const dailySalary = salary / DAILY_DIVISOR;
 
   /**
    * La jornada que la ley reconoce como ordinaria, que no siempre es la pactada.
@@ -357,7 +322,7 @@ export function calculateOvertime(input: OvertimeInput) {
   if (shiftKind === "minorUnder16" && hasOvertime && minorMaximumDailyOvertimeHours <= 0) {
     issues.push("minorDailyOvertimeMissing");
   }
-  if (shiftKind === "minorUnder16" && minorMaximumDailyOvertimeHours > 2) {
+  if (shiftKind === "minorUnder16" && minorMaximumDailyOvertimeHours > MINOR_DAILY_OVERTIME_LIMIT) {
     issues.push("minorDailyOvertimeLimit");
   }
 

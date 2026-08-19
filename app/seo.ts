@@ -1,8 +1,9 @@
 import { FAQ } from "./faq";
 import {
-  absoluteUrl, ogImagePath, PAGE_LABELS, PAGE_META, SITE_ORIGIN, type Lang, type Page,
+  absoluteUrl, ogImagePath, PAGE_LABELS, PAGE_META, SITE_ORIGIN,
+  type Lang, type Page, type ToolPage,
 } from "./routes";
-import { RULES_REVIEWED } from "./statutory";
+import { reviewedFor } from "./rules";
 
 /**
  * Structured data (JSON-LD) for a page, injected at build time by the
@@ -59,9 +60,10 @@ function breadcrumbs(lang: Lang, page: Page): Json {
   };
 }
 
-function calculator(lang: Lang, page: Exclude<Page, "home">): Json {
+function calculator(lang: Lang, page: ToolPage): Json {
   const meta = PAGE_META[lang][page];
   const url = absoluteUrl(lang, page);
+  const dateModified = reviewedFor(page);
   return {
     "@type": "WebApplication",
     "@id": `${url}#calculator`,
@@ -79,9 +81,11 @@ function calculator(lang: Lang, page: Exclude<Page, "home">): Json {
     image: `${SITE_ORIGIN}${ogImagePath(lang, page)}`,
     isPartOf: { "@id": WEBSITE_ID },
     publisher: { "@id": ORGANIZATION_ID },
-    // The employment and tax figures carry a review date; loan arithmetic does
-    // not depend on rules that change, so it does not claim one.
-    ...(page === "loans" ? {} : { dateModified: RULES_REVIEWED }),
+    // The date the oldest rule this page applies was last verified. The loan
+    // calculator applies none — its arithmetic does not depend on rules that
+    // change — so `reviewedFor` returns nothing and it claims no date, without
+    // needing to be named as an exception here.
+    ...(dateModified === undefined ? {} : { dateModified }),
     countriesSupported: "SV",
   };
 }
@@ -98,10 +102,40 @@ function faqPage(lang: Lang): Json {
   };
 }
 
+/**
+ * The disputed-rules page, which is not a calculator and must not claim to be.
+ *
+ * Every other page here is a `WebApplication` with an offer and a price of
+ * zero, because that is what it is: a thing a reader operates. This one takes
+ * no input and returns no figure — it is a reference document about the rules
+ * the calculators apply — and describing it with the calculator vocabulary
+ * would be the same category error on the crawler's side that putting it in the
+ * tool nav would be on the reader's.
+ */
+function reference(lang: Lang, page: Page): Json {
+  const meta = PAGE_META[lang][page];
+  const url = absoluteUrl(lang, page);
+  const dateModified = reviewedFor(page);
+  return {
+    "@type": "WebPage",
+    "@id": `${url}#page`,
+    name: appName(meta.title),
+    description: meta.description,
+    url,
+    inLanguage: lang,
+    image: `${SITE_ORIGIN}${ogImagePath(lang, page)}`,
+    isPartOf: { "@id": WEBSITE_ID },
+    publisher: { "@id": ORGANIZATION_ID },
+    ...(dateModified === undefined ? {} : { dateModified }),
+  };
+}
+
 export function structuredData(lang: Lang, page: Page) {
   const graph = page === "home"
     ? [organization(), website(lang), faqPage(lang)]
-    : [organization(), website(lang), calculator(lang, page), breadcrumbs(lang, page)];
+    : page === "disputed"
+      ? [organization(), website(lang), reference(lang, page), breadcrumbs(lang, page)]
+      : [organization(), website(lang), calculator(lang, page), breadcrumbs(lang, page)];
   return { "@context": "https://schema.org", "@graph": graph };
 }
 

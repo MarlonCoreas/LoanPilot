@@ -25,12 +25,20 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       answer: "La Ley Reguladora de la Prestación Económica por Renuncia Voluntaria reconoce 15 días de salario por año trabajado y exige al menos dos años continuos con el mismo patrono. En este caso el tope del salario base es de dos salarios mínimos diarios, no de cuatro.",
     },
     {
+      question: "Si renuncio, ¿me pagan la vacación del año que llevo corrido?",
+      answer: "Aquí el texto y la práctica no dicen lo mismo. El artículo 187 del Código de Trabajo reconoce la vacación proporcional al tiempo trabajado cuando el contrato termina con responsabilidad patronal o hay despido de hecho sin causa legal, y enseguida agrega que, si ya se cumplió el año continuo de servicio, la vacación se paga aunque el contrato termine sin responsabilidad para el patrono. Leído al pie de la letra, quien renuncia se lleva la vacación de los períodos completos y no la fracción del año en curso. El servicio oficial de cálculo del MTPS sí paga esa fracción en renuncia: la constancia con la que contrastamos nuestros resultados es precisamente una renuncia voluntaria y trae la vacación proporcional en su propia línea. Nuestra calculadora sigue al ministerio y te la muestra, y te lo advierte en pantalla cuando tu caso cae en esa diferencia, para que sepas que el texto admite la otra lectura antes de reclamarla.",
+    },
+    {
       question: "¿Cuántos días de aguinaldo me tocan?",
-      answer: "Según la antigüedad alcanzada al 20 de octubre: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez años. Con menos de un año se paga la parte proporcional al tiempo trabajado.",
+      answer: "Para quien sigue laborando, según la antigüedad alcanzada al 20 de octubre: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez años. Con menos de un año se paga la parte proporcional al tiempo trabajado. Si el contrato terminó antes del 20 de octubre, la norma no define expresamente qué escala rige: esa persona nunca llegó a la fecha del corte. Nuestra calculadora usa la antigüedad del último día trabajado, que es la lectura que no presupone tiempo no trabajado, y cuando las dos fechas caen en escalones distintos te muestra también la otra cifra para que la consultes con el MTPS.",
+    },
+    {
+      question: "¿Hasta cuándo tiene mi patrono para pagarme el aguinaldo?",
+      answer: "Desde la reforma de 2025 el pago va del 20 de octubre al 20 de diciembre de cada año, y esa última fecha es el límite: pasarla es incumplimiento y se puede denunciar en el MTPS. El 20 de octubre es además la fecha en que se lee tu antigüedad para saber qué escalón de días te toca. Antes de la reforma ambas cosas ocurrían el 12 de diciembre.",
     },
     {
       question: "¿Qué es la Quincena 25 y desde cuándo se paga?",
-      answer: "Es un pago equivalente a medio salario mensual creado por el Decreto Legislativo 499, dirigido a salarios de hasta $1,500. El régimen general empieza en 2027; durante 2026 es voluntario para el empleador privado. La ley lo declara renta no gravable, así que no paga retención.",
+      answer: "Es un ingreso complementario equivalente al 50% del salario básico o nominal mensual, creado por la Ley Especial Quincena Veinticinco, Decreto Legislativo 499 del 14 de enero de 2026. Solo alcanza a quienes ganan $1,500 mensuales o menos, y se paga entre el 15 y el 25 de enero. El régimen general empieza en 2027; durante 2026 el sector público lo recibe de forma obligatoria y para el patrono privado es voluntario. La ley lo declara renta no gravable y prohíbe todo descuento sobre él —ni renta, ni ISSS, ni AFP—, lo hace inembargable y lo deja fuera de la base de cálculo de otras prestaciones, así que tampoco entra en tu finiquito ni en tu aguinaldo.",
     },
     {
       question: "¿Cuánto me descuentan de AFP e ISSS cada mes?",
@@ -67,12 +75,20 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       answer: "The Voluntary Resignation Benefit Law grants 15 days of salary per year worked and requires at least two continuous years with the same employer. Here the base salary is capped at two daily minimum wages rather than four.",
     },
     {
+      question: "If I resign, am I paid the vacation for the year in progress?",
+      answer: "Here the text and the practice do not say the same thing. Article 187 of the Labour Code grants vacation in proportion to time worked when the contract ends with employer responsibility or the worker is dismissed without legal cause, and then adds that where the continuous year of service is already complete, vacation is paid even if the contract ends without employer responsibility. Read literally, someone who resigns takes the vacation of complete periods and not the fraction of the year in progress. The MTPS official calculation service does pay that fraction on a resignation: the statement we check our results against is a voluntary resignation, and it carries proportional vacation on its own line. Our calculator follows the ministry and shows it to you, and it flags your case on screen when it falls inside that difference, so you know the text admits the other reading before you claim it.",
+    },
+    {
       question: "How many days of year-end bonus apply?",
-      answer: "It depends on length of service at 20 October: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. Under a year, the proportional share is paid.",
+      answer: "For someone still employed, it depends on length of service at 20 October: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. Under a year, the proportional share is paid. If the contract ended before 20 October, the rule does not expressly say which scale governs: that person never reached the cutoff date. Our calculator uses length of service at the last day worked, the reading that does not assume time that was not worked, and when the two dates fall on different steps it also shows you the other figure so you can check it with the MTPS.",
+    },
+    {
+      question: "What is my employer's deadline to pay the year-end bonus?",
+      answer: "Since the 2025 reform payment runs from 20 October to 20 December each year, and that last date is the deadline: missing it is a breach and can be reported to the MTPS. 20 October is also the day your length of service is read at, which sets the step of days you are owed. Before the reform both happened on 12 December.",
     },
     {
       question: "What is the Quincena 25 and when is it paid?",
-      answer: "It is a payment equal to half a monthly salary created by Legislative Decree 499, aimed at salaries up to $1,500. The general regime starts in 2027; through 2026 it is voluntary for private employers. The law declares it non-taxable, so no withholding applies.",
+      answer: "It is a complementary payment equal to 50% of the basic or nominal monthly salary, created by the Ley Especial Quincena Veinticinco, Legislative Decree 499 of 14 January 2026. It reaches only those earning $1,500 a month or less, and it is paid between 15 and 25 January. The general regime starts in 2027; through 2026 the public sector receives it as of right while for private employers it is voluntary. The law declares it non-taxable income and bars every deduction from it — income tax, ISSS and pension alike — makes it unattachable, and keeps it out of the base used to calculate other benefits, so it enters neither your settlement nor your year-end bonus.",
     },
     {
       question: "How much is deducted for pension and ISSS each month?",

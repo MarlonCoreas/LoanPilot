@@ -64,12 +64,71 @@ export function buildNewSchedule(args: { principal: number; annualRate: number; 
   return { rows, payment };
 }
 
-export function buildActiveSchedule(args: { balance: number; annualRate: number; payment: number; nextDate: Date; insurance: number; oneTimeExtra?: number; extraDate?: Date; monthlyExtra?: number; }) {
-  const rows: Row[] = []; let balance = args.balance; let previous = today(); let extraApplied = false; let invalid = false;
-  // `payment` excludes insurance in all three builders; the table and the
-  // exporter add the two columns themselves.
-  for (let i = 0; i < 1200 && balance > 0.005; i++) { const date = addMonths(args.nextDate, i); const opening = balance; const interest = opening * (args.annualRate / 100) * (daysBetween(previous, date) / 365); if (args.payment <= interest && (args.monthlyExtra ?? 0) <= 0) { invalid = true; break; } const normalDue = Math.min(args.payment, opening + interest); const principalPaid = Math.max(0, normalDue - interest); let extra = Math.max(0, args.monthlyExtra ?? 0); if (!extraApplied && (args.oneTimeExtra ?? 0) > 0 && args.extraDate && date >= args.extraDate) { extra += args.oneTimeExtra ?? 0; extraApplied = true; } extra = Math.min(extra, Math.max(0, opening - principalPaid)); balance = Math.max(0, opening - principalPaid - extra); rows.push({ number: i + 1, date, opening, payment: normalDue + extra, interest, principal: principalPaid, insurance: args.insurance, extra, closing: balance }); previous = date; }
-  return { rows, invalid };
+/** A century of instalments. Past this the schedule is truncated, not solved. */
+export const MAX_MONTHS = 1200;
+
+/**
+ * The forward schedule of a debt somebody already owes, in the two shapes this
+ * site models: an instalment loan and a revolving account.
+ *
+ * A credit card is not a different engine and must not become one. The accrual
+ * is the same — interest on the outstanding balance over actual days / 365 —
+ * and only two things differ, so both are parameters here:
+ *
+ *   minimumRate    the amount due is a share of the opening balance rather than
+ *                  a fixed instalment, so it falls as the balance falls
+ *   monthlyCharge  a fee charged TO the account instead of paid beside it: it
+ *                  joins the balance and earns interest next month like any
+ *                  other debt, which is what makes a small monthly fee outlive
+ *                  the purchase that triggered it
+ *
+ * `invalid` is the answer to the question the card page exists to ask. When what
+ * is paid each month cannot cover the interest and the fee, the balance stops
+ * falling: there is no payoff date, and printing one — or looping for a century
+ * to find it — would be worse than saying so.
+ *
+ * `stalledAt` is where it stopped, and it exists because "never falls" and
+ * "falls for six years and then stops" are different facts. A percentage
+ * minimum shrinks with the balance while a fixed fee does not, so a card can
+ * pay down for years and stall a few hundred dollars from zero; a page told
+ * only `invalid` would report that as a debt that never moved.
+ *
+ * `payment` excludes insurance in all three builders; the table and the
+ * exporter add the two columns themselves.
+ *
+ * `from` is where the first accrual starts, and it defaults to today because
+ * that is what a reader looking at their own statement means. It is a parameter
+ * so that a caller can chain schedules — the debt comparator pays one debt down
+ * and then rebuilds the rest from where they stood — without the first row of
+ * the second stretch charging interest all the way back to today.
+ */
+export function buildActiveSchedule(args: { balance: number; annualRate: number; payment: number; nextDate: Date; insurance: number; oneTimeExtra?: number; extraDate?: Date; monthlyExtra?: number; minimumRate?: number; monthlyCharge?: number; from?: Date; }) {
+  const rows: Row[] = []; let balance = args.balance; let previous = args.from ?? today(); let extraApplied = false; let invalid = false; let stalledAt: number | undefined;
+  const charge = Math.max(0, args.monthlyCharge ?? 0); const recurring = Math.max(0, args.monthlyExtra ?? 0);
+  for (let i = 0; i < MAX_MONTHS && balance > 0.005; i++) {
+    const date = addMonths(args.nextDate, i); const opening = balance;
+    const interest = opening * (args.annualRate / 100) * (daysBetween(previous, date) / 365);
+    // What the account demands this month, before anything voluntary.
+    const due = args.minimumRate === undefined ? args.payment : opening * (args.minimumRate / 100);
+    // A month that cannot cover its own interest and fee repays nothing, and
+    // nothing about the next month improves on it: the balance is no smaller,
+    // so the interest is no smaller, and a percentage minimum is no larger.
+    // Whichever month it first happens in is where the schedule ends.
+    if (due + recurring <= interest + charge) { invalid = true; stalledAt = opening; break; }
+    const owed = opening + interest + charge;
+    const paid = Math.min(due, owed);
+    // Negative where the payment does not reach the interest and the fee: the
+    // balance grows by the shortfall instead of falling, which is the honest
+    // reading of that month and keeps `closing = opening - principal - extra`.
+    const principalPaid = paid - interest - charge;
+    let extra = recurring;
+    if (!extraApplied && (args.oneTimeExtra ?? 0) > 0 && args.extraDate && date >= args.extraDate) { extra += args.oneTimeExtra ?? 0; extraApplied = true; }
+    extra = Math.min(extra, Math.max(0, owed - paid));
+    balance = Math.max(0, opening - principalPaid - extra);
+    rows.push({ number: i + 1, date, opening, payment: paid + extra, interest, principal: principalPaid, insurance: args.insurance + charge, extra, closing: balance });
+    previous = date;
+  }
+  return { rows, invalid, stalledAt };
 }
 
 // Prepayments and condition changes are both date-keyed events, so the accrual
@@ -105,7 +164,7 @@ export function buildHistoricalSchedule(args: { principal: number; annualRate: n
   let payment = args.payment;
   let eventIndex = 0;
   let invalid = false;
-  for (let i = 0; i < 1200 && balance > 0.005; i++) {
+  for (let i = 0; i < MAX_MONTHS && balance > 0.005; i++) {
     const date = addMonths(args.firstDate, i);
     const opening = balance;
     let cursor = previous;
