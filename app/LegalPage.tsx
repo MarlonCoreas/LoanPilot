@@ -7,12 +7,12 @@ import UtilityHero from "./UtilityHero";
 
 const heroCopy = {
   es: {
-    settlement: { title: "Calcula lo que corresponde al terminar tu empleo.", lead: "Estima indemnización o prestación, vacaciones, aguinaldo y salarios pendientes con reglas verificables." },
-    withholding: { title: "Entiende cada descuento de tu salario.", lead: "Estima AFP, ISSS y renta con la tabla oficial de tu frecuencia de pago, o revisá tu boleta para ver de dónde sale cada diferencia." },
+    settlement: { title: "Calculadora de indemnización", accent: "Al terminar tu empleo.", lead: "Estima indemnización o prestación, vacaciones, aguinaldo y salarios pendientes con reglas verificables." },
+    withholding: { title: "Calculadora de retenciones", accent: "Cada descuento de tu salario.", lead: "Estima AFP, ISSS y renta con la tabla oficial de tu frecuencia de pago, o revisá tu boleta para ver de dónde sale cada diferencia." },
   },
   en: {
-    settlement: { title: "Estimate what is due when employment ends.", lead: "Estimate severance or resignation benefit, vacation, year-end bonus and unpaid salary with auditable rules." },
-    withholding: { title: "Understand every deduction from your pay.", lead: "Estimate pension, ISSS and income tax against the official table for your pay frequency, or check your payslip to see where each difference comes from." },
+    settlement: { title: "Severance calculator", accent: "When employment ends.", lead: "Estimate severance or resignation benefit, vacation, year-end bonus and unpaid salary with auditable rules." },
+    withholding: { title: "Withholding calculator", accent: "Every deduction from your pay.", lead: "Estimate pension, ISSS and income tax against the official table for your pay frequency, or check your payslip to see where each difference comes from." },
   },
 } as const;
 
@@ -81,7 +81,7 @@ export default function LegalPage({ lang, page }: { lang: Lang; page: "settlemen
   const hero = heroCopy[lang];
   return <main className="legal-page">
     <SiteHeader lang={lang} page={page} />
-    <UtilityHero title={hero[page].title} lead={hero[page].lead} trust={reviewedLineFor(lang, page)} />
+    <UtilityHero title={hero[page].title} accent={hero[page].accent} lead={hero[page].lead} trust={reviewedLineFor(lang, page)} />
     <StatutoryTools lang={lang} tool={page} />
     <LegalGuide lang={lang} page={page} />
     <SiteFooter lang={lang} />

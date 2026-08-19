@@ -8,7 +8,7 @@ import { ROUTES, type Lang } from "./routes";
 const copy = {
   es: {
     eyebrow: "HERRAMIENTAS FINANCIERAS · EL SALVADOR",
-    title: "Números importantes, explicados con claridad.",
+    title: "Calculadoras gratis para El Salvador, explicadas con claridad.",
     lead: "Calculadoras gratuitas para entender un préstamo, revisar una liquidación laboral, cobrar bien tus horas extras o estimar las retenciones de tu salario.",
     trust: "Sin registro · Tus datos no salen de tu dispositivo · Fuentes oficiales visibles",
     choose: "Elige una herramienta",
@@ -40,7 +40,7 @@ const copy = {
   },
   en: {
     eyebrow: "FINANCIAL TOOLS · EL SALVADOR",
-    title: "Important numbers, explained clearly.",
+    title: "Free calculators for El Salvador, explained clearly.",
     lead: "Free calculators to understand a loan, review an employment settlement, get your overtime right or estimate deductions from your pay.",
     trust: "No signup · Your data stays on your device · Official sources included",
     choose: "Choose a tool",

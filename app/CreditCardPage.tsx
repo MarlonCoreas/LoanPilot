@@ -37,8 +37,8 @@ type ScheduleView = "minimum" | "extra";
 
 const copy = {
   es: {
-    title1: "Cuánto te cuesta",
-    title2: "el pago mínimo.",
+    title1: "Calculadora de tarjeta",
+    title2: "Cuánto te cuesta el pago mínimo.",
     subtitle: "Cuántos meses y cuánto interés lleva pagar tu tarjeta con el mínimo, y cuánto cambian los dos si abonás algo más cada mes.",
     free: "Gratis · Sin registro · Tus datos no salen de tu dispositivo",
     demoLabel: "Estás viendo datos de ejemplo", demoReset: "Empezar de cero",
@@ -118,8 +118,8 @@ const copy = {
     pdfSlug: "tarjeta-credito",
   },
   en: {
-    title1: "What the minimum",
-    title2: "payment costs you.",
+    title1: "Credit card calculator",
+    title2: "What the minimum payment costs you.",
     subtitle: "How many months and how much interest it takes to clear your card on the minimum, and how far a fixed extra each month moves both.",
     free: "Free · No signup · Your data stays on your device",
     demoLabel: "You are viewing sample data", demoReset: "Start from scratch",
@@ -434,7 +434,7 @@ export default function CreditCardPage({ lang }: { lang: Lang }) {
 
   return <main>
     <SiteHeader lang={lang} page="creditCard" />
-    <UtilityHero title={<>{t.title1}<br /><em>{t.title2}</em></>} lead={t.subtitle} trust={t.free} />
+    <UtilityHero title={t.title1} accent={t.title2} lead={t.subtitle} trust={t.free} />
     <section className="calculator-shell" id="calculator">
       {fromLink && <SharedNotice lang={lang} />}
       <div className="shell-toolbar">
