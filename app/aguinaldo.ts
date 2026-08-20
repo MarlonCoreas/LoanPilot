@@ -1,4 +1,4 @@
-import { calendarService, daysInclusive, isoDate, round2, utcDate } from "./dates.ts";
+import { calendarService, DAY_MS, daysInclusive, isoDate, round2, utcDate } from "./dates.ts";
 import {
   accrualYearDays, aguinaldoCutoff, aguinaldoCycleStart, aguinaldoPaymentWindow, aguinaldoScale,
   currentValue, dailySalaryDivisor, minimumWage,
@@ -17,51 +17,56 @@ import type { AguinaldoExemption, RuleId, YearDay } from "./rules.ts";
  * asymmetry between the branches, and the window where the scale is ambiguous —
  * and they would have disagreed silently.
  *
- * WHAT SURVIVED THE MOVE UNCHANGED, ON PURPOSE:
+ * WHAT THE MTPS ACTUALLY DOES, which is what this now implements. Its online
+ * calculator was run on five cases on 20 August 2026 and it answers in TWO
+ * ROWS, each carrying the period it covers:
  *
- * The two branches read seniority on DIFFERENT DAYS and that is not an
- * oversight. Someone still on the payroll at the qualifying date is read there,
- * because that is the day article 198's scale is measured at. Someone who left
- * on the 5th never reached it, and crediting them a seniority step they never
- * completed would pay for time not worked. Nothing in the reform says which
- * scale that early leaver takes, so the conservative reading is the figure and
- * the other one is surfaced beside it.
+ *     12/12/2024 - 11/12/2025   365 días   AGUINALDO COMPLETO      $570.00
+ *     12/12/2025 - 30/06/2026   201 días   AGUINALDO PROPORCIONAL  $313.89
  *
- * WHAT CHANGED: the accrual cycle is now a parameter. It used to be a 1 January
- * built into the arithmetic while `aguinaldoCycleStart` recorded, a few files
- * away, that no article fixes it and two readings are in use. The value has not
- * moved — that needs a document, not a refactor — but a caller now passes it,
- * and a reader can see which cycle produced a number.
+ * Four things fall out of that output and all four were wrong here before:
  *
- * WHAT CHANGED WITH IT: a collected bonus no longer zeroes the line. See
- * `alreadyPaid`. The statement's aguinaldo line — $21.15, the one figure the
- * reconciliation used to leave uncompared — is now reproduced to the cent, and
- * only under the 12 December cycle. That is evidence about the disputed value
- * and it is not being used to move it: `aguinaldoCycleStart` still applies the
- * calendar year, and what changed here is only that the code can now express
- * both readings on the case that distinguishes them. It could not before, and a
- * dispute whose alternative the program cannot produce is a footnote.
+ *   THE CYCLE RUNS 12 DECEMBER TO 11 DECEMBER. It is printed, not inferred.
+ *   This module applied the calendar year and under-stated every proportional
+ *   bonus by exactly the scale times 20/365 of the daily wage.
+ *
+ *   THERE ARE TWO LINES, and a settlement can owe both: the whole bonus of the
+ *   cycle that closed and was never handed over, plus the part-year of the one
+ *   that opened after it. One figure could express one or the other depending
+ *   on the date, never both.
+ *
+ *   THE SCALE IS READ ON THE LAST DAY OF THE PERIOD BEING PAID — on 11 December
+ *   for the closed cycle, on the last day worked for the running one. Not at
+ *   the qualifying date. A worker hired on 1 November 2023 and leaving on
+ *   15 December 2026 has two completed years on 20 October and three on
+ *   11 December, and the ministry pays nineteen days.
+ *
+ *   THE QUALIFYING DATE DOES NOT CAP THE ACCRUAL. It opens the payment window
+ *   and nothing else. This module used to stop the clock there, and to grant a
+ *   whole bonus to anyone who reached it with a year of service.
+ *
+ * ALL SIX DATA POINTS ARE PINNED in `tests/aguinaldo.test.mjs`, including the
+ * MTPS settlement statement whose bonus line this suite left uncompared for as
+ * long as it existed. They are not derived from anything in this repository: if
+ * one fails, the model and the ministry have parted company.
+ *
+ * WHAT SURVIVED, ON PURPOSE: the two readings of the scale for an early leaver
+ * are still both surfaced. The ministry reads it on the last day worked, which
+ * is what this module already applied, but a practice is not a text and
+ * article 197 can still be read the other way — so where the two differ the
+ * figure is shown beside its alternative and neither is claimed to govern.
  *
  * FOR THE NEXT DECISION, NOT ACTED ON HERE. Reformed article 202 carries the
  * same restrictive formula as article 187: it grants the proportional bonus
  * "cuando se declare terminado un contrato de trabajo con responsabilidad para
  * el patrono, o cuando el trabajador fuere despedido de hecho, sin causa legal",
- * and names no other case. This module pays the proportional bonus on a
- * resignation too, on the same unexamined footing as the vacation fraction. It
- * is the same shape of question that `quincena25Window` has just been decided
- * in the other direction, and it is recorded here so it is decided rather than
- * inherited.
+ * and names no other case. This module pays it on a resignation too, on the
+ * same unexamined footing as the vacation fraction.
  *
- * WHAT THIS FUNCTION PRICES, now that the boundary is load-bearing: ONE cycle,
- * the one the last day worked falls in. A worker who reached the qualifying
- * date, was NOT paid, and leaves after the cycle reopened is owed that whole
- * unpaid bonus AS WELL, and this returns only the days of the new cycle. That
- * debt belongs to a cycle this call is not pricing, and paying two cycles from
- * one call is a larger change than the gap justifies. It cannot arise under the
- * applied calendar cycle, where the cycle day always precedes the qualifying
- * date; it is reachable only under the 12 December reading, and there the
- * previous behaviour was worse — the fraction was measured from a cycle opening
- * after the date it measured to, and a full year worked came back as zero.
+ * AND WHAT NOBODY MODELS: the anticipated payment. The window opens on
+ * 20 October and the cycle closes on 11 December, so a bonus can be handed over
+ * for a cycle still running, and neither this form nor the ministry's asks
+ * whether that happened. See `aguinaldoAnticipatedPayment`.
  */
 
 const DAILY_DIVISOR = currentValue(dailySalaryDivisor);
@@ -85,6 +90,25 @@ const yearDayIso = (year: number, day: YearDay) =>
 /** The qualifying date of a given year, which is what a still-employed reader is measured to. */
 export function aguinaldoCutoffFor(year: number, cutoff: YearDay = CUTOFF) {
   return yearDayIso(year, cutoff);
+}
+
+/**
+ * The last day of the cycle whose bonus is paid in the given year's window.
+ *
+ * WHAT A STILL-EMPLOYED READER IS MEASURED TO, and it is not the qualifying
+ * date. The window opens on 20 October, but the cycle it pays for runs to
+ * 11 December, so somebody read at 20 October has worked 313 of its 365 days
+ * and would be shown a part-year for a bonus they are going to collect whole.
+ * The article 197 date decides WHEN the money is handed over and, before the
+ * MTPS output was read, was assumed to decide the scale as well; it does not.
+ *
+ * Measuring to the close instead makes the ordinary case fall out of the same
+ * arithmetic as every other: a worker employed for the whole cycle gets 365/365
+ * and therefore the entire step, and one hired inside it gets the days they
+ * actually worked, with no branch of its own to disagree with the leaver's.
+ */
+export function aguinaldoCycleEndFor(year: number, cycleStart: YearDay = CYCLE_START) {
+  return isoDate(new Date(Date.UTC(year, cycleStart.month - 1, cycleStart.day) - DAY_MS));
 }
 
 /** When the employer must hand it over: 20 October to 20 December since the 2025 reform. */
@@ -158,84 +182,59 @@ export function calculateAguinaldo(input: {
   const cycleDay = input.cycleStart ?? CYCLE_START;
   const year = end.getUTCFullYear();
   const cutoff = new Date(Date.UTC(year, cutoffDay.month - 1, cutoffDay.day));
-  // The cycle that CONTAINS the last day read: the most recent occurrence of
-  // the cycle day on or before it, which steps back a year when that day has
-  // not come round yet. A 1 January cycle never steps back; a 12 December one
-  // does for most of the year, and that is the whole point of writing it this
-  // way rather than pinning the cycle to the calendar year of `endDate`.
+
+  // THE CYCLE CONTAINING THE LAST DAY READ, and the one that closed before it.
+  // The most recent occurrence of the cycle day on or before `end`, stepping
+  // back a year when that day has not come round yet.
   const cycleThisYear = new Date(Date.UTC(year, cycleDay.month - 1, cycleDay.day));
   const cycleOpens = cycleThisYear <= end
     ? cycleThisYear
     : new Date(Date.UTC(year - 1, cycleDay.month - 1, cycleDay.day));
+  const closedEnds = new Date(cycleOpens.getTime() - DAY_MS);
+  const closedOpens = new Date(Date.UTC(
+    closedEnds.getUTCFullYear() - 1, cycleDay.month - 1, cycleDay.day));
+
+  /** The article 198 step, read on the last day of the period being paid. */
+  const scaleOn = (day: Date) => aguinaldoDaysFor(calendarService(start, day).completedYears);
+
+  // THE CLOSED CYCLE. Owed whole when the worker was there for all of it and
+  // has not collected it; nothing otherwise. It is not prorated: a cycle worked
+  // end to end earns its whole step, which is what "prima anual" means.
+  const workedWholeClosedCycle = start <= closedOpens && end >= closedEnds;
+  const owedClosedCycle = !input.alreadyPaid && workedWholeClosedCycle;
+  const completeDays = owedClosedCycle ? scaleOn(closedEnds) : 0;
+
+  // THE RUNNING CYCLE, prorated over the days actually worked in it. Its own
+  // qualifying date is a year away and nobody has reached it, so this is a
+  // part-year however long the service is.
   const workStart = start > cycleOpens ? start : cycleOpens;
+  const cycleFraction = workStart <= end ? daysInclusive(workStart, end) / YEAR_DAYS : 0;
+  const fraction = Math.min(1, cycleFraction);
+  const scaleDays = scaleOn(end);
+  const proportionalDays = workStart <= end ? scaleDays * fraction : 0;
 
-  const service = calendarService(start, end);
-  const atCutoff = calendarService(start, cutoff);
-
-  // WHICH CYCLE A COLLECTED BONUS DISCHARGED, which is the whole of the
-  // `alreadyPaid` question and used to be assumed rather than asked.
-  //
-  // The payment settles the cycle that was open at the qualifying date. When
-  // the cycle containing the last day worked opened AFTER that date, the two
-  // are different cycles: the money paid for the earlier one, and the days run
-  // since this one opened are still owed. Under a 1 January cycle that never
-  // happens — the cycle day precedes the October qualifying date every year —
-  // so this splits exactly along the reading in dispute, which is why it can be
-  // written at all only now that the cycle is a parameter.
-  // THIS FUNCTION PRICES ONE CYCLE: the one the last day worked falls in. When
-  // that cycle opened after the qualifying date, the qualifying date belongs to
-  // the PREVIOUS cycle, and nothing about this one has been earned in full or
-  // discharged by a payment — whether or not a payment was made.
-  const cycleOpenedAfterCutoff = cycleOpens > cutoff;
-  /** Paid, and the payment covered the cycle the departure falls in. */
-  const settledByPayment = input.alreadyPaid === true && !cycleOpenedAfterCutoff;
-  /** Paid, but a later cycle has opened since: its part-year is still owed. */
-  const accruesNewCycle = input.alreadyPaid === true && cycleOpenedAfterCutoff;
-
-  /** Share of this cycle worked, 0 to 1, before the scale is applied. */
-  let cycleFraction = 0;
-  let fraction = 0;
-  // Seniority at the LAST DAY READ, which is the scale kept for anyone who
-  // never reached the qualifying date. See the asymmetry note at the top.
-  let scaleDays = aguinaldoDaysFor(service.completedYears);
+  const days = completeDays + proportionalDays;
   const reachedCutoff = end >= cutoff;
 
-  if (workStart <= end) {
-    cycleFraction = daysInclusive(workStart, end) / YEAR_DAYS;
-    // A cycle that opened after the qualifying date is a part-year like any
-    // other: its own qualifying date is a year away, nobody has reached it, and
-    // the scale is read at the last day worked. Reaching the PREVIOUS cycle's
-    // date says nothing about this one, and pricing it as a whole bonus would
-    // pay the discharged cycle a second time. Without this branch the else
-    // below measured from a cycle that opens AFTER the cutoff it measures to,
-    // and returned zero for a full year worked.
-    if (!reachedCutoff || cycleOpenedAfterCutoff) {
-      fraction = cycleFraction;
-    } else {
-      // Past the qualifying date the worker did reach it, so the scale is read
-      // there and a completed year earns the whole bonus.
-      scaleDays = aguinaldoDaysFor(atCutoff.completedYears);
-      fraction = atCutoff.completedYears >= 1
-        ? 1
-        : daysInclusive(workStart, cutoff) / YEAR_DAYS;
-    }
-  }
-
-  const days = settledByPayment ? 0 : scaleDays * Math.min(1, fraction);
-
-  // The window where the two readings of the scale disagree: the reader leaves
-  // before the qualifying date and would have crossed a step (15 / 19 / 21) had
-  // they stayed to it. Only then is there a second figure worth naming, and the
-  // interface names it without claiming either one governs. Because the cutoff
-  // is later than the departure in this branch, seniority there is never lower,
-  // so the alternative is always the larger figure.
-  const alternativeScaleDays = aguinaldoDaysFor(atCutoff.completedYears);
-  const scaleAmbiguous = !input.alreadyPaid
-    && workStart <= end
+  // The window where the two readings of the scale disagreed. The MTPS reads it
+  // on the last day worked — see the note on `aguinaldoScaleOnExit` — so the
+  // alternative is named only where a reader would otherwise not know a second
+  // reading existed, and never claimed to govern.
+  const alternativeScaleDays = aguinaldoDaysFor(calendarService(start, cutoff).completedYears);
+  const scaleAmbiguous = proportionalDays > 0
     && !reachedCutoff
     && alternativeScaleDays !== scaleDays;
-  const alternativeDays = scaleAmbiguous ? alternativeScaleDays * Math.min(1, fraction) : 0;
+  const alternativeDays = scaleAmbiguous ? alternativeScaleDays * fraction : 0;
 
+  // ROUNDED PER LINE, THEN SUMMED, and the order matters now that there are two
+  // of them. A settlement prints both and prints a total, and a reader who adds
+  // the two figures on the page has to land on the third: rounding the sum
+  // instead would leave the document a cent out of balance on some cases, which
+  // is exactly the kind of thing that loses an argument at a human resources
+  // desk. The unrounded figure stays available for callers that need it.
+  const completeAmount = round2(dailySalary * completeDays);
+  const proportionalAmount = round2(dailySalary * proportionalDays);
+  const amount = round2(completeAmount + proportionalAmount);
   const unrounded = dailySalary * days;
 
   const appliedRules: RuleId[] = [
@@ -248,37 +247,44 @@ export function calculateAguinaldo(input: {
   ];
 
   return {
-    /** Days of salary earned, after the scale and the proportion. */
+    /** Days of salary owed in total: the closed cycle plus the running one. */
     days,
-    /** The bonus, rounded the way it is paid. */
-    amount: round2(unrounded),
+    /** The bonus, rounded the way it is paid: the two lines, each rounded, summed. */
+    amount,
     /**
      * The same figure before rounding. A caller summing this into a larger
      * total needs it: the settlement rounds its total once, at the end, and
      * rounding here first would move that total by a cent on some cases.
      */
     unrounded,
+    /**
+     * THE TWO LINES THE MTPS PRINTS, and the reason the total above is a sum.
+     *
+     * A settlement can owe both at once: the whole bonus of the cycle that
+     * closed and was never handed over, and the part-year of the cycle that
+     * opened after it. Collapsing them lost one or the other depending on the
+     * date — see the note at the top of this file.
+     */
+    completeDays,
+    completeAmount,
+    proportionalDays,
+    proportionalAmount,
     dailySalary: round2(dailySalary),
-    /** The article 198 step applied, and the seniority it was read at. */
+    /** The article 198 step of the RUNNING cycle, read on the last day worked. */
     scaleDays,
-    completedYears: reachedCutoff ? atCutoff.completedYears : service.completedYears,
-    /** Share of the cycle worked, before the scale. Reused by the Quincena 25. */
+    /** The step of the closed cycle, read on its own last day. Zero when none is owed. */
+    completeScaleDays: owedClosedCycle ? scaleOn(closedEnds) : 0,
+    completedYears: calendarService(start, end).completedYears,
+    /** Share of the running cycle worked, before the scale. Reused by the Quincena 25. */
     cycleFraction,
     fraction,
     reachedCutoff,
     cutoffDate: isoDate(cutoff),
     cycleStartDate: isoDate(cycleOpens),
-    /**
-     * The bonus was collected and this figure is what the cycle that opened
-     * afterwards has accrued since.
-     *
-     * No page reads it yet, because under the applied calendar cycle it is
-     * never true. It is returned rather than kept private because the day the
-     * cycle moves, a reader who ticked "already paid" and still sees a line owed
-     * needs to be told why on screen — and a flag the caller cannot see is a
-     * flag nobody will remember to add.
-     */
-    accruesNewCycle,
+    closedCycleStartDate: isoDate(closedOpens),
+    closedCycleEndDate: isoDate(closedEnds),
+    /** True when a bonus already earned and never collected is part of this figure. */
+    owedClosedCycle,
     /** True only inside the window where the two readings of the scale differ. */
     scaleAmbiguous,
     alternativeScaleDays: scaleAmbiguous ? alternativeScaleDays : 0,

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  aguinaldoCutoffFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
+  aguinaldoCutoffFor, aguinaldoCycleEndFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
   calculateAguinaldo,
 } from "./aguinaldo";
 import DisputePanel from "./DisputePanel";
@@ -35,7 +35,7 @@ const copy = {
     start: "Fecha de ingreso", end: "Último día de trabajo",
     salary: "Salario mensual ordinario",
     salaryHint: "Incluye comisiones habituales promediadas, si aplican.",
-    alreadyPaid: "El aguinaldo de este año ya me lo pagaron",
+    alreadyPaid: "Ya cobré el aguinaldo del ciclo anterior (el que cerró el 11 de diciembre)",
     result: "Estimación bruta", total: "Aguinaldo estimado",
     days: "Días de salario", scale: "Escala aplicada",
     seniority: "Antigüedad al corte", seniorityAtEnd: "Antigüedad al último día",
@@ -55,7 +55,9 @@ const copy = {
     ambiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del 20 de octubre serían",
     ambiguousTail: "días. La reforma no dice expresamente qué escala rige para quien terminó antes del corte; si la diferencia te importa, consultalo con el MTPS.",
     notYet: "Con esa fecha de ingreso todavía no se genera aguinaldo para este ciclo: la estimación se hace sobre el corte del año siguiente.",
-    paidNote: "Marcaste que ya te lo pagaron, así que la estimación queda en cero. Desmarcá la casilla para ver lo que correspondía.",
+    closedCycle: "Aguinaldo del ciclo cerrado sin pagar", closedCycleTo: "cerró el",
+    runningCycle: "Del ciclo que corre",
+    paidNote: "Marcaste que ya cobraste el ciclo anterior, así que esa parte no aparece. Lo que queda es lo devengado del ciclo que corre desde el 12 de diciembre. Ojo: si el aguinaldo que cobraste fue un pago ADELANTADO del ciclo en curso —la ley lo permite desde el 20 de octubre— esta cifra puede estar contando días que ya te pagaron. Ni esta calculadora ni la del MTPS preguntan por eso.",
     grossNote: "Es una estimación bruta: la cifra de arriba no lleva ningún descuento. Abajo se calcula la porción exenta de renta y la base gravada; la retención sobre esa base no, porque ningún texto dice con qué tabla se hace.",
     invalid: "Revisá las fechas: el último día de trabajo debe ser posterior al ingreso y ambas deben caer entre 1950 y 2100.",
     disputeLink: "Ver las dos lecturas de esta regla",
@@ -102,7 +104,7 @@ const copy = {
     start: "Employment start date", end: "Last day worked",
     salary: "Ordinary monthly salary",
     salaryHint: "Include averaged recurring commissions, when applicable.",
-    alreadyPaid: "This year's bonus has already been paid to me",
+    alreadyPaid: "I already collected the previous cycle's bonus (the one that closed on 11 December)",
     result: "Gross estimate", total: "Estimated year-end bonus",
     days: "Days of salary", scale: "Scale applied",
     seniority: "Service at the cutoff", seniorityAtEnd: "Service at the last day worked",
@@ -122,7 +124,9 @@ const copy = {
     ambiguousMid: "days, the reading that does not assume time that was not worked. On the 20 October scale it would be",
     ambiguousTail: "days. The reform does not expressly say which scale governs someone whose contract ended before the cutoff; if the difference matters to you, check it with the MTPS.",
     notYet: "With that start date no bonus accrues for this cycle yet, so the estimate is made against the following year's cutoff.",
-    paidNote: "You ticked that it has already been paid, so the estimate stays at zero. Untick the box to see what was due.",
+    closedCycle: "Unpaid bonus of the closed cycle", closedCycleTo: "closed on",
+    runningCycle: "Of the running cycle",
+    paidNote: "You ticked that the previous cycle was already collected, so that part is not shown. What remains is what the cycle running since 12 December has accrued. Note: if the bonus you collected was an EARLY payment of the running cycle — the law allows it from 20 October — this figure may be counting days you have already been paid. Neither this calculator nor the MTPS one asks about that.",
     grossNote: "This is a gross estimate: the figure above carries no deductions. The exempt portion and the taxable base are worked out below; the withholding on that base is not, because no text says which table applies to it.",
     invalid: "Check the dates: the last day worked must be after the start date and both must fall between 1950 and 2100.",
     disputeLink: "See both readings of this rule",
@@ -196,7 +200,13 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
   const [startDate, setStartDate] = useState(() => shared.de ?? isoAfterMonths(-36));
   const [endDate, setEndDate] = useState(() => shared.ha ?? todayIso());
   const [monthlySalary, setMonthlySalary] = useState(shared.sal ?? "900");
-  const [alreadyPaid, setAlreadyPaid] = useState(shared.pg === "1");
+  // Defaults to collected, which is what almost every reader will answer: the
+  // cycle that closed on 11 December is paid in a window that shut before they
+  // opened this page. Starting from "not collected" would headline two cycles
+  // at once and over-state the figure, which is the direction this project
+  // treats as the serious one. An explicit "0" in a shared link still turns it
+  // off, so links made either way keep working.
+  const [alreadyPaid, setAlreadyPaid] = useState(shared.pg !== "0");
 
   const shareValues = {
     si: standing, de: startDate, ha: endDate, sal: monthlySalary,
@@ -210,11 +220,13 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
     // Measuring them against a cutoff they were not employed at would answer
     // "nothing", which is true of a date that has already passed and useless as
     // an answer to what they will be paid.
-    const notYet = standing === "employed" && startDate > aguinaldoCutoffFor(thisYear);
+    const notYet = standing === "employed" && startDate > aguinaldoCycleEndFor(thisYear);
     const year = notYet ? thisYear + 1 : thisYear;
-    // Still employed: measured at the qualifying date, which is the day
-    // article 198 reads seniority and article 197 fully earns the bonus.
-    const measuredTo = standing === "employed" ? aguinaldoCutoffFor(year) : endDate;
+    // Still employed: measured to the CLOSE OF THE CYCLE, not to the qualifying
+    // date. The window opens on 20 October and the cycle runs to 11 December,
+    // so reading somebody at the qualifying date shows a part-year for a bonus
+    // they will collect whole. See `aguinaldoCycleEndFor`.
+    const measuredTo = standing === "employed" ? aguinaldoCycleEndFor(year) : endDate;
     const invalid = standing === "ended"
       && (endDate < startDate || startDate < EARLIEST_EMPLOYMENT_DATE || endDate > LATEST_END_DATE);
     return {
@@ -246,7 +258,7 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
     const notes: string[] = [t.windowNote];
     if (proportional) notes.push(t.proportionalNote, t.cycleNote);
     if (bonus.scaleAmbiguous) {
-      notes.push(`${t.ambiguousLead} (${bonus.scaleDays} ${t.daysLabel}): ${money.format(bonus.amount)} ${t.ambiguousMid} (${bonus.alternativeScaleDays} ${t.daysLabel}): ${money.format(bonus.alternativeAmount)} ${t.ambiguousTail}`);
+      notes.push(`${t.ambiguousLead} (${bonus.scaleDays} ${t.daysLabel}): ${money.format(bonus.proportionalAmount)} ${t.ambiguousMid} (${bonus.alternativeScaleDays} ${t.daysLabel}): ${money.format(bonus.alternativeAmount)} ${t.ambiguousTail}`);
     }
     if (bonus.notYet) notes.push(t.notYet);
 
@@ -367,10 +379,12 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
               <div><span>{bonus.reachedCutoff ? t.seniority : t.seniorityAtEnd}</span><b>{bonus.completedYears} {bonus.completedYears === 1 ? t.year : t.yearPlural}</b></div>
               <div><span>{t.dailySalary}</span><b>{money.format(bonus.dailySalary)}</b></div>
               <div><span>{t.proportion}</span><b>{(bonus.fraction * 100).toFixed(1)}%</b><i>{t.cycleFrom} {date(bonus.cycleStartDate)}</i></div>
+              {bonus.owedClosedCycle && <div className="highlight"><span>{t.closedCycle}</span><b>{money.format(bonus.completeAmount)}</b><i>{t.closedCycleTo} {date(bonus.closedCycleEndDate)}</i></div>}
+              {bonus.owedClosedCycle && <div><span>{t.runningCycle}</span><b>{money.format(bonus.proportionalAmount)}</b><i>{bonus.proportionalDays.toFixed(2)} {t.daysLabel}</i></div>}
             </div>
             {alreadyPaid && <div className="callout"><span>i</span><p>{t.paidNote}</p></div>}
             {bonus.notYet && <div className="callout warn"><span>!</span><p>{t.notYet}</p></div>}
-            {bonus.scaleAmbiguous && <div className="callout"><span>?</span><p>{t.ambiguousLead} ({bonus.scaleDays} {t.daysLabel}): <b>{money.format(bonus.amount)}</b> {t.ambiguousMid} ({bonus.alternativeScaleDays} {t.daysLabel}): <b>{money.format(bonus.alternativeAmount)}</b> {t.ambiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
+            {bonus.scaleAmbiguous && <div className="callout"><span>?</span><p>{t.ambiguousLead} ({bonus.scaleDays} {t.daysLabel}): <b>{money.format(bonus.proportionalAmount)}</b> {t.ambiguousMid} ({bonus.alternativeScaleDays} {t.daysLabel}): <b>{money.format(bonus.alternativeAmount)}</b> {t.ambiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
             {proportional && <><div className="callout"><span>§</span><p>{t.proportionalNote}</p></div>
               <div className="callout"><span>?</span><p>{t.cycleNote} <DisputeLink rule="aguinaldoCycleStart" /></p></div></>}
           </>}

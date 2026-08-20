@@ -495,12 +495,19 @@ test("the known disputes and the known assumptions are the ones on the page", ()
   // takes the entry off the page with it, and nothing else here would notice.
   assert.deepEqual(
     disputedVersions("disputed").map(({ rule }) => rule.id).sort(),
-    ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"],
+    ["aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"],
     "the rules where a text and a practice, or two articles, disagree");
   assert.deepEqual(
     disputedVersions("unsourced").map(({ rule }) => rule.id).sort(),
-    ["dailySalaryDivisor"],
+    ["aguinaldoCycleStart", "dailySalaryDivisor"],
     "the rules no document fixes at all");
+
+  // `aguinaldoCycleStart` moved between these two lists in August 2026 and the
+  // move is the point of naming them per section. It was filed as a dispute
+  // while two readings of the accrual period were in use and neither had a
+  // document; the MTPS calculator then turned out to PRINT the cycle on every
+  // row, which makes it the divisor's shape and not article 187's — a silence
+  // in the text that an institution fills, with nothing left to argue against.
 
   // And the two together are everything the registry marks: a section neither
   // list covers would be published under no heading.

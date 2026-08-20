@@ -565,60 +565,88 @@ export const aguinaldoCutoff = rule<YearDay>({
 /**
  * The day the bonus year starts accruing.
  *
- * DISPUTED. Articles 196 to 202 name the qualifying date and the payment window
- * and say the leaver is owed the part "proporcional al tiempo trabajado" — but
- * no article in the chapter says what period that proportion runs over. What
- * used to be recorded here as simply unsourced is now known to be a live
- * disagreement, with two readings in the field and neither one written down in
- * a text:
+ * SETTLED BY EVIDENCE, and it was not before. Articles 196 to 202 name the
+ * qualifying date and the payment window and say the leaver is owed the part
+ * "proporcional al tiempo trabajado" — but no article in the chapter says what
+ * period that proportion runs over. Two readings were in use and neither was
+ * written down in a text, so this rule spent a long time recording the
+ * disagreement rather than resolving it.
  *
- *   1 JANUARY, the calendar year, which is what this module applies. The
- *   backing recorded here USED TO BE OVERSTATED and the correction matters. The
- *   MTPS publication in `aguinaldoReform` says that an early payment is optional
- *   for the employer and that one who chooses to make it "debe darlo completa al
- *   trabajador". It says nothing about the accrual period. Reading "complete" as
- *   "the calendar year" is an inference, and not a compelling one: a complete
- *   bonus of a 12 December cycle is equally complete. So this reading rests on
- *   an institutional statement about the AMOUNT, stretched to cover the PERIOD.
+ * WHAT RESOLVED IT: the MTPS online calculator PRINTS THE CYCLE DATES. Asked
+ * for a settlement it returns two rows, and each one carries the period it
+ * covers — "12/12/2024 - 11/12/2025" for the closed cycle and
+ * "12/12/2025 - 30/06/2026" for the running one. That is the ministry that
+ * administers the rule naming the accrual period in a document, which is what
+ * this registry said all along it was waiting for. Five cases were run on
+ * 20 August 2026, all post-reform, and every one of them names 12 December.
  *
- *   12 DECEMBER, the cycle that closes on the old qualifying date. The MTPS
- *   settlement statement the suite reconciles against prints $21.15 of bonus for
- *   a resignation on 24 December 2025 with the bonus already collected, and that
- *   figure is nineteen days of scale over the thirteen run from 12 December, on
- *   a 937.54/30 daily base. No other whole number of days reaches it. This is
- *   the ministry's own arithmetic in a document, not a press summary of it.
+ * THE CALENDAR YEAR IS GONE, and it never had the backing this project claimed
+ * for it. What was recorded here as MTPS support was an inference from a press
+ * release saying an early payment must be handed over "completa" — a statement
+ * about the AMOUNT, stretched to cover the PERIOD. The evidence now runs the
+ * other way and the criterion is the one article 187 and `dailySalaryDivisor`
+ * already use: where a text is silent and the ministry acts, follow the
+ * ministry and say so.
  *
- * SO THE EVIDENCE POINTS AT THE READING THAT IS NOT APPLIED, and saying so is
- * the point of this entry. On article 187 and on `dailySalaryDivisor` the same
- * statement reconciling to the cent is exactly what decides the question, and
- * the criterion is not being applied here. Two reasons, both provisional: the
- * statement is dated December 2025, two months after D.L. 433 moved the
- * qualifying date, so the ministry's own tool may not have been updated; and one
- * document against an inference is thin ground on which to move every
- * proportional bonus the suite pins. PENDING: run the MTPS online calculator on
- * a case built to discriminate — under a year of service, departure between 20
- * October and 31 December — and settle it with a second data point.
- *
- * WHAT DID CHANGE. The alternative is now producible: `calculateAguinaldo`
- * reproduces the $21.15 line under the 12 December cycle and zero under the
- * calendar one, because a collected bonus no longer zeroes every case. That was
- * a bug in its own right, and it is fixed independently of this value.
+ * WHAT MOVED WITH IT. The cycle is not a parameter swap: it changes the shape
+ * of the answer. A settlement can owe the whole bonus of the cycle that closed
+ * AND the part-year of the one that opened after it, which is why
+ * `calculateAguinaldo` now returns two lines. See the note at the top of that
+ * file, and `aguinaldoAnticipatedPayment` for what none of this models.
  */
 export const aguinaldoCycleStart = rule<YearDay>({
   id: "aguinaldoCycleStart",
   unit: "day-of-year",
   versions: [{
     from: "1972-10-31",
-    value: { month: 1, day: 1 },
-    norm: "Sin norma que lo fije: arts. 196-202 no definen el período de devengo",
-    // The MTPS publication on early payment, not the Labour Code. The chapter
-    // is silent by this rule's own norm, so linking it offered the reader a
-    // document that cannot settle the question; this one at least backs the
-    // reading applied, as far as it goes. See the note.
+    value: { month: 12, day: 12 },
+    norm: "Sin norma que lo fije: arts. 196-202 no definen el período de devengo; el ciclo lo declara el servicio de cálculo del MTPS",
+    // The calculator itself, which is the document that declares the cycle by
+    // printing its dates on every row. The press release it used to point at
+    // describes an anticipated payment and never names a period.
+    source: "laborService",
+    reviewed: "2026-08-20",
+    status: ["UNSOURCED"],
+    note: "UNSOURCED. No text fixes the accrual period, and this is now decided on evidence rather than left open. No article of chapter VII fixes the accrual period, so this was two readings with nothing to choose between them. The MTPS online calculator settles it by PRINTING THE CYCLE: every row it returns carries its period, and they read 12/12/YYYY to 11/12/YYYY. Five post-reform cases run on 20 August 2026 agree, and so does the MTPS settlement statement the suite reconciles against, whose $21.15 bonus line is nineteen days of scale over the thirteen run from 12 December. The calendar year that used to sit here rested on an inference from a press release about the AMOUNT of an anticipated payment, not about its period, and that backing was overstated in this file for as long as it stood."  }],
+});
+
+/**
+ * The anticipated payment, which neither this project nor the MTPS models.
+ *
+ * NOT MODELLED, and it is the hole the 12 December cycle opens. The payment
+ * window runs from 20 October to 20 December while the cycle it pays for does
+ * not close until 11 December, so for eight weeks of every year an employer can
+ * hand over a bonus for a cycle still running. The MTPS says so itself: an
+ * early payment is optional, and one made "debe darlo completa al trabajador".
+ *
+ * NOBODY ASKS ABOUT IT. The MTPS form has one question — "¿Recibió pago de
+ * aguinaldo del año anterior?" — and the year anterior is the cycle that CLOSED.
+ * A worker who collected an anticipated bonus in November for the cycle running
+ * to 11 December answers that question about a different cycle, and the
+ * ministry's own tool then prints a proportional line for money already in
+ * their pocket. This calculator inherits the gap because it follows the
+ * ministry, and the interface says so where the question is asked.
+ *
+ * WHICH DIRECTION IT ERRS. Over-statement, and only inside the window: a reader
+ * who leaves between 20 October and 11 December having already collected sees a
+ * proportional line they may not be owed. That is the direction this project
+ * treats as the serious one — see `quincena25Window` — so it is disclosed on
+ * screen rather than left to the reader to notice.
+ *
+ * WHAT WOULD CLOSE IT: a second question, and a criterion for which cycle an
+ * anticipated payment discharges. No text names either.
+ */
+export const aguinaldoAnticipatedPayment = rule<{ windowOpens: YearDay; cycleCloses: YearDay }>({
+  id: "aguinaldoAnticipatedPayment",
+  unit: "not-modelled",
+  versions: [{
+    from: "2025-10-20",
+    value: { windowOpens: { month: 10, day: 20 }, cycleCloses: { month: 12, day: 11 } },
+    norm: "Ventana de pago del art. 200 reformado, contra el cierre del ciclo de devengo",
     source: "aguinaldoReform",
-    reviewed: "2026-08-19",
-    status: ["DISPUTED"],
-    note: "DISPUTED. Two readings are in use and no text settles either. The calendar year is applied; its backing is an MTPS publication saying an early payment must be handed over complete, which speaks to the AMOUNT and is stretched here to cover the PERIOD. The 12 December cycle is the only reading that reproduces the bonus line of the MTPS settlement statement — $21.15, nineteen days over thirteen from 12 December — which is the ministry's own arithmetic in a document. The evidence therefore points at the reading NOT applied, and the same criterion decides article 187 and `dailySalaryDivisor` the other way. Not moved yet on two provisional grounds: the statement post-dates D.L. 433 by two months and the ministry's tool may be stale, and one document against an inference is thin ground for moving every proportional bonus the suite pins. Pending a second data point from the MTPS online calculator on a discriminating case. Both readings are EXPRESSIBLE and the alternative is now produced on that exact case: the cycle opens on the most recent occurrence of this day on or before the last day read, and a collected bonus settles only the cycle it discharged.",
+    reviewed: "2026-08-20",
+    status: ["NOT MODELLED"],
+    note: "NOT MODELLED. The payment window opens on 20 October and the accrual cycle does not close until 11 December, so a bonus can be handed over for a cycle still running. Neither this calculator nor the MTPS service asks whether that happened: the ministry's form asks only about the cycle that closed. Inside those eight weeks a reader who already collected may see a proportional line for money they have. Closing it needs a second question and a rule for which cycle an anticipated payment discharges, and no text supplies either.",
   }],
 });
 
@@ -1526,7 +1554,7 @@ export const RULES = {
   dailySalaryDivisor, accrualYearDays,
   vacationDaysPerYear, vacationSurcharge, vacationProportionalOnExit, vacationUnmodelled,
   aguinaldoScale, aguinaldoScaleOnExit, aguinaldoCutoff, aguinaldoCycleStart,
-  aguinaldoPaymentWindow, aguinaldoTaxExemption,
+  aguinaldoPaymentWindow, aguinaldoTaxExemption, aguinaldoAnticipatedPayment,
   quincena25SalaryCeiling, quincena25Rate, quincena25Exempt, quincena25Window,
   quincena25MandatoryFrom,
   withholdingTables, recalcTables, recalcMonths,
@@ -1580,6 +1608,7 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "dailySalaryDivisor", "accrualYearDays",
     "vacationDaysPerYear", "vacationSurcharge", "vacationProportionalOnExit", "vacationUnmodelled",
     "aguinaldoScale", "aguinaldoScaleOnExit", "aguinaldoCutoff", "aguinaldoCycleStart",
+    "aguinaldoAnticipatedPayment",
     "quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt", "quincena25Window",
     "quincena25MandatoryFrom",
   ],
@@ -1589,7 +1618,7 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
   aguinaldo: [
     "dailySalaryDivisor", "accrualYearDays",
     "aguinaldoScale", "aguinaldoScaleOnExit", "aguinaldoCutoff", "aguinaldoCycleStart",
-    "aguinaldoPaymentWindow", "aguinaldoTaxExemption",
+    "aguinaldoPaymentWindow", "aguinaldoTaxExemption", "aguinaldoAnticipatedPayment",
   ],
   overtime: [
     "dailySalaryDivisor", "nightWindow", "shiftLimits", "minorOvertimeLimit", "overtimeFactors",

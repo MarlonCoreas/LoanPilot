@@ -309,6 +309,16 @@ Lo que queda **fuera de alcance** —las `NOT MODELLED`— no cabe en una insign
 y conviene tenerlo escrito entero, porque es lo único del inventario que un
 lector necesita en prosa:
 
+- **`aguinaldoAnticipatedPayment`** (art. 200 reformado). La ventana de pago
+  abre el 20 de octubre y el ciclo de devengo no cierra hasta el 11 de
+  diciembre, así que durante ocho semanas al año se puede cobrar el aguinaldo de
+  un ciclo que todavía corre. Nadie pregunta por eso: el formulario del MTPS
+  solo pregunta por «el año anterior», que es el ciclo que YA cerró, y esta
+  calculadora hereda el hueco porque sigue al ministerio. Dentro de esa ventana,
+  quien ya cobró puede ver una línea proporcional por dinero que ya tiene. Es la
+  dirección que este proyecto trata como la grave —sobrestimar—, así que se
+  advierte en pantalla. Cerrarlo pide una segunda pregunta y un criterio sobre
+  qué ciclo descarga un pago anticipado; ningún texto da ninguno de los dos.
 - **`vacationUnmodelled`** (Código de Trabajo arts. 180 y 184). El artículo 180
   exige 200 días trabajados en el año para devengar vacación, y el formulario
   nunca pregunta cuántos días se trabajaron. El 184 suma 25% por alojamiento y
@@ -416,25 +426,19 @@ calcula.
   comentario del repositorio.
 - **`aguinaldoCycleStart`.** Los arts. 196 a 202 fijan la fecha de corte y la
   ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado»,
-  pero ninguno dice sobre qué período corre esa proporción. Ya no es sólo una
-  laguna: son dos lecturas vivas. El módulo corre la proporción sobre el año
-  calendario; la constancia del MTPS reconcilia únicamente con un ciclo desde
-  el 12 de diciembre. **La evidencia disponible apunta a la lectura que no se
-  aplica**, y eso está escrito en la ficha en vez de suavizado: para una
-  renuncia el 24 de diciembre de 2025 con el aguinaldo ya cobrado, la constancia
-  imprime $21.15, que son 19 días de escala sobre los 13 corridos desde el 12 de
-  diciembre, y ningún otro número entero de días llega a esa cifra. El respaldo
-  de la lectura aplicada es más delgado: la publicación del MTPS dice que el
-  pago anticipado debe entregarse *completo*, lo cual habla del monto y no del
-  período. El valor no se mueve todavía por dos razones provisionales —la
-  constancia es de diciembre de 2025, dos meses después de que el D.L. 433
-  corriera el corte, y un solo documento contra una inferencia es base delgada
-  para mover todos los proporcionales fijados— y queda pendiente un segundo dato
-  de la calculadora en línea del MTPS. La línea de aguinaldo de la constancia
-  **ya se compara**: `tests/aguinaldo.test.mjs` reproduce los $21.15 bajo el
-  ciclo de diciembre y `tests/statutory.test.mjs` fija el cero bajo el
-  calendario, de modo que la divergencia no puede desplazarse sin que algo
-  falle.
+  pero ninguno dice sobre qué período corre esa proporción. **Lo resolvió el
+  propio MTPS**: su calculadora en línea imprime el período de cada renglón que
+  devuelve, y todos dicen `12/12/AAAA - 11/12/AAAA`. Cinco casos corridos el 20
+  de agosto de 2026, todos posteriores a la reforma, más la constancia de
+  diciembre de 2025, reproducidos al centavo. El ciclo dejó de ser una pregunta.
+  Hasta entonces este sitio aplicaba el año calendario y decía que lo respaldaba
+  el ministerio; eso era una inferencia sobre una nota que habla del monto del
+  pago anticipado y no de su período, y el respaldo estaba sobrestimado. La
+  ficha pasó de «en disputa» a «sin fuente», que es su forma real: un silencio
+  del texto que una institución llena, sin nada que contraponerle. El cambio no
+  es un valor: un finiquito puede deber el aguinaldo entero del ciclo que cerró
+  sin pagarse **y** la fracción del que abrió después, así que la calculadora
+  devuelve dos renglones donde antes devolvía uno.
 - **`vacationProportionalOnExit`.** El art. 187 reconoce la vacación
   proporcional cuando la terminación es con responsabilidad patronal o hay
   despido de hecho, y para quien renuncia menciona sólo la vacación del año

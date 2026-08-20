@@ -42,13 +42,14 @@ const copy = {
     salary: "Salario mensual ordinario", salaryHint: "Incluye comisiones habituales promediadas, si aplican.",
     cause: "Forma de terminación", dismissal: "Despido injustificado", resignation: "Renuncia voluntaria",
     sector: "Sector económico del empleador", pendingDays: "Días de salario pendientes",
-    unusedVacation: "Períodos completos de vacaciones pendientes", aguinaldoPaid: "El aguinaldo de este año ya fue pagado",
+    unusedVacation: "Períodos completos de vacaciones pendientes", aguinaldoPaid: "Ya se pagó el aguinaldo del ciclo anterior (el que cerró el 11 de diciembre)",
     service: "Antigüedad estimada", year: "año", yearPlural: "años", month: "mes", monthPlural: "meses",
     period: "período cumplido", periodPlural: "períodos cumplidos", daysLabel: "días",
     completedPeriodsLead: "Llevás", completedPeriodsTail: "; ingresá solo los que no te hayan pagado.",
     total: "Total bruto estimado", indemnity: "Indemnización / prestación",
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
     vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
+    aguinaldoComplete: "Aguinaldo completo (ciclo cerrado sin pagar)", aguinaldoFraction: "Aguinaldo proporcional",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499): el art. 2 la fija en el 50% del salario mensual y solo para quien gana $1,500 o menos, y el art. 1 manda pagarla íntegra, sin retención ni descuento de ninguna clase. Es obligatoria para el patrono privado desde 2027. Se incluye en este cálculo porque la terminación cae dentro de la ventana del art. 3: «antes del veinticinco de enero o en esa misma fecha».",
     quincena25OutsideLead: "Cumplís todo lo demás para la Quincena 25 —despido, salario dentro del tope y fecha dentro del régimen— pero la terminación queda fuera de la ventana del art. 3, que nombra a quien sale «antes del veinticinco de enero o en esa misma fecha». Aquí se aplica esa lectura estricta y la línea es cero. La lectura amplia, la que remite a las reglas del aguinaldo, habría pagado",
@@ -187,13 +188,14 @@ const copy = {
     salary: "Ordinary monthly salary", salaryHint: "Include averaged recurring commissions, when applicable.",
     cause: "How employment ends", dismissal: "Unjustified dismissal", resignation: "Voluntary resignation",
     sector: "Employer's economic sector", pendingDays: "Unpaid salary days",
-    unusedVacation: "Complete unused vacation periods", aguinaldoPaid: "This year's year-end bonus was already paid",
+    unusedVacation: "Complete unused vacation periods", aguinaldoPaid: "The previous cycle's year-end bonus was already paid",
     service: "Estimated service", year: "year", yearPlural: "years", month: "month", monthPlural: "months",
     period: "completed period", periodPlural: "completed periods", daysLabel: "days",
     completedPeriodsLead: "You have", completedPeriodsTail: "; enter only the ones you were never paid.",
     total: "Estimated gross total", indemnity: "Severance / benefit",
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
     vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
+    aguinaldoComplete: "Complete year-end bonus (closed cycle, unpaid)", aguinaldoFraction: "Proportional year-end bonus",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499): article 2 sets it at 50% of the monthly salary and only for those earning $1,500 or less, and article 1 requires it to be paid in full, with no withholding or deduction of any kind. It is mandatory for private employers from 2027. It is included in this calculation because the termination falls inside the window of article 3: \"antes del veinticinco de enero o en esa misma fecha\".",
     quincena25OutsideLead: "You meet everything else for the Quincena 25 — dismissal, salary within the ceiling, a date inside the regime — but the termination falls outside the window of article 3, which names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\". That strict reading is the one applied here, and the line is zero. The broad reading, the one referring to the year-end bonus rules, would have paid",
@@ -493,7 +495,9 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const [sector, setSector] = useState<WageSector>((shared.sec as WageSector) ?? "commerce");
   const [pendingDays, setPendingDays] = useState(shared.dp ?? "10");
   const [unusedVacation, setUnusedVacation] = useState(shared.vac ?? "0");
-  const [aguinaldoPaid, setAguinaldoPaid] = useState(shared.agp === "1");
+  // See the same default on /aguinaldo/: collected is the ordinary case, and
+  // the other way round adds a whole bonus to a figure somebody negotiates with.
+  const [aguinaldoPaid, setAguinaldoPaid] = useState(shared.agp !== "0");
   const [gross, setGross] = useState(shared.br ?? "900");
   const [frequency, setFrequency] = useState<PayFrequency>((shared.fr as PayFrequency) ?? "monthly");
   // The three switches default to on, so a link only ever turns one off — an
@@ -652,7 +656,12 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
         money.format(settlement.indemnity)],
       [t.vacationComplete, `${days(settlement.completeVacationDays)} · ${atRate(settlement.dailySalary, true)}`, money.format(settlement.completeVacation)],
       [t.vacationFraction, `${days(settlement.proportionalVacationDays)} · ${atRate(settlement.dailySalary, true)}`, money.format(settlement.proportionalVacation)],
-      [t.aguinaldo, `${days(settlement.aguinaldoDays)} · ${atRate(settlement.dailySalary)}`, money.format(settlement.aguinaldo)],
+      ...(settlement.aguinaldoOwedClosedCycle
+        ? [[t.aguinaldoComplete, `${days(settlement.aguinaldoCompleteDays)} · ${atRate(settlement.dailySalary)}`,
+            money.format(settlement.aguinaldoComplete)]]
+        : []),
+      [t.aguinaldoFraction, `${days(settlement.aguinaldoProportionalDays)} · ${atRate(settlement.dailySalary)}`,
+        money.format(settlement.aguinaldoProportional)],
       [t.pendingSalary, `${number(pendingDays)} ${t.daysLabel} · ${atRate(settlement.dailySalary)}`, money.format(settlement.pendingSalary)],
     ];
     if (settlement.quincena25Applies) lines.push([t.quincena25, "", money.format(settlement.quincena25)]);
@@ -669,7 +678,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
     ];
     if (settlement.proportionalVacationDisputed) notes.push(t.pdfDisputedVacation);
     if (settlement.aguinaldoScaleAmbiguous) {
-      notes.push(`${t.aguinaldoAmbiguousLead} (${settlement.aguinaldoScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldo)} ${t.aguinaldoAmbiguousMid} (${settlement.aguinaldoAlternativeScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldoAlternative)} ${t.aguinaldoAmbiguousTail}`);
+      notes.push(`${t.aguinaldoAmbiguousLead} (${settlement.aguinaldoScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldoProportional)} ${t.aguinaldoAmbiguousMid} (${settlement.aguinaldoAlternativeScaleDays} ${t.daysLabel}): ${money.format(settlement.aguinaldoAlternative)} ${t.aguinaldoAmbiguousTail}`);
     }
     if (settlement.quincena25Applies) notes.push(t.quincena25Note);
     // The zero the restrictive reading produced, and what the broad one would
@@ -817,7 +826,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
           <div className="results-kicker">{t.result}</div>
           {settlement.invalid ? <div className="warning">! {t.invalidDates}</div> : <>
             <div className="result-headline"><span>{t.total}</span><strong>{money.format(settlement.total)}</strong><small>{t.service}: {serviceLabel(settlement, t)}</small></div>
-            <div className="result-tiles"><div className="highlight"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacationComplete}</span><b>{money.format(settlement.completeVacation)}</b><i>{settlement.completeVacationDays.toFixed(2)} {t.daysLabel}</i></div><div><span>{t.vacationFraction}</span><b>{money.format(settlement.proportionalVacation)}</b><i>{settlement.proportionalVacationDays.toFixed(2)} {t.daysLabel}</i></div><div><span>{t.aguinaldo}</span><b>{money.format(settlement.aguinaldo)}</b></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
+            <div className="result-tiles"><div className="highlight"><span>{t.indemnity}</span><b>{money.format(settlement.indemnity)}</b></div><div><span>{t.vacationComplete}</span><b>{money.format(settlement.completeVacation)}</b><i>{settlement.completeVacationDays.toFixed(2)} {t.daysLabel}</i></div><div><span>{t.vacationFraction}</span><b>{money.format(settlement.proportionalVacation)}</b><i>{settlement.proportionalVacationDays.toFixed(2)} {t.daysLabel}</i></div>{settlement.aguinaldoOwedClosedCycle && <div><span>{t.aguinaldoComplete}</span><b>{money.format(settlement.aguinaldoComplete)}</b><i>{settlement.aguinaldoCompleteDays.toFixed(2)} {t.daysLabel}</i></div>}<div><span>{t.aguinaldoFraction}</span><b>{money.format(settlement.aguinaldoProportional)}</b><i>{settlement.aguinaldoProportionalDays.toFixed(2)} {t.daysLabel}</i></div><div><span>{t.pendingSalary}</span><b>{money.format(settlement.pendingSalary)}</b></div>{settlement.quincena25Applies && <div><span>{t.quincena25}</span><b>{money.format(settlement.quincena25)}</b></div>}</div>
             <div className="result-facts"><div><span>{t.dailyBase}</span><b>{money.format(settlement.indemnityBaseDaily)}</b></div><div><span>{t.vacationDays}</span><b>{settlement.vacationDays.toFixed(2)}</b><small>{t.vacation}: {money.format(settlement.vacation)}</small></div></div>
             {settlement.minimumWagePredatesTables && <div className="callout warn"><span>!</span><p>{t.wageOutOfRange}</p></div>}
             {/* Only inside the window where the two readings of the article 198
@@ -828,7 +837,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
                 vacación proporcional en renuncia. Se describe la diferencia y
                 se nombra la lectura aplicada, sin afirmar cuál rige. */}
             {settlement.proportionalVacationDisputed && <div className="callout"><span>?</span><p>{t.pdfDisputedVacation} <DisputeLink rule="vacationProportionalOnExit" /></p></div>}
-            {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldo)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
+            {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoProportional)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
             {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note} <DisputeLink rule="quincena25Window" /></p></div>}
             {/* Qualified on every count except the date. The rule's own note has
                 promised since it was written that the broad reading is named on
