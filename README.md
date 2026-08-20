@@ -317,13 +317,17 @@ lector necesita en prosa:
 - **`aguinaldoAnticipatedPayment`** (art. 200 reformado). La ventana de pago
   abre el 20 de octubre y el ciclo de devengo no cierra hasta el 11 de
   diciembre, así que durante ocho semanas al año se puede cobrar el aguinaldo de
-  un ciclo que todavía corre. Nadie pregunta por eso: el formulario del MTPS
-  solo pregunta por «el año anterior», que es el ciclo que YA cerró, y esta
-  calculadora hereda el hueco porque sigue al ministerio. Dentro de esa ventana,
-  quien ya cobró puede ver una línea proporcional por dinero que ya tiene. Es la
-  dirección que este proyecto trata como la grave —sobrestimar—, así que se
-  advierte en pantalla. Cerrarlo pide una segunda pregunta y un criterio sobre
-  qué ciclo descarga un pago anticipado; ningún texto da ninguno de los dos.
+  un ciclo que todavía corre. **Eso sí se modela**: dentro de esa ventana el
+  formulario ofrece una tercera respuesta —«un adelanto del ciclo que corre»— y
+  la línea proporcional se va a cero, porque el MTPS dice que un adelanto debe
+  entregarse completo y un aguinaldo completo no deja nada por devengar. Lo que
+  queda fuera es el otro lado: si el patrono puede recuperar la diferencia de
+  quien cobró entero y se fue a mitad del ciclo. Ningún texto lo dice y esta
+  calculadora no lo va a contestar —estima lo que se le debe AL trabajador, y
+  cero es el piso; un renglón negativo sería un reclamo contra el lector hecho
+  sin autoridad ninguna—. El servicio del MTPS pregunta sólo por el ciclo que
+  cerró, así que éste es uno de los pocos lugares donde seguir al ministerio
+  sobrestimaría y el proyecto no lo hace.
 - **`vacationUnmodelled`** (Código de Trabajo arts. 180 y 184). El artículo 180
   exige 200 días trabajados en el año para devengar vacación, y el formulario
   nunca pregunta cuántos días se trabajaron. El 184 suma 25% por alojamiento y

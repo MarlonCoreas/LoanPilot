@@ -41,8 +41,11 @@ const copy = {
     data: "Datos del empleo", result: "Estimación bruta", start: "Fecha de ingreso", end: "Último día de trabajo",
     salary: "Salario mensual ordinario", salaryHint: "Incluye comisiones habituales promediadas, si aplican.",
     cause: "Forma de terminación", dismissal: "Despido injustificado", resignation: "Renuncia voluntaria",
+    helpCause: "Elegí «renuncia» sólo si te fuiste por tu propia decisión. Todo lo demás se calcula como despido: mutuo acuerdo, cierre de la empresa, recorte de personal, disminución de obra. Lo comprobamos en el servicio del MTPS en agosto de 2026 —una terminación por mutuo acuerdo devuelve exactamente la misma cifra que un despido— y la diferencia es grande: sobre un salario de $900 con seis años de servicio son $5,851 contra $2,621, porque la renuncia se rige por la Ley 592, que paga 15 días por año con tope de dos salarios mínimos diarios, y el despido por el artículo 58, que paga 30 con tope de cuatro.",
     sector: "Sector económico del empleador", pendingDays: "Días de salario pendientes",
-    unusedVacation: "Períodos completos de vacaciones pendientes", aguinaldoPaid: "Ya se pagó el aguinaldo del ciclo anterior (el que cerró el 11 de diciembre)",
+    unusedVacation: "Períodos completos de vacaciones pendientes", aguinaldoCollected: "Aguinaldo ya cobrado",
+    collectedNone: "Ninguno", collectedClosed: "El del ciclo anterior", collectedAdvance: "Un adelanto del ciclo que corre",
+    helpCollected: "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre. «El del ciclo anterior» es el que cerró el 11 de diciembre pasado y se cobró en su ventana; descontarlo deja sólo lo devengado del ciclo que corre. «Un adelanto» sólo aparece si la salida cae entre el 20 de octubre y el 11 de diciembre, que es cuando la ley deja pagar por adelantado un ciclo sin cerrar: si eso pasó, el patrono debió entregarlo completo y no queda nada por devengar de ese ciclo.",
     service: "Antigüedad estimada", year: "año", yearPlural: "años", month: "mes", monthPlural: "meses",
     period: "período cumplido", periodPlural: "períodos cumplidos", daysLabel: "días",
     completedPeriodsLead: "Llevás", completedPeriodsTail: "; ingresá solo los que no te hayan pagado.",
@@ -50,7 +53,7 @@ const copy = {
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
     vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
     aguinaldoComplete: "Aguinaldo completo (ciclo cerrado sin pagar)", aguinaldoFraction: "Aguinaldo proporcional",
-    aguinaldoAnticipatedNote: "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre, pero la ley deja pagarlo desde el 20 de octubre. Si esta salida cae en esa ventana y ya se había cobrado un aguinaldo ADELANTADO del ciclo que todavía corre, la línea proporcional de arriba puede estar contando días ya pagados. La casilla pregunta por el ciclo anterior, que es otro; ni esta calculadora ni la del MTPS preguntan por el adelanto.",
+    aguinaldoAnticipatedNote: "Esta salida cae entre el 20 de octubre y el 11 de diciembre, la ventana en la que la ley deja pagar por adelantado un aguinaldo cuyo ciclo todavía no cierra. Si ya se cobró ese adelanto, la línea proporcional de arriba está contando días ya pagados: marcá «Un adelanto del ciclo que corre» arriba y la cifra se corrige. El servicio del MTPS no hace esta pregunta, así que su cálculo tampoco lo descuenta.",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499): el art. 2 la fija en el 50% del salario mensual y solo para quien gana $1,500 o menos, y el art. 1 manda pagarla íntegra, sin retención ni descuento de ninguna clase. Es obligatoria para el patrono privado desde 2027. Se incluye en este cálculo porque la terminación cae dentro de la ventana del art. 3: «antes del veinticinco de enero o en esa misma fecha».",
     quincena25OutsideLead: "Cumplís todo lo demás para la Quincena 25 —despido, salario dentro del tope y fecha dentro del régimen— pero la terminación queda fuera de la ventana del art. 3, que nombra a quien sale «antes del veinticinco de enero o en esa misma fecha». Aquí se aplica esa lectura estricta y la línea es cero. La lectura amplia, la que remite a las reglas del aguinaldo, habría pagado",
@@ -188,8 +191,11 @@ const copy = {
     data: "Employment details", result: "Gross estimate", start: "Employment start date", end: "Last day worked",
     salary: "Ordinary monthly salary", salaryHint: "Include averaged recurring commissions, when applicable.",
     cause: "How employment ends", dismissal: "Unjustified dismissal", resignation: "Voluntary resignation",
+    helpCause: "Pick \"resignation\" only if leaving was your own decision. Everything else is priced as a dismissal: mutual agreement, company closure, staff reduction, reduced work. We checked this against the MTPS service in August 2026 — a termination by mutual agreement returns exactly the same figure as a dismissal — and the gap is large: on a $900 salary with six years of service it is $5,851 against $2,621, because a resignation is governed by Law 592, which pays 15 days a year capped at two daily minimum wages, and a dismissal by article 58, which pays 30 capped at four.",
     sector: "Employer's economic sector", pendingDays: "Unpaid salary days",
-    unusedVacation: "Complete unused vacation periods", aguinaldoPaid: "The previous cycle's year-end bonus was already paid",
+    unusedVacation: "Complete unused vacation periods", aguinaldoCollected: "Year-end bonus already collected",
+    collectedNone: "None", collectedClosed: "The previous cycle's", collectedAdvance: "An advance on the running cycle",
+    helpCollected: "The bonus accrues from 12 December to 11 December. \"The previous cycle's\" is the one that closed last 11 December and was collected in its window; taking it off leaves only what the running cycle has accrued. \"An advance\" appears only when the departure falls between 20 October and 11 December, which is when the law allows an unclosed cycle to be paid early: if that happened, the employer had to hand over the whole of it and nothing of that cycle is left to accrue.",
     service: "Estimated service", year: "year", yearPlural: "years", month: "month", monthPlural: "months",
     period: "completed period", periodPlural: "completed periods", daysLabel: "days",
     completedPeriodsLead: "You have", completedPeriodsTail: "; enter only the ones you were never paid.",
@@ -197,7 +203,7 @@ const copy = {
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
     vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
     aguinaldoComplete: "Complete year-end bonus (closed cycle, unpaid)", aguinaldoFraction: "Proportional year-end bonus",
-    aguinaldoAnticipatedNote: "The bonus accrues from 12 December to 11 December, but the law allows it to be paid from 20 October. If this departure falls inside that window and an EARLY bonus for the still-running cycle had already been collected, the proportional line above may be counting days already paid. The checkbox asks about the previous cycle, which is a different one; neither this calculator nor the MTPS service asks about the advance.",
+    aguinaldoAnticipatedNote: "This departure falls between 20 October and 11 December, the window in which the law allows a bonus to be paid early for a cycle that has not closed. If that advance was collected, the proportional line above is counting days already paid: pick \"an advance on the running cycle\" above and the figure corrects itself. The MTPS service does not ask this, so its calculation does not deduct it either.",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499): article 2 sets it at 50% of the monthly salary and only for those earning $1,500 or less, and article 1 requires it to be paid in full, with no withholding or deduction of any kind. It is mandatory for private employers from 2027. It is included in this calculation because the termination falls inside the window of article 3: \"antes del veinticinco de enero o en esa misma fecha\".",
     quincena25OutsideLead: "You meet everything else for the Quincena 25 — dismissal, salary within the ceiling, a date inside the regime — but the termination falls outside the window of article 3, which names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\". That strict reading is the one applied here, and the line is zero. The broad reading, the one referring to the year-end bonus rules, would have paid",
@@ -459,6 +465,7 @@ const SETTLEMENT_SHARE: ShareSchema = {
   dp: { kind: "int", max: 31 },
   vac: { kind: "int", max: 50 },
   agp: { kind: "flag" },
+  agd: { kind: "flag" },
 };
 
 const PAYROLL_SHARE: ShareSchema = {
@@ -499,7 +506,17 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const [unusedVacation, setUnusedVacation] = useState(shared.vac ?? "0");
   // See the same default on /aguinaldo/: collected is the ordinary case, and
   // the other way round adds a whole bonus to a figure somebody negotiates with.
+  // Three states out of two flags, which is what the arithmetic actually takes:
+  // `agp` settles the closed cycle and `agd` the running one. Kept as two share
+  // fields rather than one option so links made before the advance existed keep
+  // decoding to exactly the figure they were made with.
   const [aguinaldoPaid, setAguinaldoPaid] = useState(shared.agp !== "0");
+  const [aguinaldoAdvance, setAguinaldoAdvance] = useState(shared.agd === "1");
+  const collected = aguinaldoAdvance ? "advance" : aguinaldoPaid ? "closed" : "none";
+  const setCollected = (value: "none" | "closed" | "advance") => {
+    setAguinaldoPaid(value !== "none");
+    setAguinaldoAdvance(value === "advance");
+  };
   const [gross, setGross] = useState(shared.br ?? "900");
   const [frequency, setFrequency] = useState<PayFrequency>((shared.fr as PayFrequency) ?? "monthly");
   // The three switches default to on, so a link only ever turns one off — an
@@ -527,7 +544,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const shareValues: ShareValues = tool === "settlement"
     ? {
       cau: termination, de: startDate, ha: endDate, sal: monthlySalary,
-      sec: sector, dp: pendingDays, vac: unusedVacation, agp: aguinaldoPaid ? "1" : "0",
+      sec: sector, dp: pendingDays, vac: unusedVacation, agp: aguinaldoPaid ? "1" : "0", agd: aguinaldoAdvance ? "1" : "0",
     }
     : {
       mo: payrollMode, br: gross, fr: frequency, an: annualGross, aa: annualAfp, nc: nonContributory,
@@ -540,7 +557,8 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
   const settlement = useMemo(() => calculateSettlement({
     startDate, endDate, monthlySalary: number(monthlySalary), sector, termination,
     pendingSalaryDays: number(pendingDays), unusedVacationPeriods: number(unusedVacation), aguinaldoPaid,
-  }), [aguinaldoPaid, endDate, monthlySalary, pendingDays, sector, startDate, termination, unusedVacation]);
+    aguinaldoAdvance,
+  }), [aguinaldoAdvance, aguinaldoPaid, endDate, monthlySalary, pendingDays, sector, startDate, termination, unusedVacation]);
   const payroll = useMemo(() => calculatePayrollWithholding({ gross: number(gross), frequency, includeAfp, includeIsss, applyFixedDeduction, annualGross: number(annualGross), annualAfp: number(annualAfp), nonContributoryPay: number(nonContributory) }), [annualAfp, annualGross, applyFixedDeduction, frequency, gross, includeAfp, includeIsss, nonContributory]);
   // What the same pay would withhold under the pre-2025 reading, where the
   // tables were said to already contain the $1,600. Shown only when it differs,
@@ -706,7 +724,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
             [t.sector, sectorLabels[lang][sector]],
             [t.pendingDays, String(number(pendingDays))],
             [t.unusedVacation, String(settlement.completeVacationPeriods)],
-            [t.aguinaldoPaid, aguinaldoPaid ? t.pdfYes : t.pdfNo],
+            [t.aguinaldoCollected, collected === "advance" ? t.collectedAdvance : collected === "closed" ? t.collectedClosed : t.collectedNone],
             [t.service, `${serviceLabel(settlement, t)} · ${settlement.serviceDays} ${t.daysLabel}`],
           ],
         },
@@ -812,7 +830,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
         <div className="form-panel">
           <div className="section-title"><span>01</span><div><h2>{t.data}</h2><p>{lang === "es" ? "Sector privado regido por el Código de Trabajo" : "Private sector governed by the Labor Code"}</p></div></div>
           <div className="field-grid">
-            <SegmentedField full label={t.cause} lang={lang} value={termination} onChange={setTermination}
+            <SegmentedField full label={t.cause} lang={lang} value={termination} onChange={setTermination} help={t.helpCause}
               options={[{ value: "dismissal", label: t.dismissal }, { value: "resignation", label: t.resignation }] as const} /><DateField label={t.start} lang={lang} value={startDate} onChange={setStartDate} min={EARLIEST_EMPLOYMENT_DATE} max={endDate} help={t.helpStart} />
             <DateField label={t.end} lang={lang} value={endDate} onChange={setEndDate} min={startDate} max={LATEST_END_DATE} help={t.helpEnd} />
             <MoneyField label={t.salary} lang={lang} value={monthlySalary} onChange={setMonthlySalary} note={t.salaryHint} help={t.helpSalary} />
@@ -822,7 +840,17 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
             <NumberField label={t.unusedVacation} lang={lang} value={unusedVacation} onChange={setUnusedVacation} max="50" help={t.helpUnusedVacation}
               note={settlement.invalid ? undefined : completedPeriodsNote(settlement.completedYears, t)} />
           </div>
-          <CheckField label={t.aguinaldoPaid} checked={aguinaldoPaid} onChange={setAguinaldoPaid} />
+          <SegmentedField full label={t.aguinaldoCollected} lang={lang} value={collected}
+              onChange={setCollected} help={t.helpCollected}
+              options={[
+                { value: "none", label: t.collectedNone },
+                { value: "closed", label: t.collectedClosed },
+                // Offered only where it can have happened: outside the window
+                // `calculateAguinaldo` ignores the flag anyway, so showing it
+                // would be a control that does nothing.
+                ...(settlement.aguinaldoInAnticipationWindow || aguinaldoAdvance
+                  ? [{ value: "advance" as const, label: t.collectedAdvance }] : []),
+              ] as const} />
         </div>
         <div className="results-panel">
           <div className="results-kicker">{t.result}</div>
@@ -839,7 +867,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
                 vacación proporcional en renuncia. Se describe la diferencia y
                 se nombra la lectura aplicada, sin afirmar cuál rige. */}
             {settlement.proportionalVacationDisputed && <div className="callout"><span>?</span><p>{t.pdfDisputedVacation} <DisputeLink rule="vacationProportionalOnExit" /></p></div>}
-            {settlement.aguinaldoInAnticipationWindow && <div className="callout warn"><span>!</span><p>{t.aguinaldoAnticipatedNote}</p></div>}
+            {settlement.aguinaldoInAnticipationWindow && !settlement.aguinaldoRunningCycleAdvanced && <div className="callout warn"><span>!</span><p>{t.aguinaldoAnticipatedNote}</p></div>}
             {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoProportional)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
             {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note} <DisputeLink rule="quincena25Window" /></p></div>}
             {/* Qualified on every count except the date. The rule's own note has

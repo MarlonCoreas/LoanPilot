@@ -623,30 +623,32 @@ export const aguinaldoCycleStart = rule<YearDay>({
 });
 
 /**
- * The anticipated payment, which neither this project nor the MTPS models.
+ * The anticipated payment: what is now asked, and the one thing still not.
  *
- * NOT MODELLED, and it is the hole the 12 December cycle opens. The payment
- * window runs from 20 October to 20 December while the cycle it pays for does
- * not close until 11 December, so for eight weeks of every year an employer can
- * hand over a bonus for a cycle still running. The MTPS says so itself: an
- * early payment is optional, and one made "debe darlo completa al trabajador".
+ * THE HOLE THE 12 DECEMBER CYCLE OPENS. The payment window runs from 20 October
+ * to 20 December while the cycle it pays for does not close until 11 December,
+ * so for eight weeks of every year an employer can hand over a bonus for a cycle
+ * still running. The MTPS says so itself: an early payment is optional, and one
+ * made "debe darlo completa al trabajador".
  *
- * NOBODY ASKS ABOUT IT. The MTPS form has one question — "¿Recibió pago de
- * aguinaldo del año anterior?" — and the year anterior is the cycle that CLOSED.
- * A worker who collected an anticipated bonus in November for the cycle running
- * to 11 December answers that question about a different cycle, and the
- * ministry's own tool then prints a proportional line for money already in
- * their pocket. This calculator inherits the gap because it follows the
- * ministry, and the interface says so where the question is asked.
+ * WHAT IS NOW MODELLED. This calculator asks. Where the dates put a departure
+ * inside that window it offers a third answer — an advance on the running cycle
+ * — and takes the proportional line to zero, because a bonus handed over whole
+ * leaves nothing of that cycle to accrue. That much needs no text: it is what
+ * the ministry's own publication says an advance is.
  *
- * WHICH DIRECTION IT ERRS. Over-statement, and only inside the window: a reader
- * who leaves between 20 October and 11 December having already collected sees a
- * proportional line they may not be owed. That is the direction this project
- * treats as the serious one — see `quincena25Window` — so it is disclosed on
- * screen rather than left to the reader to notice.
+ * WHAT IS STILL NOT MODELLED, and it is narrower than it was. Somebody who
+ * collected a whole bonus and then left mid-cycle has been paid for days they
+ * did not work, and no text says whether an employer may recover the difference.
+ * This calculator does not answer that and should not: it estimates what is owed
+ * TO the worker, and zero is the floor. A negative line would be a claim against
+ * a reader made on no authority at all.
  *
- * WHAT WOULD CLOSE IT: a second question, and a criterion for which cycle an
- * anticipated payment discharges. No text names either.
+ * THE MTPS DOES NOT ASK EITHER. Its form has one question — "¿Recibió pago de
+ * aguinaldo del año anterior?" — and the year anterior is the cycle that CLOSED,
+ * so its own proportional line prices days an advance may already have covered.
+ * This is one of the few places the project does not follow the ministry, and
+ * the reason is the direction of the error: following it here would over-state.
  */
 export const aguinaldoAnticipatedPayment = rule<{ windowOpens: YearDay; cycleCloses: YearDay }>({
   id: "aguinaldoAnticipatedPayment",
@@ -658,7 +660,7 @@ export const aguinaldoAnticipatedPayment = rule<{ windowOpens: YearDay; cycleClo
     source: "aguinaldoReform",
     reviewed: "2026-08-20",
     status: ["NOT MODELLED"],
-    note: "NOT MODELLED. The payment window opens on 20 October and the accrual cycle does not close until 11 December, so a bonus can be handed over for a cycle still running. Neither this calculator nor the MTPS service asks whether that happened: the ministry's form asks only about the cycle that closed. Inside those eight weeks a reader who already collected may see a proportional line for money they have. Closing it needs a second question and a rule for which cycle an anticipated payment discharges, and no text supplies either.",
+    note: "NOT MODELLED, and now only in one direction. The window opens on 20 October and the cycle closes on 11 December, so for eight weeks a bonus can be handed over for a cycle still running. That much IS modelled: inside the window the form offers \"an advance on the running cycle\" and the proportional line goes to zero, because the MTPS says an advance must be handed over whole and a whole bonus leaves nothing to accrue. What stays unmodelled is the other side — whether an employer may recover the difference from somebody who collected a whole bonus and left mid-cycle. No text says, and this calculator will not answer it: it estimates what is owed TO the worker and zero is the floor. The MTPS service asks only about the cycle that closed, so this is one of the few places where following the ministry would over-state and the project does not.",
   }],
 });
 
@@ -1512,10 +1514,16 @@ export const minorOvertimeLimit = rule<number>({
  * holiday "el cálculo para el pago de los recargos respectivos" is made on the
  * extraordinary salary of that day. The 25% night premium of article 168 is one
  * of those recargos, and the worked example the MTPS publishes fixes the order:
- * on an hour worth $1.50 the daytime overtime hour pays $3.00 and the night one
- * $3.74, so the 25% falls on the hour already surcharged by 100%, not on the
- * basic one. Applying that same order to the bases of 3 and 4 is what produces
- * 3.75 and 5.
+ * on an hour worth $1.50 the daytime overtime hour pays $3.00, and the night one
+ * adds the 25% to THAT rather than to the basic hour. Applying the same order to
+ * the bases of 3 and 4 is what produces 3.75 and 5.
+ *
+ * THE EXAMPLE IS A CENT OUT AND THIS DOES NOT COPY IT. The ministry writes
+ * "$0.74 (25% nocturnidad) + 3.00 = $3.74", but a quarter of $3.00 is $0.75 and
+ * the correct total is $3.75. The order it demonstrates is what this rule takes
+ * from the document; the arithmetic slip in the last line is not evidence of
+ * anything and reproducing it would put a wrong figure on a payslip check. Read
+ * back against the page on 20 August 2026 — the wording is unchanged.
  */
 export const overtimeFactors = rule<{
   overtimeDiurnal: number; overtimeNocturnal: number; nightSurcharge: number;
@@ -1554,7 +1562,7 @@ export const overtimeFactors = rule<{
     norm: "Código de Trabajo arts. 168, 169, 175 y 192",
     source: "overtimePay",
     citedThrough: "Los factores nocturnos no están en ningún artículo suelto: los arts. 175 y 192 mandan calcular los recargos sobre el salario extraordinario del día y el 168 pone el 25%, pero el ORDEN de las dos operaciones solo lo fija el ejemplo numérico que publica el MTPS. El enlace abre ese ejemplo porque es lo único que sostiene el 2.5.",
-    reviewed: "2026-08-11",
+    reviewed: "2026-08-20",
   }],
 });
 

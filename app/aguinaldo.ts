@@ -155,6 +155,28 @@ export function calculateAguinaldo(input: {
    */
   alreadyPaid?: boolean;
   /**
+   * An ADVANCE on the cycle still running was collected, which is a different
+   * thing from `alreadyPaid` and the reason this flag exists.
+   *
+   * Article 200 opens the payment window on 20 October and the cycle does not
+   * close until 11 December, so for eight weeks an employer can hand over the
+   * bonus of a cycle nobody has finished — and the MTPS says that when they do,
+   * they must hand over the whole of it. A reader who collected that and then
+   * leaves inside the window has already been paid for days this function would
+   * otherwise price again.
+   *
+   * IT IS IGNORED OUTSIDE THE WINDOW. Once the cycle reopens on 12 December
+   * there is no advance to speak of, and a stale share link carrying this flag
+   * must not zero a figure that is genuinely owed. `inAnticipationWindow` is the
+   * gate, and it is computed from the dates rather than trusted from the caller.
+   *
+   * WHAT IT DOES NOT DECIDE: whether an employer can recover the difference from
+   * somebody who collected a whole bonus and then left mid-cycle. No text says,
+   * and it is not this calculator's question — it estimates what is owed TO the
+   * worker, and zero is the floor. See `aguinaldoAnticipatedPayment`.
+   */
+  advanceOnRunningCycle?: boolean;
+  /**
    * Where the accrual cycle starts. DISPUTED — passed, never implied.
    *
    * BOTH READINGS ARE EXPRESSIBLE, which they were not. The day used to be
@@ -211,9 +233,6 @@ export function calculateAguinaldo(input: {
   const cycleFraction = workStart <= end ? daysInclusive(workStart, end) / YEAR_DAYS : 0;
   const fraction = Math.min(1, cycleFraction);
   const scaleDays = scaleOn(end);
-  const proportionalDays = workStart <= end ? scaleDays * fraction : 0;
-
-  const days = completeDays + proportionalDays;
   const reachedCutoff = end >= cutoff;
 
   // THE EIGHT WEEKS NOBODY ASKS ABOUT: the payment window is open and the cycle
@@ -222,7 +241,14 @@ export function calculateAguinaldo(input: {
   // simply that the running cycle opened before the qualifying date and the last
   // day read is past it. Once the cycle reopens on 12 December the window is
   // behind us again and `alreadyPaid` means what it says.
-  const inAnticipationWindow = reachedCutoff && cycleOpens < cutoff && proportionalDays > 0;
+  const inAnticipationWindow = reachedCutoff && cycleOpens < cutoff && cycleFraction > 0;
+  /** An advance was collected AND the dates make that possible. */
+  const runningCycleAdvanced = input.advanceOnRunningCycle === true && inAnticipationWindow;
+
+  const proportionalDays = (workStart <= end && !runningCycleAdvanced) ? scaleDays * fraction : 0;
+
+  const days = completeDays + proportionalDays;
+
 
   // The window where the two readings of the scale disagreed. The MTPS reads it
   // on the last day worked — see the note on `aguinaldoScaleOnExit` — so the
@@ -299,6 +325,8 @@ export function calculateAguinaldo(input: {
      * form nor the ministry's asks, so the interface has to say so.
      */
     inAnticipationWindow,
+    /** True when an advance was collected and is discharging the running cycle. */
+    runningCycleAdvanced,
     /** True only inside the window where the two readings of the scale differ. */
     scaleAmbiguous,
     alternativeScaleDays: scaleAmbiguous ? alternativeScaleDays : 0,

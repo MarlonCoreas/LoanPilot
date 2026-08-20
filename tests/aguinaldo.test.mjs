@@ -124,6 +124,49 @@ test("a collected bonus settles the closed cycle, and only the closed cycle", ()
   assert.equal(paid.proportionalAmount, unpaid.proportionalAmount);
 });
 
+test("an advance discharges the running cycle, and only inside the window", () => {
+  // THE EIGHT-WEEK HOLE, CLOSED AS FAR AS IT CAN BE. The window opens on
+  // 20 October and the cycle runs to 11 December, so a bonus handed over in
+  // between is an advance on a cycle nobody has finished — and the MTPS says an
+  // employer who advances it must hand over the whole thing. Somebody who
+  // collected that and then leaves inside the window has already been paid for
+  // the days this function would otherwise price a second time.
+  const inside = { startDate: "2020-01-01", endDate: "2026-11-30", monthlySalary: 900 };
+  const warned = calculateAguinaldo({ ...inside, alreadyPaid: true });
+  assert.equal(warned.inAnticipationWindow, true);
+  assert.equal(warned.proportionalAmount, 552.82, "priced, and possibly already paid");
+
+  const declared = calculateAguinaldo({ ...inside, alreadyPaid: true, advanceOnRunningCycle: true });
+  assert.equal(declared.runningCycleAdvanced, true);
+  assert.equal(declared.proportionalAmount, 0, "nothing of that cycle is left to accrue");
+  assert.equal(declared.completeAmount, 0);
+
+  // OUTSIDE THE WINDOW THE FLAG IS IGNORED, and that is a safety property rather
+  // than a nicety: once the cycle reopens on 12 December there is no advance to
+  // speak of, and a share link made in November must not zero a figure that is
+  // genuinely owed when it is opened in January.
+  for (const endDate of ["2026-06-30", "2026-12-15"]) {
+    const outside = calculateAguinaldo({
+      startDate: "2020-01-01", endDate, monthlySalary: 900,
+      alreadyPaid: true, advanceOnRunningCycle: true,
+    });
+    assert.equal(outside.inAnticipationWindow, false, endDate);
+    assert.equal(outside.runningCycleAdvanced, false, endDate);
+    assert.equal(outside.proportionalAmount,
+      calculateAguinaldo({ startDate: "2020-01-01", endDate, monthlySalary: 900, alreadyPaid: true }).proportionalAmount,
+      `${endDate}: the flag changed a figure it has no business changing`);
+  }
+
+  // The window's edges, to the day. 19 October is outside it; 20 October is the
+  // first day an advance is possible and 11 December the last.
+  const edges = [["2026-10-19", false], ["2026-10-20", true], ["2026-12-11", true], ["2026-12-12", false]];
+  for (const [endDate, expected] of edges) {
+    assert.equal(
+      calculateAguinaldo({ startDate: "2020-01-01", endDate, monthlySalary: 900 }).inAnticipationWindow,
+      expected, endDate);
+  }
+});
+
 test("the scale is read on the last day of the period being paid", () => {
   // ONE RULE, TWO PLACES, and the MTPS output separates them. Hired 1 November
   // 2023 and leaving on 15 December 2026: two completed years at the 20 October

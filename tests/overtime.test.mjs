@@ -156,7 +156,21 @@ test("the statutory factors and shift limits match the cited articles", () => {
   assert.equal(NIGHT_STARTS_AT, 19);
 });
 
-test("reproduces the MTPS worked example for one overtime hour", () => {
+test("follows the MTPS worked example on the ORDER, and not on its arithmetic slip", () => {
+  // THE EXAMPLE, VERBATIM, because the divergence has to be visible here. The
+  // ministry publishes: "$1.50 (salarios por hora) + $1.50 (recargo del 100%)
+  // = $3.00. $0.74 (25% nocturnidad) + 3.00 = $3.74 por cada hora extra
+  // nocturna."
+  //
+  // Twenty-five per cent of $3.00 is $0.75. The published figure is a cent
+  // short and the total inherits it, so this suite cannot reproduce $3.74
+  // without reproducing an arithmetic error.
+  //
+  // What the example DOES settle, and the only thing this module takes from it,
+  // is the ORDER OF OPERATIONS: the 25% of article 168 falls on the hour
+  // already surcharged by 100%, not on the basic one. That is not in any single
+  // article and nothing else states it. Applying it correctly gives 2.5 times
+  // the basic hour, which is the factor `overtimeFactors` carries.
   const result = calculateOvertime({
     ...base,
     monthlySalary: 1.5 * 8 * 30,
@@ -166,7 +180,8 @@ test("reproduces the MTPS worked example for one overtime hour", () => {
 
   assert.equal(result.hourly, 1.5);
   assert.equal(result.overtimeDiurnal, 3);
-  assert.equal(result.overtimeNocturnal, 3.75);
+  assert.equal(result.overtimeNocturnal, 3.75,
+    "2.5 x 1.50 — the ministry's own example prints 3.74 and is a cent out");
 });
 
 test("the hourly base is the daily salary over the contracted ordinary day", () => {

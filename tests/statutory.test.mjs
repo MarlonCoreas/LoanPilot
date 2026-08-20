@@ -1155,6 +1155,59 @@ test("the settlement says whether the statutory cap bit, rather than implying it
   assert.equal(under.indemnityBaseDaily, 20, "the salary is used in full");
 });
 
+test("a whole MTPS document reconciles on a resignation, total included", () => {
+  // Calculation 219640 on the ministry's service, run on 20 August 2026: hired
+  // 1 January 2020, resigned 30 June 2026, $900 a month, commerce, with neither
+  // the previous cycle's bonus nor the previous year's vacation collected.
+  //
+  // Five printed rows and the total, all reconciled. It is the strongest check
+  // in this suite: the earlier statement covered a resignation too, but this one
+  // exercises the two-line bonus, the complete vacation period and the Law 592
+  // cap in a single document, on the tool as it stands today.
+  //
+  // The MTPS asks "¿Recibió pago vacacional del año anterior?" where this form
+  // asks for complete unused periods; answering No there is one period here.
+  const r = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "resignation", unusedVacationPeriods: 1,
+  });
+  assert.equal(r.indemnity, 2621.35, "15 days a year capped at two daily minimum wages");
+  assert.equal(r.proportionalVacation, 290.10);
+  assert.equal(r.completeVacation, 585.00);
+  assert.equal(r.aguinaldoComplete, 570.00, "the closed cycle is owed on a resignation too");
+  assert.equal(r.aguinaldoProportional, 313.89);
+  assert.equal(r.total, 4380.34, "SUMA TOTAL");
+});
+
+test("everything except a voluntary resignation is priced as a dismissal", () => {
+  // The MTPS offers eleven reasons and prices ten of them alike: a termination
+  // POR MUTUO ACUERDO returns $5,851.23 of indemnización, to the cent the same
+  // as POR DESPIDO on identical dates. Only POR RENUNCIA differs, because only
+  // it is governed by Law 592.
+  //
+  // This form offers two options, which is enough to cover all eleven — but only
+  // if the reader picks the right one, and somebody who agreed to leave may well
+  // read "renuncia" as describing them. That is a $3,229.88 under-statement on
+  // this case, so the field carries help text saying which is which. This pins
+  // the arithmetic the help text promises.
+  const shared = {
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", unusedVacationPeriods: 1,
+  };
+  const asDismissal = calculateSettlement({ ...shared, termination: "dismissal" });
+  const asResignation = calculateSettlement({ ...shared, termination: "resignation" });
+  assert.equal(asDismissal.indemnity, 5851.23, "article 58: 30 days a year, cap of four");
+  assert.equal(asResignation.indemnity, 2621.35, "Law 592: 15 days a year, cap of two");
+  assert.equal(round(asDismissal.indemnity - asResignation.indemnity), 3229.88,
+    "what picking the wrong option costs, and what the help text exists to prevent");
+
+  // Every other line is identical between the two, which is why the choice
+  // reads as harmless and is not.
+  for (const line of ["completeVacation", "proportionalVacation", "aguinaldoComplete", "aguinaldoProportional"]) {
+    assert.equal(asDismissal[line], asResignation[line], line);
+  }
+});
+
 test("the article 187 divergence is flagged on the cases it actually touches", () => {
   // Article 187 grants the part-year of vacation to dismissal and, read
   // literally, gives someone who resigns only the years already completed. The

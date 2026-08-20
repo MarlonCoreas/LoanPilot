@@ -279,6 +279,17 @@ export const OFFICIAL = {
   // of rubbish before the `%PDF` header, so `file` calls it "data" and poppler
   // refuses it until the prefix is cut. The text layer underneath is real, not
   // a scan: arts. 14, 16, 26 and 138 were read straight out of it.
+  // EL SERVIDOR DE LA SSF FALLA TLS DE FORMA INTERMITENTE, y no es este enlace.
+  // A agosto de 2026 `ssf.gob.sv` responde a veces 200 y a veces rechaza la
+  // conexión con "no alternative certificate subject name matches target host
+  // name": el certificado que sirve alguno de sus nodos no cubre ese nombre.
+  // Afecta a las dos entradas de este dominio y puede mostrarle al lector una
+  // advertencia del navegador.
+  //
+  // NO SE ARREGLA CAMBIANDO LA URL. El documento es el correcto y el problema
+  // es del otro lado; sustituirlo por una copia en otro dominio rompería la
+  // regla del encabezado de este archivo —toda fuente vive en `.gob.sv`— y
+  // cambiaría un documento oficial por uno que nadie administra.
   pensions: "https://ssf.gob.sv/wp-content/uploads/2023/02/Ley-Integral-del-Sistema-de-Pensiones.pdf",
   ssf: "https://ssf.gob.sv/servicios/tasas-de-interes-comisiones-y-recargos/",
   treasury: "https://www.mh.gob.sv/modificacion-a-las-tablas-de-retencion-del-impuesto-sobre-la-renta-decreto-ejecutivo-no-10/",

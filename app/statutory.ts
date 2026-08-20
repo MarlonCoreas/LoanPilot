@@ -129,6 +129,8 @@ export function calculateSettlement(input: {
   pendingSalaryDays?: number;
   unusedVacationPeriods?: number;
   aguinaldoPaid?: boolean;
+  /** An advance on the still-running cycle was collected. See `calculateAguinaldo`. */
+  aguinaldoAdvance?: boolean;
 }) {
   const start = utcDate(input.startDate);
   const end = utcDate(input.endDate);
@@ -147,6 +149,7 @@ export function calculateSettlement(input: {
     aguinaldoCompleteDays: 0, aguinaldoComplete: 0, aguinaldoProportionalDays: 0,
     aguinaldoProportional: 0, aguinaldoOwedClosedCycle: false,
     aguinaldoCycleStartDate: "", aguinaldoClosedCycleEndDate: "", aguinaldoInAnticipationWindow: false,
+    aguinaldoRunningCycleAdvanced: false,
     aguinaldoAlternativeScaleDays: 0, aguinaldoAlternativeDays: 0, aguinaldoAlternative: 0,
     quincena25: 0, quincena25Applies: false, total: 0,
     appliedRules: [] as RuleId[], startDate: "", endDate: "",
@@ -231,6 +234,7 @@ export function calculateSettlement(input: {
     endDate: input.endDate,
     monthlySalary: salary,
     alreadyPaid: input.aguinaldoPaid,
+    advanceOnRunningCycle: input.aguinaldoAdvance,
   });
   // The two printed lines, summed the way they are printed. It used to take the
   // unrounded figure so the total rounded once at the end; with the bonus now
@@ -386,6 +390,8 @@ export function calculateSettlement(input: {
     aguinaldoProportional: bonus.proportionalAmount,
     aguinaldoOwedClosedCycle: bonus.owedClosedCycle,
     aguinaldoInAnticipationWindow: bonus.inAnticipationWindow,
+    /** True when an advance is discharging the running cycle rather than a warning being shown. */
+    aguinaldoRunningCycleAdvanced: bonus.runningCycleAdvanced,
     aguinaldoCycleStartDate: bonus.cycleStartDate,
     aguinaldoClosedCycleEndDate: bonus.closedCycleEndDate,
     aguinaldo: bonus.amount,
