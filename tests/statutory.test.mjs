@@ -786,15 +786,24 @@ test("reproduces a real MTPS settlement statement to the cent", () => {
   assert.equal(result.indemnityBaseDaily, 26.88, "capped at two daily minimum wages");
   assert.equal(result.indemnity, 1673.55, "1,613.90 + 59.65");
   assert.equal(result.vacation, 90.16);
-  // The aguinaldo line is deliberately not compared: the MTPS runs its bonus
-  // year from 12 December, this module still runs it over the calendar year,
-  // and settling that needs the October 2025 reform decree.
+  // THE BONUS LINE DIVERGES, and it is now compared rather than skipped. The
+  // statement prints $21.15; this settlement prints zero, because the applied
+  // cycle is the calendar year and the payment discharged it. Under the 12
+  // December cycle the same case reproduces $21.15 to the cent — pinned in
+  // `tests/aguinaldo.test.mjs`, which can pass the cycle that this entry point
+  // cannot.
   //
-  // Left open on purpose as of August 2026. It is scheduled for the pass that
-  // extracts the statutory constants into dated data files, where the bonus
-  // year becomes a declared date rather than a hardcoded 1 January. Do not
-  // patch it inline here: changing the cycle silently moves every proportional
-  // bonus this suite pins, and it needs its own source check first.
+  // The zero is asserted so the divergence cannot drift unnoticed in either
+  // direction: it used to be an uncompared line, which hid both this gap and
+  // the settlement bug underneath it — a collected bonus zeroed the whole
+  // figure, for every reading, including cases where days were plainly owed.
+  //
+  // Do not "fix" this by switching the cycle. That is a decision about
+  // `aguinaldoCycleStart`, it moves every proportional bonus this suite pins,
+  // and it is waiting on a second piece of evidence: this statement is dated
+  // December 2025, two months after the reform moved the qualifying date, so
+  // the ministry's own tool may simply not have been updated yet.
+  assert.equal(result.aguinaldo, 0, "the calendar cycle was discharged by the payment");
 });
 
 test("leaving before the cutoff accrues the year-end bonus in proportion to days worked", () => {

@@ -64,6 +64,14 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       question: "¿Cuánto me toca si trabajo un domingo o un día de asueto?",
       answer: "Trabajar el día de descanso semanal da derecho al salario básico de ese día, un recargo mínimo del 50% por las horas trabajadas y un día de descanso compensatorio remunerado. El día de asueto trabajado se paga doble: salario ordinario más un recargo del 100%.",
     },
+    {
+      question: "¿Me toca devolución al declarar la renta anual?",
+      answer: "No necesariamente, y conviene saberlo antes: el saldo sale en contra tan seguido como a favor. Las tablas de retención ya traen incorporados los $1,600 de deducción en sus tramos altos, pero el artículo 37 solo se los reconoce a quien obtiene hasta $9,100 al año, o a quien pasa de ahí y tiene comprobantes de gastos médicos o de colegiatura. Quien pasa de $9,100 y no gastó en ninguno de los dos fue retenido de menos todo el año y le queda diferencia por pagar. No es error de nadie: es cómo están construidas las tablas.",
+    },
+    {
+      question: "¿Cuánto cuesta pagar la tarjeta de crédito con el mínimo?",
+      answer: "Mucho más de lo que parece, porque el pago mínimo es un porcentaje del saldo: baja cada mes conforme el saldo baja, y con él baja también el abono a capital. El interés se cobra sobre el saldo, así que la deuda se estira años y el total pagado puede superar con creces lo consumido. Esta cuenta no aplica ninguna regla salvadoreña —es interés sobre saldo— y por eso la página no lleva insignia de verificación.",
+    },
   ],
   en: [
     {
@@ -113,6 +121,14 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     {
       question: "What am I owed for working a Sunday or a public holiday?",
       answer: "Working the weekly rest day entitles you to that day's basic salary, a surcharge of at least 50% for the hours worked and a paid compensatory rest day. A public holiday worked is paid double: ordinary salary plus a 100% surcharge.",
+    },
+    {
+      question: "Will I get a refund on the annual tax return?",
+      answer: "Not necessarily, and it is worth knowing in advance: the balance lands against you as often as in your favour. The withholding tables already carry the $1,600 deduction inside their upper bands, but article 37 grants it only to someone earning up to $9,100 a year, or to someone above that with receipts for medical costs or tuition. Anyone above $9,100 who spent on neither was under-withheld all year and has a difference to pay. It is nobody's mistake: it is how the tables are built.",
+    },
+    {
+      question: "What does paying only the credit card minimum cost?",
+      answer: "Far more than it looks, because the minimum payment is a percentage of the balance: it falls every month as the balance falls, and the principal it repays falls with it. Interest is charged on the balance, so the debt stretches over years and the total paid can far exceed what was spent. This calculation applies no Salvadoran rule — it is interest on a balance — which is why that page carries no verification badge.",
     },
   ],
 };

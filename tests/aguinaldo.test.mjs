@@ -64,13 +64,64 @@ test("under a year the bonus is the share of the cycle actually worked", () => {
   assert.equal(round(acrossTheYear.days), round(15 * 293 / 365));
 });
 
-test("a bonus already collected is zero, and the scale never opens", () => {
+test("a bonus already collected settles its own cycle, and only its own", () => {
+  // Read at the qualifying date under the applied calendar cycle: the payment
+  // covered the cycle this day falls in, so nothing is left.
   const paid = atCutoff("2020-01-01", 2026, { alreadyPaid: true });
   assert.equal(paid.days, 0);
   assert.equal(paid.amount, 0);
+  assert.equal(paid.accruesNewCycle, false);
   assert.equal(paid.scaleAmbiguous, false);
   assert.deepEqual(paid.appliedRules, ["dailySalaryDivisor", "accrualYearDays"],
     "a document for a zero must not cite the scale it never read");
+
+  // The same flag under a cycle that reopens BEFORE the payment window closes.
+  // The money paid for the cycle that ended on 11 December; the days since the
+  // 12th belong to one the payment never touched, and they are still owed.
+  const reopened = calculateAguinaldo({
+    startDate: "2020-01-01", endDate: "2026-12-24", monthlySalary: 900,
+    cycleStart: { month: 12, day: 12 }, alreadyPaid: true,
+  });
+  assert.equal(reopened.accruesNewCycle, true);
+  assert.equal(reopened.cycleStartDate, "2026-12-12");
+  assert.ok(reopened.days > 0, "a reopened cycle accrues");
+  assert.equal(reopened.scaleDays, 19, "six completed years");
+  assert.equal(round(reopened.days), round(19 * 13 / 365), "13 days of the new cycle");
+  assert.ok(reopened.appliedRules.includes("aguinaldoCycleStart"),
+    "the figure now turns on the cycle, so it has to cite it");
+});
+
+test("the MTPS statement's bonus line reconciles, and only on the 12 December cycle", () => {
+  // The line the reconciliation used to leave uncompared. Same statement as
+  // `tests/statutory.test.mjs`: voluntary resignation, 1 Nov 2021 to 24 Dec
+  // 2025, $937.54 a month, bonus already collected in the payment window. The
+  // MTPS prints $21.15 for it and this module used to return zero.
+  const statement = {
+    startDate: "2021-11-01", endDate: "2025-12-24", monthlySalary: 937.54,
+    alreadyPaid: true,
+  };
+
+  // Nineteen days of scale over the thirteen run from 12 December, on a daily
+  // base of 937.54/30. No other whole number of days lands on the printed
+  // figure: twelve gives $19.52 and fourteen gives $22.77.
+  const december = calculateAguinaldo({ ...statement, cycleStart: { month: 12, day: 12 } });
+  assert.equal(december.cycleStartDate, "2025-12-12");
+  assert.equal(december.scaleDays, 19);
+  assert.equal(december.amount, 21.15, "the aguinaldo line of the official statement");
+
+  // And the applied reading gives zero, because a 1 January cycle is the cycle
+  // the payment discharged: there is nothing left of it to accrue. That is the
+  // divergence, stated rather than hidden — it is the whole of the evidence
+  // recorded on `aguinaldoCycleStart`, and it does not move the value.
+  const calendar = calculateAguinaldo(statement);
+  assert.equal(calendar.cycleStartDate, "2025-01-01");
+  assert.equal(calendar.accruesNewCycle, false);
+  assert.equal(calendar.amount, 0);
+
+  // The case discriminates the two readings, which is what makes it evidence.
+  // Before the payment branch was split it could not: every candidate cycle
+  // ran through `reachedCutoff` and returned the same whole bonus.
+  assert.notEqual(december.amount, calendar.amount);
 });
 
 test("the two branches read seniority on different days, and say when that matters", () => {

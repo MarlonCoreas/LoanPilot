@@ -3,11 +3,13 @@ import test from "node:test";
 
 import { ASSUMPTIONS, DISPUTES, assumptionFor, disputeFor, pagesApplying } from "../app/disputes.ts";
 import {
-  ALL_RULES, citationsFor, disputedVersions, oldestReviewed, reviewedFor, ruleAt, RULES,
-  RULE_USAGE, RULES_REVIEWED, sectionFor,
+  ALL_RULES, citationsFor, disputedVersions, institutionsCited, oldestReviewed, reviewedFor,
+  ruleAt, RULES, RULE_USAGE, RULES_REVIEWED, sectionFor,
 } from "../app/rules.ts";
 import { LANGS, PAGES } from "../app/routes.ts";
-import { OFFICIAL } from "../app/sources.ts";
+import {
+  DOCUMENTS, DOCUMENT_IDENTITIES, INSTITUTIONS, institutionOf, OFFICIAL,
+} from "../app/sources.ts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -164,6 +166,85 @@ test("no normative figure is cited from the press", () => {
       assert.ok(url.hostname.endsWith(".gob.sv"),
         `${rule.id} @ ${version.from} cites ${url.hostname}, which is not an official Salvadoran domain`);
     }
+  }
+});
+
+test("a norm never names a document its link does not open", () => {
+  // THE D.L. 499 DEFECT, GENERALISED. Three rules of the Quincena 25 once
+  // pointed at the Labour Code, whose reform table carries a different "D. L.
+  // No. 499" from 1976 — a citation that resolved, looked right, and led
+  // somewhere else. That was fixed by hand, and nothing stopped the same shape
+  // recurring: article 187 over the MTPS calculator, four Labour Code articles
+  // over MTPS explainers, two different norms sharing one ISSS URL.
+  //
+  // Both fields were defensible alone, which is why only the PAIR can be
+  // checked. `DOCUMENTS[source].carries` says whose text is inside the file;
+  // the norm is scanned for the identities anything carries; and each one it
+  // names has to be in there — or the version has to say in words why not.
+  //
+  // A consolidated text carries many identities and is shared by many rules:
+  // that is correct and does not fire here. Sharing a URL is not the defect.
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const carried = DOCUMENTS[version.source].carries;
+      const named = DOCUMENT_IDENTITIES.filter((identity) => version.norm.includes(identity));
+      const foreign = named.filter((identity) => !carried.includes(identity));
+      const where = `${rule.id} @ ${version.from}`;
+      if (version.citedThrough) {
+        assert.ok(foreign.length > 0,
+          `${where} declares citedThrough but its norm names nothing its source lacks — drop the field`);
+        assert.ok(version.citedThrough.length > 40,
+          `${where} has to say WHY in a sentence, not a word`);
+        continue;
+      }
+      assert.deepEqual(foreign, [],
+        `${where} names ${foreign.join(", ")} but its link opens `
+        + `"${DOCUMENTS[version.source].name}". Point it at the document that `
+        + `carries the article, or declare citedThrough to say why it cannot.`);
+    }
+  }
+});
+
+test("every document says what it is called, so a link can be labelled honestly", () => {
+  // The names are what the reader is told they are opening. A source with no
+  // name would put the burden back on `norm`, which is the arrangement this
+  // pair of tests exists to end.
+  assert.deepEqual(Object.keys(DOCUMENTS).sort(), Object.keys(OFFICIAL).sort(),
+    "every link needs a document entry and every document entry needs a link");
+  for (const [key, doc] of Object.entries(DOCUMENTS)) {
+    assert.ok(doc.name.length > 8, `${key} needs a name a reader can recognise`);
+    for (const identity of doc.carries) {
+      assert.ok(DOCUMENT_IDENTITIES.includes(identity), `${key} carries an unknown identity`);
+    }
+  }
+});
+
+test("the home page's row of sources is every institution the rules actually cite", () => {
+  // It used to be four names typed into PlatformHome, and it had gone stale:
+  // the LISR, the Ley Integral del Sistema de Pensiones, the ISSS and the D.L.
+  // 499 were being cited by the calculators while the front door named none of
+  // them. A summary that has fallen behind is worse than no summary, because it
+  // is the page a first-time reader judges the rest of the site by.
+  const cited = institutionsCited();
+  assert.ok(cited.length > 0, "an empty row would make the home page claim nothing");
+  assert.deepEqual([...new Set(cited.map((item) => item.name))], cited.map((item) => item.name),
+    "an institution must appear once, however many of its documents are cited");
+
+  // Every rule source resolves to a named institution, so a new document on a
+  // host nobody has named cannot slip in and quietly vanish from the row.
+  const names = new Set(cited.map((item) => item.name));
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const institution = institutionOf(version.source);
+      assert.ok(institution,
+        `${rule.id} cites ${new URL(OFFICIAL[version.source]).hostname}, which INSTITUTIONS does not name`);
+      assert.ok(names.has(institution), `${institution} is cited but missing from the row`);
+    }
+  }
+
+  // And each pill opens a document that institution actually published.
+  for (const { name, href } of cited) {
+    assert.equal(INSTITUTIONS[new URL(href).hostname], name, `${name} links to another institution's host`);
   }
 });
 

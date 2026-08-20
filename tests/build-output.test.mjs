@@ -59,9 +59,23 @@ test("prerenders every page instead of shipping empty roots", async () => {
     pageHtml("es", "settlement"), pageHtml("es", "withholding"),
   ]);
   assert.match(home, /Elige una herramienta/);
-  assert.match(loans, /Entiende tu préstamo/);
+  // EVERY HERO ASSERTION HERE NAMES THE ACCENT HALF OF THE h1, never the first
+  // half, and that is load-bearing rather than a style: since the headlines were
+  // rewritten to lead with a search term, the first half of each one is also the
+  // <title> and the og:title. A page that shipped an empty root would still
+  // match it, and this test — whose entire job is to prove the body rendered —
+  // would pass on a blank page. The accent half exists only inside the hero.
+  //
+  // Seven of them had drifted and this test had been failing since 421af70,
+  // which moved the copy without moving the assertions. Only one failure showed
+  // at a time, because assert throws on the first: the loan hero hid the
+  // settlement one, which hid the annual one, and so on down. "Entiende tu
+  // préstamo" still lives in `OG_CARD`, which paints the Open Graph image and is
+  // a different surface with its own voice — so the string was findable in the
+  // repository, which is what made the staleness look like a passing test.
+  assert.match(loans, /Decide con claridad/);
   assert.match(loans, /Costo efectivo anual estimado/);
-  assert.match(settlement, /Calcula lo que corresponde al terminar tu empleo/);
+  assert.match(settlement, /Al terminar tu empleo/);
   assert.match(settlement, /Indemnización \/ prestación/);
   assert.match(withholding, /Decreto Ejecutivo 10\/2025/);
 
@@ -92,8 +106,8 @@ test("prerenders every page instead of shipping empty roots", async () => {
   const [annual, enAnnual] = await Promise.all([
     pageHtml("es", "annualTax"), pageHtml("en", "annualTax"),
   ]);
-  assert.match(annual, /Tu renta del año, contra lo que ya te retuvieron/);
-  assert.match(enAnnual, /against what was already withheld/);
+  assert.match(annual, /Contra lo que ya te retuvieron/);
+  assert.match(enAnnual, /Against what was already withheld/);
   // The estimate notice is above the calculator, not at the foot. Position is
   // the assertion: a notice under the results is a notice nobody read.
   const noticeAt = annual.indexOf("Esto es una estimación educativa");
@@ -115,7 +129,7 @@ test("prerenders every page instead of shipping empty roots", async () => {
   assert.match(annual, /Ley Integral del Sistema de Pensiones arts\. 14, 16 y 26/);
 
   const aguinaldo = await pageHtml("es", "aguinaldo");
-  assert.match(aguinaldo, /Cuánto aguinaldo te toca este año/);
+  assert.match(aguinaldo, /Cuánto te toca este año/);
   // The deadline is the one figure on that page a reader can act on, so it has
   // to survive into the prerendered markup and not wait for JavaScript.
   assert.match(aguinaldo, /de diciembre de \d{4}/);
@@ -143,9 +157,9 @@ test("prerenders every page instead of shipping empty roots", async () => {
     pageHtml("en", "settlement"), pageHtml("en", "withholding"),
   ]);
   assert.match(enHome, /Choose a tool/);
-  assert.match(enLoans, /Understand your loan/);
-  assert.match(enSettlement, /Estimate what is due when employment ends/);
-  assert.match(enWithholding, /Understand every deduction from your pay/);
+  assert.match(enLoans, /Decide with clarity/);
+  assert.match(enSettlement, /When employment ends/);
+  assert.match(enWithholding, /Every deduction from your pay/);
   for (const html of [enSettlement, enWithholding]) {
     assert.match(html, /Sources verified on \d{1,2} [A-Za-z]+ \d{4}/);
   }

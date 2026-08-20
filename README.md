@@ -165,7 +165,7 @@ ninguna más suelta en el código: `app/statutory.ts` y `app/overtime.ts` guarda
 la aritmética y las lecturas que los textos no resuelven, pero ya no guardan
 ningún número que no puedan citar.
 
-Cada regla lleva seis campos, y ninguno es decorativo:
+Cada regla lleva seis campos obligatorios, y ninguno es decorativo:
 
 | Campo      | Qué es |
 | ---------- | ------ |
@@ -175,6 +175,12 @@ Cada regla lleva seis campos, y ninguno es decorativo:
 | `source`   | La clave de `app/sources.ts` del documento que hay que abrir para comprobarlo. |
 | `from`     | El primer día en que esa versión aplica. |
 | `reviewed` | El día en que una persona la leyó por última vez contra ese documento. |
+
+Y uno opcional que sólo aparece cuando hace falta:
+
+| Campo          | Cuándo se escribe |
+| -------------- | ----------------- |
+| `citedThrough` | Cuando el `norm` nombra un documento que el `source` **no contiene**, y el par es correcto de todas formas: un valor que sale de la práctica de una institución cita el artículo que esa práctica interpreta, y una reforma que el consolidado todavía no absorbe se cita a través del decreto que la recita. La prueba `a norm never names a document its link does not open` falla si el desajuste no está declarado aquí, en palabras. Es el mecanismo que evita repetir el D.L. 499: un enlace que resuelve, parece correcto y lleva a otro documento. |
 
 ### El procedimiento
 
@@ -412,12 +418,23 @@ calcula.
   ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado»,
   pero ninguno dice sobre qué período corre esa proporción. Ya no es sólo una
   laguna: son dos lecturas vivas. El módulo corre la proporción sobre el año
-  calendario, que es lo que respalda el MTPS al calcular el pago anticipado
-  «como si fuera en diciembre»; la constancia del MTPS sólo reconcilia con un
-  ciclo desde el 12 de diciembre, y la práctica contable todavía mezcla esa
-  fecha con la del 20 de octubre. El valor no se mueve por eso, y la línea de
-  aguinaldo sigue siendo la única que la prueba de reconciliación deja sin
-  comparar.
+  calendario; la constancia del MTPS reconcilia únicamente con un ciclo desde
+  el 12 de diciembre. **La evidencia disponible apunta a la lectura que no se
+  aplica**, y eso está escrito en la ficha en vez de suavizado: para una
+  renuncia el 24 de diciembre de 2025 con el aguinaldo ya cobrado, la constancia
+  imprime $21.15, que son 19 días de escala sobre los 13 corridos desde el 12 de
+  diciembre, y ningún otro número entero de días llega a esa cifra. El respaldo
+  de la lectura aplicada es más delgado: la publicación del MTPS dice que el
+  pago anticipado debe entregarse *completo*, lo cual habla del monto y no del
+  período. El valor no se mueve todavía por dos razones provisionales —la
+  constancia es de diciembre de 2025, dos meses después de que el D.L. 433
+  corriera el corte, y un solo documento contra una inferencia es base delgada
+  para mover todos los proporcionales fijados— y queda pendiente un segundo dato
+  de la calculadora en línea del MTPS. La línea de aguinaldo de la constancia
+  **ya se compara**: `tests/aguinaldo.test.mjs` reproduce los $21.15 bajo el
+  ciclo de diciembre y `tests/statutory.test.mjs` fija el cero bajo el
+  calendario, de modo que la divergencia no puede desplazarse sin que algo
+  falle.
 - **`vacationProportionalOnExit`.** El art. 187 reconoce la vacación
   proporcional cuando la terminación es con responsabilidad patronal o hay
   despido de hecho, y para quien renuncia menciona sólo la vacación del año

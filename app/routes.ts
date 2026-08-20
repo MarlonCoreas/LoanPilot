@@ -48,7 +48,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
   es: {
     home: {
       title: "Herramientas financieras para El Salvador | LoanPilot",
-      description: "Calculadoras gratuitas de préstamos, finiquito, horas extras y retenciones salariales para El Salvador.",
+      description: "Calculadoras gratuitas para El Salvador: préstamos, tarjeta de crédito, finiquito, aguinaldo, horas extras, retenciones salariales y renta anual.",
       ogTitle: "LoanPilot | Herramientas financieras para El Salvador",
     },
     loans: {
@@ -95,7 +95,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
   en: {
     home: {
       title: "Financial tools for El Salvador | LoanPilot",
-      description: "Free calculators for loans, employment settlements, overtime pay and payroll withholding in El Salvador.",
+      description: "Free calculators for El Salvador: loans, credit cards, employment settlements, the year-end bonus, overtime, payroll withholding and the annual return.",
       ogTitle: "LoanPilot | Financial tools for El Salvador",
     },
     loans: {

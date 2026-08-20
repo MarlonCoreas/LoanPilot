@@ -33,17 +33,35 @@ import type { AguinaldoExemption, RuleId, YearDay } from "./rules.ts";
  * moved — that needs a document, not a refactor — but a caller now passes it,
  * and a reader can see which cycle produced a number.
  *
+ * WHAT CHANGED WITH IT: a collected bonus no longer zeroes the line. See
+ * `alreadyPaid`. The statement's aguinaldo line — $21.15, the one figure the
+ * reconciliation used to leave uncompared — is now reproduced to the cent, and
+ * only under the 12 December cycle. That is evidence about the disputed value
+ * and it is not being used to move it: `aguinaldoCycleStart` still applies the
+ * calendar year, and what changed here is only that the code can now express
+ * both readings on the case that distinguishes them. It could not before, and a
+ * dispute whose alternative the program cannot produce is a footnote.
+ *
  * FOR THE NEXT DECISION, NOT ACTED ON HERE. Reformed article 202 carries the
  * same restrictive formula as article 187: it grants the proportional bonus
  * "cuando se declare terminado un contrato de trabajo con responsabilidad para
  * el patrono, o cuando el trabajador fuere despedido de hecho, sin causa legal",
  * and names no other case. This module pays the proportional bonus on a
- * resignation too. For vacation that divergence is at least anchored — an MTPS
- * statement pays the fraction on a resignation and the suite reconciles to the
- * cent against it. The bonus has no such anchor: the statement's aguinaldo line
- * is the one figure the reconciliation leaves uncompared. It is the same shape
- * of question that `quincena25Window` has just been decided in the other
- * direction, and it is recorded here so it is decided rather than inherited.
+ * resignation too, on the same unexamined footing as the vacation fraction. It
+ * is the same shape of question that `quincena25Window` has just been decided
+ * in the other direction, and it is recorded here so it is decided rather than
+ * inherited.
+ *
+ * WHAT THIS FUNCTION PRICES, now that the boundary is load-bearing: ONE cycle,
+ * the one the last day worked falls in. A worker who reached the qualifying
+ * date, was NOT paid, and leaves after the cycle reopened is owed that whole
+ * unpaid bonus AS WELL, and this returns only the days of the new cycle. That
+ * debt belongs to a cycle this call is not pricing, and paying two cycles from
+ * one call is a larger change than the gap justifies. It cannot arise under the
+ * applied calendar cycle, where the cycle day always precedes the qualifying
+ * date; it is reachable only under the 12 December reading, and there the
+ * previous behaviour was worse — the fraction was measured from a cycle opening
+ * after the date it measured to, and a full year worked came back as zero.
  */
 
 const DAILY_DIVISOR = currentValue(dailySalaryDivisor);
@@ -88,7 +106,29 @@ export function calculateAguinaldo(input: {
    */
   endDate: string;
   monthlySalary: number;
-  /** Already collected this cycle: nothing is owed and the scale never opens. */
+  /**
+   * The bonus earned by the qualifying date has already been collected.
+   *
+   * IT DOES NOT MEAN "NOTHING IS OWED". A payment discharges the cycle that was
+   * open at the QUALIFYING DATE — that is the day the bonus is earned by and
+   * the day the payment window pays for. Since the 2025 reform that window runs
+   * from 20 October to 20 December, so a worker can collect and then leave with
+   * weeks still to run, and under a cycle that reopens inside those weeks those
+   * days belong to a NEW cycle the payment never touched.
+   *
+   * WHAT IT COSTS TODAY: nothing, and that is worth being exact about. Under
+   * the applied calendar cycle the cycle day always precedes the October
+   * qualifying date, so the payment always discharges the cycle the departure
+   * falls in and this branch never runs. No settlement figure moved when it was
+   * written. What it does is make the 12 December reading produce the MTPS
+   * statement's $21.15 instead of zero — which is the difference between a
+   * dispute with two live readings and a decision with a footnote, and it is
+   * the precondition for deciding `aguinaldoCycleStart` on evidence at all.
+   *
+   * So the flag settles a cycle, not a worker: `settledByPayment` when the
+   * discharged cycle is the one the last day worked falls in, and
+   * `accruesNewCycle` when a later one has opened since.
+   */
   alreadyPaid?: boolean;
   /**
    * Where the accrual cycle starts. DISPUTED — passed, never implied.
@@ -132,6 +172,26 @@ export function calculateAguinaldo(input: {
   const service = calendarService(start, end);
   const atCutoff = calendarService(start, cutoff);
 
+  // WHICH CYCLE A COLLECTED BONUS DISCHARGED, which is the whole of the
+  // `alreadyPaid` question and used to be assumed rather than asked.
+  //
+  // The payment settles the cycle that was open at the qualifying date. When
+  // the cycle containing the last day worked opened AFTER that date, the two
+  // are different cycles: the money paid for the earlier one, and the days run
+  // since this one opened are still owed. Under a 1 January cycle that never
+  // happens — the cycle day precedes the October qualifying date every year —
+  // so this splits exactly along the reading in dispute, which is why it can be
+  // written at all only now that the cycle is a parameter.
+  // THIS FUNCTION PRICES ONE CYCLE: the one the last day worked falls in. When
+  // that cycle opened after the qualifying date, the qualifying date belongs to
+  // the PREVIOUS cycle, and nothing about this one has been earned in full or
+  // discharged by a payment — whether or not a payment was made.
+  const cycleOpenedAfterCutoff = cycleOpens > cutoff;
+  /** Paid, and the payment covered the cycle the departure falls in. */
+  const settledByPayment = input.alreadyPaid === true && !cycleOpenedAfterCutoff;
+  /** Paid, but a later cycle has opened since: its part-year is still owed. */
+  const accruesNewCycle = input.alreadyPaid === true && cycleOpenedAfterCutoff;
+
   /** Share of this cycle worked, 0 to 1, before the scale is applied. */
   let cycleFraction = 0;
   let fraction = 0;
@@ -142,7 +202,14 @@ export function calculateAguinaldo(input: {
 
   if (workStart <= end) {
     cycleFraction = daysInclusive(workStart, end) / YEAR_DAYS;
-    if (!reachedCutoff) {
+    // A cycle that opened after the qualifying date is a part-year like any
+    // other: its own qualifying date is a year away, nobody has reached it, and
+    // the scale is read at the last day worked. Reaching the PREVIOUS cycle's
+    // date says nothing about this one, and pricing it as a whole bonus would
+    // pay the discharged cycle a second time. Without this branch the else
+    // below measured from a cycle that opens AFTER the cutoff it measures to,
+    // and returned zero for a full year worked.
+    if (!reachedCutoff || cycleOpenedAfterCutoff) {
       fraction = cycleFraction;
     } else {
       // Past the qualifying date the worker did reach it, so the scale is read
@@ -154,7 +221,7 @@ export function calculateAguinaldo(input: {
     }
   }
 
-  const days = input.alreadyPaid ? 0 : scaleDays * Math.min(1, fraction);
+  const days = settledByPayment ? 0 : scaleDays * Math.min(1, fraction);
 
   // The window where the two readings of the scale disagree: the reader leaves
   // before the qualifying date and would have crossed a step (15 / 19 / 21) had
@@ -201,6 +268,17 @@ export function calculateAguinaldo(input: {
     reachedCutoff,
     cutoffDate: isoDate(cutoff),
     cycleStartDate: isoDate(cycleOpens),
+    /**
+     * The bonus was collected and this figure is what the cycle that opened
+     * afterwards has accrued since.
+     *
+     * No page reads it yet, because under the applied calendar cycle it is
+     * never true. It is returned rather than kept private because the day the
+     * cycle moves, a reader who ticked "already paid" and still sees a line owed
+     * needs to be told why on screen — and a flag the caller cannot see is a
+     * flag nobody will remember to add.
+     */
+    accruesNewCycle,
     /** True only inside the window where the two readings of the scale differ. */
     scaleAmbiguous,
     alternativeScaleDays: scaleAmbiguous ? alternativeScaleDays : 0,

@@ -1,8 +1,8 @@
 import { FAQ } from "./faq";
 import { reviewedDate } from "./reviewed";
+import { institutionsCited } from "./rules";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
-import { OFFICIAL } from "./sources";
 import { ROUTES, type Lang } from "./routes";
 
 const copy = {
@@ -72,21 +72,6 @@ const copy = {
   },
 } as const;
 
-const sourceLinks = {
-  es: [
-    ["Código de Trabajo", OFFICIAL.laborCode],
-    ["MTPS", OFFICIAL.laborService],
-    ["Ministerio de Hacienda", OFFICIAL.treasury],
-    ["SSF", OFFICIAL.ssf],
-  ],
-  en: [
-    ["Labour Code", OFFICIAL.laborCode],
-    ["MTPS", OFFICIAL.laborService],
-    ["Ministry of Finance", OFFICIAL.treasury],
-    ["SSF", OFFICIAL.ssf],
-  ],
-} as const;
-
 export default function PlatformHome({ lang }: { lang: Lang }) {
   const t = copy[lang];
 
@@ -127,8 +112,11 @@ export default function PlatformHome({ lang }: { lang: Lang }) {
       </article>)}</div>
       <div className="guide-sources">
         <b>{t.verified(reviewedDate(lang))}</b>
-        <div>{sourceLinks[lang].map(([label, href]) =>
-          <a href={href} target="_blank" rel="noreferrer" key={href}>{label}<span>↗</span></a>)}</div>
+        {/* Derived from the registry, not typed here. The hand-kept version of
+            this row named four documents while the calculators behind it cited
+            fifteen, and nothing could notice. */}
+        <div>{institutionsCited().map(({ name, href }) =>
+          <a href={href} target="_blank" rel="noreferrer" key={name}>{name}<span>↗</span></a>)}</div>
       </div>
     </section>
     {/* The claim the rest of the section makes — that these figures can be
