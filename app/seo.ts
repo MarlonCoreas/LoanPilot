@@ -34,7 +34,10 @@ function organization(): Json {
     "@id": ORGANIZATION_ID,
     name: "LoanPilot",
     url: `${SITE_ORIGIN}/`,
-    logo: `${SITE_ORIGIN}/favicon.svg`,
+    // A dedicated high-resolution raster logo is the most interoperable form
+    // for consumers of Organization metadata. The browser/search favicon is
+    // declared separately in the document head.
+    logo: `${SITE_ORIGIN}/logo-512.png`,
     sameAs: [REPOSITORY],
   };
 }

@@ -35,7 +35,14 @@ test("builds a self-contained static site", async () => {
   assert.match(html, /src="\/assets\/.+\.js"/i);
   assert.ok(files.includes("assets"));
 
-  await access(new URL("favicon.svg", outputRoot));
+  for (const icon of [
+    "favicon.ico", "favicon.svg", "favicon-96x96.png",
+    "apple-touch-icon.png", "logo-512.png",
+  ]) {
+    await access(new URL(icon, outputRoot));
+  }
+  assert.match(html, /rel="icon" type="image\/png" sizes="96x96" href="\/favicon-96x96\.png"/);
+  assert.match(html, /rel="shortcut icon" href="\/favicon\.ico"/);
   await access(new URL("robots.txt", outputRoot));
   await access(new URL("sitemap.xml", outputRoot));
   await access(new URL(".htaccess", outputRoot));
