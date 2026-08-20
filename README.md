@@ -65,9 +65,12 @@ puede afirmar algo que la página no diga.
 - Estimación de finiquito e indemnización por despido injustificado o renuncia
   voluntaria, incluyendo vacaciones, aguinaldo y salario pendiente.
 - Estimación de aguinaldo en su propia página, para quien sigue laborando y para
-  quien ya salió: escala del art. 198 según la antigüedad al 20 de octubre,
-  parte proporcional cuando no se alcanza el ciclo completo, y la ventana legal
-  de pago con su fecha límite. La lógica es la misma función que usa el
+  quien ya salió: escala del art. 198 según la antigüedad al cerrar el ciclo
+  —que corre del 12 de diciembre al 11 de diciembre—, la parte proporcional
+  cuando no se alcanza el ciclo completo, el aguinaldo entero del ciclo que
+  cerró sin pagarse cuando lo hay, y la ventana legal de pago con su fecha
+  límite. El 20 de octubre abre esa ventana y no es la fecha en que se mide la
+  antigüedad; eso lo aclaró la calculadora del MTPS en agosto de 2026. La lógica es la misma función que usa el
   finiquito, así que las dos páginas no pueden dar cifras distintas.
 - Estimación de la hora extra diurna y nocturna, del recargo nocturno de la
   jornada ordinaria y del pago por trabajar en día de descanso o de asueto.
@@ -165,7 +168,7 @@ ninguna más suelta en el código: `app/statutory.ts` y `app/overtime.ts` guarda
 la aritmética y las lecturas que los textos no resuelven, pero ya no guardan
 ningún número que no puedan citar.
 
-Cada regla lleva seis campos, y ninguno es decorativo:
+Cada regla lleva seis campos obligatorios, y ninguno es decorativo:
 
 | Campo      | Qué es |
 | ---------- | ------ |
@@ -175,6 +178,12 @@ Cada regla lleva seis campos, y ninguno es decorativo:
 | `source`   | La clave de `app/sources.ts` del documento que hay que abrir para comprobarlo. |
 | `from`     | El primer día en que esa versión aplica. |
 | `reviewed` | El día en que una persona la leyó por última vez contra ese documento. |
+
+Y uno opcional que sólo aparece cuando hace falta:
+
+| Campo          | Cuándo se escribe |
+| -------------- | ----------------- |
+| `citedThrough` | Cuando el `norm` nombra un documento que el `source` **no contiene**, y el par es correcto de todas formas: un valor que sale de la práctica de una institución cita el artículo que esa práctica interpreta, y una reforma que el consolidado todavía no absorbe se cita a través del decreto que la recita. La prueba `a norm never names a document its link does not open` falla si el desajuste no está declarado aquí, en palabras. Es el mecanismo que evita repetir el D.L. 499: un enlace que resuelve, parece correcto y lleva a otro documento. |
 
 ### El procedimiento
 
@@ -246,7 +255,9 @@ hay, y por eso conviene que nadie lo silencie.
 | Cuándo | Qué se revisa | Qué se toca si cambió |
 | ------ | ------------- | --------------------- |
 | **Desde finales de octubre** | **El decreto transitorio que exime el aguinaldo del ejercicio en curso.** Es lo más previsible del año y lo único que hay que ir a buscar: se aprueban en las semanas de cierre —7 dic 2021, 7 dic 2022, 29 nov 2023, 26 nov 2024, y 15 oct 2025 sólo porque acababa de moverse la ventana de pago—. Se busca en el [listado de decretos de la Asamblea](https://www.asamblea.gob.sv/decretos). Si no aparece ninguno, no hay vacío: rige el piso permanente del numeral 16) del artículo 4, que nunca fue derogado. | Una entrada nueva en `aguinaldoTaxExemption.versions` con su propio `exercise` y su `from` en la fecha del decreto. **No se edita la del año anterior**: cada decreto gobierna su ejercicio y expira con él, y `/renta-anual/` necesita las viejas para declarar años cerrados. Ningún cambio de código: para eso está el campo. |
-| **20 de octubre** | Abre la ventana de pago del aguinaldo (art. 200 reformado por el D.L. 433). Sube el tráfico de `/aguinaldo/`. | Nada, si nada cambió. Es la fecha en que un error en esa página se ve. |
+| **20 de octubre** | Abre la ventana de pago del aguinaldo (art. 200 reformado por el D.L. 433). Sube el tráfico de `/aguinaldo/`. **No** es la fecha en que se mide la antigüedad: eso es el cierre del ciclo. | Nada, si nada cambió. Es la fecha en que un error en esa página se ve. |
+| **20 de octubre al 11 de diciembre** | La ventana está abierta y el ciclo todavía corre, así que un aguinaldo cobrado en esas ocho semanas es un ADELANTO del ciclo en curso y no el pago del que cerró. Ni este sitio ni el MTPS preguntan por eso; el finiquito avisa en pantalla. Ver `aguinaldoAnticipatedPayment`. | Nada. Se cierra el día que algún texto diga qué ciclo descarga un pago anticipado. |
+| **11 de diciembre** | Cierra el ciclo de devengo del aguinaldo, que es el día en que se lee la escala del art. 198. Lo declara el servicio de cálculo del MTPS imprimiendo el período en cada renglón. | Nada. Si el ministerio cambiara el ciclo, se vería aquí primero: `aguinaldoCycleStart`. |
 | **20 de diciembre** | Cierra la ventana de pago. | Nada. |
 | **Junio y diciembre** | Los recálculos del literal f) del D.E. 10/2025, que es cuando `/retenciones/` recibe a quien vio un descuento distinto ese mes. | Nada, salvo que el decreto se reforme. |
 | **31 de diciembre** | Cierra el ejercicio fiscal (art. 13 letra c). A partir de acá `/renta-anual/` puede declarar el año que terminó. | Nada. Es la fecha con la que se lee la tabla: el ejercicio se cotiza a su cierre, no con la tabla de hoy. |
@@ -303,6 +314,20 @@ Lo que queda **fuera de alcance** —las `NOT MODELLED`— no cabe en una insign
 y conviene tenerlo escrito entero, porque es lo único del inventario que un
 lector necesita en prosa:
 
+- **`aguinaldoAnticipatedPayment`** (art. 200 reformado). La ventana de pago
+  abre el 20 de octubre y el ciclo de devengo no cierra hasta el 11 de
+  diciembre, así que durante ocho semanas al año se puede cobrar el aguinaldo de
+  un ciclo que todavía corre. **Eso sí se modela**: dentro de esa ventana el
+  formulario ofrece una tercera respuesta —«un adelanto del ciclo que corre»— y
+  la línea proporcional se va a cero, porque el MTPS dice que un adelanto debe
+  entregarse completo y un aguinaldo completo no deja nada por devengar. Lo que
+  queda fuera es el otro lado: si el patrono puede recuperar la diferencia de
+  quien cobró entero y se fue a mitad del ciclo. Ningún texto lo dice y esta
+  calculadora no lo va a contestar —estima lo que se le debe AL trabajador, y
+  cero es el piso; un renglón negativo sería un reclamo contra el lector hecho
+  sin autoridad ninguna—. El servicio del MTPS pregunta sólo por el ciclo que
+  cerró, así que éste es uno de los pocos lugares donde seguir al ministerio
+  sobrestimaría y el proyecto no lo hace.
 - **`vacationUnmodelled`** (Código de Trabajo arts. 180 y 184). El artículo 180
   exige 200 días trabajados en el año para devengar vacación, y el formulario
   nunca pregunta cuántos días se trabajaron. El 184 suma 25% por alojamiento y
@@ -410,14 +435,19 @@ calcula.
   comentario del repositorio.
 - **`aguinaldoCycleStart`.** Los arts. 196 a 202 fijan la fecha de corte y la
   ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado»,
-  pero ninguno dice sobre qué período corre esa proporción. Ya no es sólo una
-  laguna: son dos lecturas vivas. El módulo corre la proporción sobre el año
-  calendario, que es lo que respalda el MTPS al calcular el pago anticipado
-  «como si fuera en diciembre»; la constancia del MTPS sólo reconcilia con un
-  ciclo desde el 12 de diciembre, y la práctica contable todavía mezcla esa
-  fecha con la del 20 de octubre. El valor no se mueve por eso, y la línea de
-  aguinaldo sigue siendo la única que la prueba de reconciliación deja sin
-  comparar.
+  pero ninguno dice sobre qué período corre esa proporción. **Lo resolvió el
+  propio MTPS**: su calculadora en línea imprime el período de cada renglón que
+  devuelve, y todos dicen `12/12/AAAA - 11/12/AAAA`. Cinco casos corridos el 20
+  de agosto de 2026, todos posteriores a la reforma, más la constancia de
+  diciembre de 2025, reproducidos al centavo. El ciclo dejó de ser una pregunta.
+  Hasta entonces este sitio aplicaba el año calendario y decía que lo respaldaba
+  el ministerio; eso era una inferencia sobre una nota que habla del monto del
+  pago anticipado y no de su período, y el respaldo estaba sobrestimado. La
+  ficha pasó de «en disputa» a «sin fuente», que es su forma real: un silencio
+  del texto que una institución llena, sin nada que contraponerle. El cambio no
+  es un valor: un finiquito puede deber el aguinaldo entero del ciclo que cerró
+  sin pagarse **y** la fracción del que abrió después, así que la calculadora
+  devuelve dos renglones donde antes devolvía uno.
 - **`vacationProportionalOnExit`.** El art. 187 reconoce la vacación
   proporcional cuando la terminación es con responsabilidad patronal o hay
   despido de hecho, y para quien renuncia menciona sólo la vacación del año

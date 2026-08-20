@@ -129,6 +129,8 @@ export function calculateSettlement(input: {
   pendingSalaryDays?: number;
   unusedVacationPeriods?: number;
   aguinaldoPaid?: boolean;
+  /** An advance on the still-running cycle was collected. See `calculateAguinaldo`. */
+  aguinaldoAdvance?: boolean;
 }) {
   const start = utcDate(input.startDate);
   const end = utcDate(input.endDate);
@@ -144,6 +146,10 @@ export function calculateSettlement(input: {
     completeVacation: 0, proportionalVacationDays: 0, proportionalVacation: 0,
     proportionalVacationDisputed: false,
     aguinaldoDays: 0, aguinaldo: 0, aguinaldoScaleAmbiguous: false, aguinaldoScaleDays: 0,
+    aguinaldoCompleteDays: 0, aguinaldoComplete: 0, aguinaldoProportionalDays: 0,
+    aguinaldoProportional: 0, aguinaldoOwedClosedCycle: false,
+    aguinaldoCycleStartDate: "", aguinaldoClosedCycleEndDate: "", aguinaldoInAnticipationWindow: false,
+    aguinaldoRunningCycleAdvanced: false,
     aguinaldoAlternativeScaleDays: 0, aguinaldoAlternativeDays: 0, aguinaldoAlternative: 0,
     quincena25: 0, quincena25Applies: false, total: 0,
     appliedRules: [] as RuleId[], startDate: "", endDate: "",
@@ -228,8 +234,13 @@ export function calculateSettlement(input: {
     endDate: input.endDate,
     monthlySalary: salary,
     alreadyPaid: input.aguinaldoPaid,
+    advanceOnRunningCycle: input.aguinaldoAdvance,
   });
-  const aguinaldo = bonus.unrounded;
+  // The two printed lines, summed the way they are printed. It used to take the
+  // unrounded figure so the total rounded once at the end; with the bonus now
+  // arriving as two rows on the document, a total that does not equal the rows
+  // above it is worse than a total a cent away from the exact arithmetic.
+  const aguinaldo = bonus.amount;
 
   // Decree 499 article 3 grants the Quincena 25 when the contract ends with
   // employer responsibility or the worker is dismissed without legal cause,
@@ -266,10 +277,25 @@ export function calculateSettlement(input: {
     && end.getUTCDate() <= QUINCENA25.window.day;
   const quincena25Applies = quincena25Eligible && withinQuincena25Window;
   const quincena25OutsideWindow = quincena25Eligible && !withinQuincena25Window;
-  // The proportion still runs over the cycle the bonus uses, which is the only
-  // period this project has: article 2 keys the amount to the salary "al
-  // momento en que la prestación se materialice" and names no accrual period.
-  const quincena25Share = salary * QUINCENA25.rate * Math.min(1, bonus.cycleFraction);
+  // THE PROPORTION RUNS OVER THE CALENDAR YEAR, and it is computed here rather
+  // than borrowed. It used to reuse the bonus's own cycle fraction on the
+  // grounds that it was "the only period this project has" — which was true
+  // only while that cycle was also 1 January. The bonus now accrues from 12
+  // December, and a benefit this calculator bounds to the first 25 days of
+  // January cannot sensibly be prorated over a period that opened in the
+  // previous December: the two dates would contradict each other inside one
+  // figure.
+  //
+  // Article 2 keys the amount to the salary "al momento en que la prestación se
+  // materialice" and names no accrual period, so this is a choice and not a
+  // reading — the same choice, and the same 1 January, that `quincena25Window`
+  // already declares for where the window opens. See that rule.
+  const quincena25CycleOpens = new Date(Date.UTC(end.getUTCFullYear(), 0, 1));
+  const quincena25Accrued = start > quincena25CycleOpens ? start : quincena25CycleOpens;
+  const quincena25Fraction = quincena25Accrued <= end
+    ? daysInclusive(quincena25Accrued, end) / YEAR_DAYS
+    : 0;
+  const quincena25Share = salary * QUINCENA25.rate * Math.min(1, quincena25Fraction);
   const quincena25 = quincena25Applies ? quincena25Share : 0;
 
   const total = indemnity + pendingSalary + vacation + aguinaldo + quincena25;
@@ -351,6 +377,23 @@ export function calculateSettlement(input: {
     /** True only where article 187 and the official service disagree. */
     proportionalVacationDisputed,
     aguinaldoDays: bonus.days,
+    /**
+     * The two lines the bonus comes in, because a settlement can owe both: the
+     * whole bonus of the cycle that closed and was never handed over, and the
+     * part-year of the one that opened after it. `aguinaldoDays` above is their
+     * sum, which is what the total adds; these are what the screen and the PDF
+     * have to show separately for the figure to be checkable against the MTPS.
+     */
+    aguinaldoCompleteDays: bonus.completeDays,
+    aguinaldoComplete: bonus.completeAmount,
+    aguinaldoProportionalDays: bonus.proportionalDays,
+    aguinaldoProportional: bonus.proportionalAmount,
+    aguinaldoOwedClosedCycle: bonus.owedClosedCycle,
+    aguinaldoInAnticipationWindow: bonus.inAnticipationWindow,
+    /** True when an advance is discharging the running cycle rather than a warning being shown. */
+    aguinaldoRunningCycleAdvanced: bonus.runningCycleAdvanced,
+    aguinaldoCycleStartDate: bonus.cycleStartDate,
+    aguinaldoClosedCycleEndDate: bonus.closedCycleEndDate,
     aguinaldo: bonus.amount,
     /** True only inside the window where the two readings of the scale differ. */
     aguinaldoScaleAmbiguous: bonus.scaleAmbiguous,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  aguinaldoCutoffFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
+  aguinaldoCutoffFor, aguinaldoCycleEndFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
   calculateAguinaldo, exemptAmount,
 } from "../app/aguinaldo.ts";
 import {
@@ -14,9 +14,16 @@ import { calculateSettlement, withholdingForTaxable } from "../app/statutory.ts"
 
 const round = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
 
-/** Someone still employed, read at the qualifying date of the year given. */
-const atCutoff = (startDate, year = 2026, over = {}) => calculateAguinaldo({
-  startDate, endDate: aguinaldoCutoffFor(year), monthlySalary: 900, ...over,
+/**
+ * Someone still employed, read at the CLOSE OF THE CYCLE paid in that year.
+ *
+ * Not at the qualifying date, which is when the money is handed over and not
+ * what the cycle runs to. Reading at 20 October would show 313/365 of a bonus
+ * the reader is going to collect whole. Every case below assumes the previous
+ * cycle was collected, which is what a still-employed reader answers.
+ */
+const stillEmployed = (startDate, year = 2026, over = {}) => calculateAguinaldo({
+  startDate, endDate: aguinaldoCycleEndFor(year), monthlySalary: 900, alreadyPaid: true, ...over,
 });
 
 test("the qualifying date and the payment window are the 2025 reform's, not the old ones", () => {
@@ -28,88 +35,199 @@ test("the qualifying date and the payment window are the 2025 reform's, not the 
 });
 
 test("article 198 pays 15, 19 and 21 days, and the step turns on the exact anniversary", () => {
-  // Measured at the cutoff, so every case below has reached the qualifying date
-  // and takes its whole step. The pairs are the edges: one day of service
-  // either side of each anniversary, which is where an off-by-one would live.
-  assert.equal(atCutoff("2025-10-20").days, 15, "exactly one year");
-  assert.equal(atCutoff("2023-10-20").days, 19, "exactly three years");
-  assert.equal(atCutoff("2016-10-20").days, 21, "exactly ten years");
+  // Employed for the whole cycle, so every case below takes its whole step: the
+  // proportion is 365/365 and the scale is read on 11 December. The pairs are
+  // the edges — a day of service either side of each anniversary, which is
+  // where an off-by-one would live.
+  assert.equal(stillEmployed("2025-12-12").days, 15, "exactly one cycle");
+  assert.equal(stillEmployed("2023-12-11").days, 19, "three years on 11 December");
+  assert.equal(stillEmployed("2016-12-11").days, 21, "ten years on 11 December");
 
   // A day short of each anniversary stays on the step below.
-  assert.equal(atCutoff("2023-10-21").days, 15, "two years and 364 days");
-  assert.equal(atCutoff("2016-10-21").days, 19, "nine years and 364 days");
+  assert.equal(stillEmployed("2023-12-12").days, 15, "two years and 364 days");
+  assert.equal(stillEmployed("2016-12-12").days, 19, "nine years and 364 days");
 
   // And the middle of each band takes the same figure as its edge.
-  assert.equal(atCutoff("2024-06-15").days, 15);
-  assert.equal(atCutoff("2020-03-02").days, 19);
-  assert.equal(atCutoff("2005-01-01").days, 21);
+  assert.equal(stillEmployed("2024-06-15").days, 15);
+  assert.equal(stillEmployed("2020-03-02").days, 19);
+  assert.equal(stillEmployed("2005-01-01").days, 21);
 });
 
-test("under a year the bonus is the share of the cycle actually worked", () => {
-  // Hired 1 June 2026 and read at 20 October: 142 days of the cycle, and the
-  // 15-day step prorated over them. Not the whole 15 days, which is the
-  // mistake the article's "proporcional al tiempo trabajado" exists to stop.
-  const partial = atCutoff("2026-06-01");
+test("under a cycle the bonus is the share of it actually worked", () => {
+  // Hired 1 June 2026, cycle closing 11 December 2026: 194 days of it, and the
+  // 15-day step prorated over them. Not the whole 15 days, which is the mistake
+  // the article's "proporcional al tiempo trabajado" exists to stop.
+  const partial = stillEmployed("2026-06-01");
   assert.equal(partial.completedYears, 0);
   assert.equal(partial.scaleDays, 15);
-  assert.equal(round(partial.days), round(15 * 142 / 365));
-  assert.equal(partial.amount, round(900 / 30 * 15 * 142 / 365));
+  assert.equal(round(partial.days), round(15 * 194 / 365));
+  assert.equal(partial.amount, round(900 / 30 * 15 * 194 / 365));
   assert.ok(partial.days < 15);
 
-  // Someone hired in the previous year but still short of the anniversary is
-  // measured from the start of the cycle, not from their hire date: 293 days
-  // of 2026, not the 365 they have been employed.
-  const acrossTheYear = atCutoff("2025-10-21");
-  assert.equal(acrossTheYear.completedYears, 0);
-  assert.equal(round(acrossTheYear.days), round(15 * 293 / 365));
+  // Someone hired before the cycle opened is measured from the CYCLE, not from
+  // their hire date: the 365 days of it, not the longer stretch they have been
+  // employed. This is what makes the ordinary case pay a whole step.
+  const acrossTheYear = stillEmployed("2025-10-21");
+  assert.equal(acrossTheYear.completedYears, 1);
+  assert.equal(round(acrossTheYear.days), 15);
 });
 
-test("a bonus already collected is zero, and the scale never opens", () => {
-  const paid = atCutoff("2020-01-01", 2026, { alreadyPaid: true });
-  assert.equal(paid.days, 0);
-  assert.equal(paid.amount, 0);
-  assert.equal(paid.scaleAmbiguous, false);
-  assert.deepEqual(paid.appliedRules, ["dailySalaryDivisor", "accrualYearDays"],
-    "a document for a zero must not cite the scale it never read");
+test("the MTPS calculator's own output, reproduced to the cent", () => {
+  // THE EVIDENCE THIS MODULE IS BUILT ON. Five cases were run through the
+  // ministry's online calculator on 20 August 2026, plus the settlement
+  // statement the suite has reconciled against since the start. Each row it
+  // returns carries the period it covers, and every one of them reads
+  // 12/12/YYYY to 11/12/YYYY — which is how the accrual cycle stopped being a
+  // question. Its two rows are why this function returns two figures.
+  //
+  // These are not derived from anything in this repository. If one of them
+  // fails, the model and the ministry have parted company and the model is
+  // wrong until somebody re-runs the case and says otherwise.
+  const official = [
+    // start        end           salary    paid   complete  proportional
+    ["2024-12-20", "2025-11-30",  900,     false,     0.00,    426.58],
+    ["2021-11-01", "2025-12-24",  937.54,  true,      0.00,     21.15],
+    ["2020-01-01", "2026-06-30",  900,     false,   570.00,    313.89],
+    ["2023-10-15", "2026-10-05",  900,     false,   450.00,    367.40],
+    ["2023-11-01", "2026-12-15",  900,     false,   570.00,      6.25],
+    ["2020-01-01", "2026-06-30",  900,     true,      0.00,    313.89],
+  ];
+  for (const [startDate, endDate, monthlySalary, alreadyPaid, complete, proportional] of official) {
+    const where = `${startDate} to ${endDate}${alreadyPaid ? ", collected" : ""}`;
+    const bonus = calculateAguinaldo({ startDate, endDate, monthlySalary, alreadyPaid });
+    assert.equal(bonus.completeAmount, complete, `${where}: AGUINALDO COMPLETO`);
+    assert.equal(bonus.proportionalAmount, proportional, `${where}: AGUINALDO PROPORCIONAL`);
+    assert.equal(bonus.amount, round(complete + proportional), `${where}: the total is the sum`);
+  }
 });
 
-test("the two branches read seniority on different days, and say when that matters", () => {
-  // Left on 1 October 2026 having started on 15 October 2023: three years at
-  // the cutoff, but only two on the day they left. The conservative reading is
-  // the figure — crediting the step they never completed would pay for time
-  // not worked — and the other one is surfaced rather than discarded.
+test("a collected bonus settles the closed cycle, and only the closed cycle", () => {
+  const shared = { startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900 };
+
+  // Not collected: the cycle that closed on 11 December 2025 is owed whole, and
+  // the one that opened on the 12th is owed in proportion. Both at once, which
+  // is the case a single figure could not express.
+  const unpaid = calculateAguinaldo(shared);
+  assert.equal(unpaid.owedClosedCycle, true);
+  assert.equal(unpaid.closedCycleStartDate, "2024-12-12");
+  assert.equal(unpaid.closedCycleEndDate, "2025-12-11");
+  assert.equal(unpaid.completeDays, 19, "a cycle worked end to end earns its whole step");
+  assert.equal(round(unpaid.proportionalDays), round(19 * 201 / 365));
+
+  // Collected: the closed cycle goes, the running one stays. The MTPS prints
+  // exactly this — $0.00 against AGUINALDO COMPLETO and the proportional line
+  // untouched — which is what makes "already paid" a statement about a cycle
+  // rather than about a worker.
+  const paid = calculateAguinaldo({ ...shared, alreadyPaid: true });
+  assert.equal(paid.owedClosedCycle, false);
+  assert.equal(paid.completeAmount, 0);
+  assert.equal(paid.proportionalAmount, unpaid.proportionalAmount);
+});
+
+test("an advance discharges the running cycle, and only inside the window", () => {
+  // THE EIGHT-WEEK HOLE, CLOSED AS FAR AS IT CAN BE. The window opens on
+  // 20 October and the cycle runs to 11 December, so a bonus handed over in
+  // between is an advance on a cycle nobody has finished — and the MTPS says an
+  // employer who advances it must hand over the whole thing. Somebody who
+  // collected that and then leaves inside the window has already been paid for
+  // the days this function would otherwise price a second time.
+  const inside = { startDate: "2020-01-01", endDate: "2026-11-30", monthlySalary: 900 };
+  const warned = calculateAguinaldo({ ...inside, alreadyPaid: true });
+  assert.equal(warned.inAnticipationWindow, true);
+  assert.equal(warned.proportionalAmount, 552.82, "priced, and possibly already paid");
+
+  const declared = calculateAguinaldo({ ...inside, alreadyPaid: true, advanceOnRunningCycle: true });
+  assert.equal(declared.runningCycleAdvanced, true);
+  assert.equal(declared.proportionalAmount, 0, "nothing of that cycle is left to accrue");
+  assert.equal(declared.completeAmount, 0);
+
+  // OUTSIDE THE WINDOW THE FLAG IS IGNORED, and that is a safety property rather
+  // than a nicety: once the cycle reopens on 12 December there is no advance to
+  // speak of, and a share link made in November must not zero a figure that is
+  // genuinely owed when it is opened in January.
+  for (const endDate of ["2026-06-30", "2026-12-15"]) {
+    const outside = calculateAguinaldo({
+      startDate: "2020-01-01", endDate, monthlySalary: 900,
+      alreadyPaid: true, advanceOnRunningCycle: true,
+    });
+    assert.equal(outside.inAnticipationWindow, false, endDate);
+    assert.equal(outside.runningCycleAdvanced, false, endDate);
+    assert.equal(outside.proportionalAmount,
+      calculateAguinaldo({ startDate: "2020-01-01", endDate, monthlySalary: 900, alreadyPaid: true }).proportionalAmount,
+      `${endDate}: the flag changed a figure it has no business changing`);
+  }
+
+  // The window's edges, to the day. 19 October is outside it; 20 October is the
+  // first day an advance is possible and 11 December the last.
+  const edges = [["2026-10-19", false], ["2026-10-20", true], ["2026-12-11", true], ["2026-12-12", false]];
+  for (const [endDate, expected] of edges) {
+    assert.equal(
+      calculateAguinaldo({ startDate: "2020-01-01", endDate, monthlySalary: 900 }).inAnticipationWindow,
+      expected, endDate);
+  }
+});
+
+test("the scale is read on the last day of the period being paid", () => {
+  // ONE RULE, TWO PLACES, and the MTPS output separates them. Hired 1 November
+  // 2023 and leaving on 15 December 2026: two completed years at the 20 October
+  // qualifying date, three by the time the cycle closed on 11 December. The
+  // ministry pays $570 for the closed cycle, which is nineteen days — the step
+  // at the CYCLE'S CLOSE, not at the qualifying date, which would have paid
+  // fifteen and $450.
+  const straddling = calculateAguinaldo({
+    startDate: "2023-11-01", endDate: "2026-12-15", monthlySalary: 900,
+  });
+  assert.equal(straddling.completeScaleDays, 19, "the step on 11 December, not on 20 October");
+  assert.equal(straddling.completeAmount, 570);
+
+  // And the running cycle's step is read on the last day worked. Hired 15
+  // October 2023, leaving 5 October 2026: two years that day, three had they
+  // stayed to the qualifying date. The ministry prints $367.40, which is
+  // fifteen days over 298, so it does not credit the step nobody reached.
   const early = calculateAguinaldo({
-    startDate: "2023-10-15", endDate: "2026-10-01", monthlySalary: 900,
+    startDate: "2023-10-15", endDate: "2026-10-05", monthlySalary: 900,
   });
   assert.equal(early.reachedCutoff, false);
-  assert.equal(early.scaleDays, 15, "seniority at the last day worked");
-  assert.equal(early.scaleAmbiguous, true);
-  assert.equal(early.alternativeScaleDays, 19, "seniority at 20 October");
-  assert.ok(early.alternativeAmount > early.amount);
+  assert.equal(early.scaleDays, 15, "the step on the last day worked");
+  assert.equal(early.proportionalAmount, 367.40);
 
-  // Stay two more weeks and the ambiguity disappears: the cutoff was reached,
-  // so there is only one day to read the scale at.
-  const late = calculateAguinaldo({
-    startDate: "2023-10-15", endDate: "2026-10-25", monthlySalary: 900,
-  });
-  assert.equal(late.reachedCutoff, true);
-  assert.equal(late.scaleDays, 19);
-  assert.equal(late.scaleAmbiguous, false);
-  assert.equal(late.days, 19, "a completed year at the cutoff earns the whole bonus");
+  // The other reading is still named where it differs, because a practice is
+  // not a text and article 197 can still be read the other way.
+  assert.equal(early.scaleAmbiguous, true);
+  assert.equal(early.alternativeScaleDays, 19, "the step at 20 October");
+  assert.ok(early.alternativeAmount > early.proportionalAmount);
 });
 
-test("the accrual cycle is a parameter, not a 1 January buried in the arithmetic", () => {
-  // The value has not moved and this test does not move it: what it pins is
-  // that a caller CAN move it, which is the whole point of the extraction. No
-  // article of chapter VII fixes the period, and the rule says so.
-  const calendar = atCutoff("2026-01-01");
-  const later = calculateAguinaldo({
-    startDate: "2026-01-01", endDate: aguinaldoCutoffFor(2026), monthlySalary: 900,
-    cycleStart: { month: 2, day: 1 },
+test("the accrual cycle is a parameter, and the calendar year is now the alternative", () => {
+  // The value moved to 12 December on the ministry's own output, and the
+  // parameter stays because the reading it replaced has to remain producible:
+  // a rule whose alternative the code cannot express is a decision with a
+  // footnote, whichever way round it is.
+  const applied = calculateAguinaldo({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900, alreadyPaid: true,
+  });
+  assert.equal(applied.cycleStartDate, "2025-12-12");
+  assert.equal(applied.proportionalAmount, 313.89);
+
+  const calendar = calculateAguinaldo({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900, alreadyPaid: true,
+    cycleStart: { month: 1, day: 1 },
   });
   assert.equal(calendar.cycleStartDate, "2026-01-01");
-  assert.equal(later.cycleStartDate, "2026-02-01");
-  assert.ok(later.days < calendar.days, "a cycle that opens later has fewer days in it");
+  assert.equal(calendar.proportionalAmount, 282.66);
+
+  // Twenty days of scale is the whole of the difference between the two, every
+  // time, for any departure before the cycle reopens: 12 December to 1 January.
+  assert.equal(round(applied.proportionalAmount - calendar.proportionalAmount),
+    round(19 * 20 / 365 * 30), "the gap is the twenty days between the two cycle days");
+
+  // The cycle day resolves backwards when it has not come round yet, which is
+  // what lets a cycle opening in the previous year be written down at all.
+  const afterTheDay = calculateAguinaldo({
+    startDate: "2020-01-01", endDate: "2026-12-20", monthlySalary: 900,
+  });
+  assert.equal(afterTheDay.cycleStartDate, "2026-12-12");
+  assert.equal(afterTheDay.closedCycleEndDate, "2026-12-11");
 
   // The cutoff moves the same way, which is what prices a pre-2025 case.
   const oldCutoff = calculateAguinaldo({
@@ -118,39 +236,6 @@ test("the accrual cycle is a parameter, not a 1 January buried in the arithmetic
   });
   assert.equal(oldCutoff.cutoffDate, "2024-12-12");
   assert.equal(oldCutoff.reachedCutoff, true);
-});
-
-test("both readings of the accrual cycle are expressible, including the one that straddles the year", () => {
-  // The rule is marked DISPUTED and the live alternative is a cycle that opens
-  // on 12 December of the PREVIOUS year. While the cycle day was resolved
-  // inside the calendar year of the last day read, that alternative could not
-  // be written down at all — the parameter existed and could only ever produce
-  // the reading it already applied. This is that gap closed.
-  const december = calculateAguinaldo({
-    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
-    cycleStart: { month: 12, day: 12 },
-  });
-  assert.equal(december.cycleStartDate, "2025-12-12",
-    "the cycle containing 30 June 2026 opened in December 2025");
-
-  // Past the cycle day of its own year, the same parameter resolves forward
-  // rather than sticking a year behind: 20 December is inside the cycle that
-  // opened eight days earlier.
-  const afterTheDay = calculateAguinaldo({
-    startDate: "2020-01-01", endDate: "2026-12-20", monthlySalary: 900,
-    cycleStart: { month: 12, day: 12 },
-  });
-  assert.equal(afterTheDay.cycleStartDate, "2026-12-12");
-
-  // And the applied reading is untouched, which is the point of pinning it: a
-  // 1 January cycle never steps back, because no last day read is earlier than
-  // the January of its own year.
-  for (const endDate of ["2026-01-01", "2026-06-30", "2026-12-31"]) {
-    const calendar = calculateAguinaldo({
-      startDate: "2020-01-01", endDate, monthlySalary: 900,
-    });
-    assert.equal(calendar.cycleStartDate, `${endDate.slice(0, 4)}-01-01`, endDate);
-  }
 });
 
 test("the settlement and the bonus page give the same figure for the same case", () => {

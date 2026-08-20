@@ -1,5 +1,8 @@
 import type { Page } from "./routes";
-import type { OFFICIAL } from "./sources";
+// Extension written out: the test suite loads this through Node's type
+// stripping, which resolves specifiers literally. The type-only import above
+// was erased before Node saw it; this one is a value and is not.
+import { institutionOf, OFFICIAL } from "./sources.ts";
 
 /**
  * Every statutory figure the calculators apply, with the document behind it.
@@ -88,6 +91,20 @@ export type RuleVersion<T> = {
   norm: string;
   /** Which document in `OFFICIAL` has to be opened to check the value. */
   source: SourceKey;
+  /**
+   * Why the `norm` names a document that `source` does not carry.
+   *
+   * Some pairings are deliberate: a value that comes from an institution's
+   * practice cites the article the practice interprets, and a reform not yet
+   * absorbed into a consolidated text is cited through the decree that recites
+   * it. Both are legitimate and both look exactly like the accident this field
+   * exists to catch — an article cited over an explainer that never quotes it.
+   *
+   * So the mismatch is legal only when it is declared here, in words, and
+   * `tests/rules.test.mjs` fails when it is not. See `DOCUMENTS` in
+   * `sources.ts` for what each link actually carries.
+   */
+  citedThrough?: string;
   /** The day a human last read this value back against that document. */
   reviewed: string;
   /** What the source does not settle, when it does not settle it. */
@@ -332,6 +349,7 @@ export const dailySalaryDivisor = rule<number>({
     value: 30,
     norm: "Código de Trabajo arts. 142 y 183 (ninguno fija el divisor)",
     source: "laborService",
+    citedThrough: "El norm nombra los artículos que DEBERÍAN fijar el divisor y ninguno lo hace; el 30 sale de la constancia del servicio del MTPS, que es lo que abre el enlace. Reapuntarlo al Código ofrecería un documento donde el valor no está.",
     reviewed: "2026-08-16",
     status: ["UNSOURCED"],
     note: "UNSOURCED. No text fixes it: article 183 sets the base and article 142 defines the daily wage from the hourly one, so neither settles the divisor. The 30 is anchored empirically to the MTPS calculator — 30.42 stops reconciling with the official statement — and it multiplies into every daily figure the site prints: severance, vacation, the year-end bonus and every overtime hour.",
@@ -354,6 +372,7 @@ export const accrualYearDays = rule<number>({
     value: 365,
     norm: "Código de Trabajo art. 58 (\"proporcionalmente por fracciones de año\")",
     source: "laborService",
+    citedThrough: "El art. 58 dice «proporcionalmente por fracciones de año» y no dice sobre cuántos días ni si se cuentan ambos extremos. Los 365 con día de entrada y de salida incluidos son lo que hace el servicio del MTPS, y es ese documento el que reconcilia al centavo.",
     reviewed: "2026-08-16",
     note: "Leap years are not given a 366th day: the MTPS calculator prorates over 365 and pays the leap day as an extra day of service instead.",
   }],
@@ -434,6 +453,7 @@ export const vacationProportionalOnExit = rule<{
     value: { literal: ["dismissal"], applied: ["dismissal", "resignation"] },
     norm: "Código de Trabajo art. 187",
     source: "laborService",
+    citedThrough: "El art. 187 es la lectura que NO se aplica: el enlace abre el servicio del MTPS porque es la práctica que se sigue y la que la constancia acredita. Es el corazón de la ficha de /reglas-en-disputa/, y el norm nombra el texto del que se diverge.",
     reviewed: "2026-08-16",
     status: ["DISPUTED"],
     note: "DISPUTED. Article 187 reads as dismissal only; the MTPS calculator pays the fraction on resignation too, and that statement is what this module reconciles against. Applying the literal text would drop the $90.16 line from the reconciliation and change the answer for every resignation on the site.",
@@ -485,7 +505,19 @@ export const aguinaldoScale = rule<AguinaldoStep[]>({
 });
 
 /**
- * The day seniority is read at, and by which the bonus is fully earned.
+ * The day the payment window opens. NOT the day seniority is read at.
+ *
+ * IT WAS BOTH, in this registry, until the MTPS output was read in August 2026.
+ * The ministry measures the step on the last day of the period being paid — on
+ * 11 December for a closed cycle, on the last day worked for a running one —
+ * and 20 October decides only when the money has to be handed over. A worker
+ * hired on 1 November 2023 leaving on 15 December 2026 has two complete years
+ * on this date and three when the cycle closed, and is paid for three.
+ *
+ * It still earns its place: it is the only figure on `/aguinaldo/` a reader can
+ * act on, because a bonus unpaid by 20 December is a complaint they can take to
+ * the ministry. See `aguinaldoPaymentWindow` for the other end of it, and
+ * `aguinaldoAnticipatedPayment` for the gap between this date and the cycle's.
  *
  * Articles 197, 200 and 202 all keyed on 12 December until Legislative Decree
  * 433 moved them to 20 October. Both versions are listed because a settlement is
@@ -527,6 +559,7 @@ export const aguinaldoCutoff = rule<YearDay>({
       value: { month: 10, day: 20 },
       norm: "D.L. 433 del 15 de octubre de 2025 (D.O. 194, Tomo 449), que reforma los arts. 197, 200 y 202 del Código de Trabajo",
       source: "aguinaldoDecree",
+      citedThrough: "El D.L. 433 no está publicado por sí solo en la bóveda y el consolidado del Código todavía trae «doce de diciembre», así que la cita de grado decreto es el considerando V del D.L. 440, que da número, fecha y Diario Oficial. Sustituir en cuanto se publique el 433 o se actualice el consolidado.",
       reviewed: "2026-08-16",
       note: "Cited through the fifth recital of D.L. 440, which gives the decree number, date and Diario Oficial. The Asamblea's consolidated Labour Code still carried the pre-reform \"doce de diciembre\" when this was last read; swap the source for D.L. 433 itself, or for the updated consolidation, as soon as either is published.",
     },
@@ -544,40 +577,90 @@ export const aguinaldoCutoff = rule<YearDay>({
 /**
  * The day the bonus year starts accruing.
  *
- * DISPUTED. Articles 196 to 202 name the qualifying date and the payment window
- * and say the leaver is owed the part "proporcional al tiempo trabajado" — but
- * no article in the chapter says what period that proportion runs over. What
- * used to be recorded here as simply unsourced is now known to be a live
- * disagreement, with two readings in the field and neither one written down in
- * a text:
+ * SETTLED BY EVIDENCE, and it was not before. Articles 196 to 202 name the
+ * qualifying date and the payment window and say the leaver is owed the part
+ * "proporcional al tiempo trabajado" — but no article in the chapter says what
+ * period that proportion runs over. Two readings were in use and neither was
+ * written down in a text, so this rule spent a long time recording the
+ * disagreement rather than resolving it.
  *
- *   1 JANUARY, the calendar year, which is what this module applies and what
- *   the MTPS told this project when asked how an early payment is worked out:
- *   the anticipated bonus is calculated AS IF it were being paid in December,
- *   so moving the payment forward does not shorten the period it covers.
+ * WHAT RESOLVED IT: the MTPS online calculator PRINTS THE CYCLE DATES. Asked
+ * for a settlement it returns two rows, and each one carries the period it
+ * covers — "12/12/2024 - 11/12/2025" for the closed cycle and
+ * "12/12/2025 - 30/06/2026" for the running one. That is the ministry that
+ * administers the rule naming the accrual period in a document, which is what
+ * this registry said all along it was waiting for. Five cases were run on
+ * 20 August 2026, all post-reform, and every one of them names 12 December.
  *
- *   12 DECEMBER, the cycle that closes on the old qualifying date. The MTPS
- *   statement reproduced in the tests only reconciles on this reading, which is
- *   why that statement's aguinaldo line is the one figure the reconciliation
- *   leaves uncompared. Accounting practice has not converged either: both the
- *   12 December date and the reformed 20 October one are in current use.
+ * THE CALENDAR YEAR IS GONE, and it never had the backing this project claimed
+ * for it. What was recorded here as MTPS support was an inference from a press
+ * release saying an early payment must be handed over "completa" — a statement
+ * about the AMOUNT, stretched to cover the PERIOD. The evidence now runs the
+ * other way and the criterion is the one article 187 and `dailySalaryDivisor`
+ * already use: where a text is silent and the ministry acts, follow the
+ * ministry and say so.
  *
- * The value does not move on this note. Naming the second reading is not a
- * reason to adopt it, and switching cycles would silently change every
- * proportional bonus the suite pins. What settles it is a document that states
- * the accrual period, and no article in chapter VII does.
+ * WHAT MOVED WITH IT. The cycle is not a parameter swap: it changes the shape
+ * of the answer. A settlement can owe the whole bonus of the cycle that closed
+ * AND the part-year of the one that opened after it, which is why
+ * `calculateAguinaldo` now returns two lines. See the note at the top of that
+ * file, and `aguinaldoAnticipatedPayment` for what none of this models.
  */
 export const aguinaldoCycleStart = rule<YearDay>({
   id: "aguinaldoCycleStart",
   unit: "day-of-year",
   versions: [{
     from: "1972-10-31",
-    value: { month: 1, day: 1 },
-    norm: "Sin norma que lo fije: arts. 196-202 no definen el período de devengo",
-    source: "laborCode",
-    reviewed: "2026-08-16",
-    status: ["DISPUTED"],
-    note: "DISPUTED. Two readings are in use and no text settles either: the calendar year, which the MTPS supports by treating an early payment as if made in December, and a 12 December cycle, which is the only reading that reconciles the MTPS statement in the tests. Practice also still mixes the 12 December and 20 October dates. The value stays on the calendar year until a source states the accrual period. Both readings are now EXPRESSIBLE: the cycle opens on the most recent occurrence of this day on or before the last day read, so a 12 December start resolves into the previous calendar year the way that reading requires. A rule whose alternative the code cannot produce is not really in dispute — it is a decision with a footnote.",
+    value: { month: 12, day: 12 },
+    norm: "Sin norma que lo fije: arts. 196-202 no definen el período de devengo; el ciclo lo declara el servicio de cálculo del MTPS",
+    // The calculator itself, which is the document that declares the cycle by
+    // printing its dates on every row. The press release it used to point at
+    // describes an anticipated payment and never names a period.
+    source: "laborService",
+    reviewed: "2026-08-20",
+    status: ["UNSOURCED"],
+    note: "UNSOURCED. No text fixes the accrual period, and this is now decided on evidence rather than left open. No article of chapter VII fixes the accrual period, so this was two readings with nothing to choose between them. The MTPS online calculator settles it by PRINTING THE CYCLE: every row it returns carries its period, and they read 12/12/YYYY to 11/12/YYYY. Five post-reform cases run on 20 August 2026 agree, and so does the MTPS settlement statement the suite reconciles against, whose $21.15 bonus line is nineteen days of scale over the thirteen run from 12 December. The calendar year that used to sit here rested on an inference from a press release about the AMOUNT of an anticipated payment, not about its period, and that backing was overstated in this file for as long as it stood."  }],
+});
+
+/**
+ * The anticipated payment: what is now asked, and the one thing still not.
+ *
+ * THE HOLE THE 12 DECEMBER CYCLE OPENS. The payment window runs from 20 October
+ * to 20 December while the cycle it pays for does not close until 11 December,
+ * so for eight weeks of every year an employer can hand over a bonus for a cycle
+ * still running. The MTPS says so itself: an early payment is optional, and one
+ * made "debe darlo completa al trabajador".
+ *
+ * WHAT IS NOW MODELLED. This calculator asks. Where the dates put a departure
+ * inside that window it offers a third answer — an advance on the running cycle
+ * — and takes the proportional line to zero, because a bonus handed over whole
+ * leaves nothing of that cycle to accrue. That much needs no text: it is what
+ * the ministry's own publication says an advance is.
+ *
+ * WHAT IS STILL NOT MODELLED, and it is narrower than it was. Somebody who
+ * collected a whole bonus and then left mid-cycle has been paid for days they
+ * did not work, and no text says whether an employer may recover the difference.
+ * This calculator does not answer that and should not: it estimates what is owed
+ * TO the worker, and zero is the floor. A negative line would be a claim against
+ * a reader made on no authority at all.
+ *
+ * THE MTPS DOES NOT ASK EITHER. Its form has one question — "¿Recibió pago de
+ * aguinaldo del año anterior?" — and the year anterior is the cycle that CLOSED,
+ * so its own proportional line prices days an advance may already have covered.
+ * This is one of the few places the project does not follow the ministry, and
+ * the reason is the direction of the error: following it here would over-state.
+ */
+export const aguinaldoAnticipatedPayment = rule<{ windowOpens: YearDay; cycleCloses: YearDay }>({
+  id: "aguinaldoAnticipatedPayment",
+  unit: "not-modelled",
+  versions: [{
+    from: "2025-10-20",
+    value: { windowOpens: { month: 10, day: 20 }, cycleCloses: { month: 12, day: 11 } },
+    norm: "Ventana de pago del art. 200 reformado, contra el cierre del ciclo de devengo",
+    source: "aguinaldoReform",
+    reviewed: "2026-08-20",
+    status: ["NOT MODELLED"],
+    note: "NOT MODELLED, and now only in one direction. The window opens on 20 October and the cycle closes on 11 December, so for eight weeks a bonus can be handed over for a cycle still running. That much IS modelled: inside the window the form offers \"an advance on the running cycle\" and the proportional line goes to zero, because the MTPS says an advance must be handed over whole and a whole bonus leaves nothing to accrue. What stays unmodelled is the other side — whether an employer may recover the difference from somebody who collected a whole bonus and left mid-cycle. No text says, and this calculator will not answer it: it estimates what is owed TO the worker and zero is the floor. The MTPS service asks only about the cycle that closed, so this is one of the few places where following the ministry would over-state and the project does not.",
   }],
 });
 
@@ -642,6 +725,7 @@ export const aguinaldoPaymentWindow = rule<{ opens: YearDay; closes: YearDay }>(
       value: { opens: { month: 10, day: 20 }, closes: { month: 12, day: 20 } },
       norm: "D.L. 433 del 15 de octubre de 2025 (D.O. 194, Tomo 449), que reforma el art. 200 del Código de Trabajo",
       source: "aguinaldoDecree",
+      citedThrough: "Igual que `aguinaldoCutoff`: el considerando V del D.L. 440 enuncia la ventana con todas sus letras —«entre el 20 de octubre y el 20 diciembre de cada año»— y el consolidado del Código aún no absorbe la reforma.",
       reviewed: "2026-08-16",
       note: "Cited through the fifth recital of D.L. 440, which states the window the reform opened in so many words: the payment falls \"entre el 20 de octubre y el 20 diciembre de cada año\". The Asamblea's consolidated Labour Code still carried the pre-reform article when this was last read.",
     },
@@ -1024,9 +1108,15 @@ export const isssEmployeeRate = rule<number>({
   versions: [{
     from: "2015-01-01",
     value: 0.03,
-    norm: "Reglamento para la Aplicación del Régimen del Seguro Social",
+    // The Reglamento was the wrong citation and the linked document says so
+    // itself: its "BASE LEGAL" quotes the first paragraph of article 29 of the
+    // LEY del Seguro Social for the split — "el patrono aportará el siete punto
+    // cincuenta por ciento (7.5%) y el trabajador el tres por ciento (3%)" —
+    // and reaches for the Reglamento only for article 3, the remuneración
+    // afecta. The rate was being attributed to a text that does not carry it.
+    norm: "Ley del Seguro Social art. 29 inciso primero",
     source: "isss",
-    reviewed: "2026-08-14",
+    reviewed: "2026-08-19",
   }],
 });
 
@@ -1365,8 +1455,11 @@ export const nightWindow = rule<{ startsAt: number; endsAt: number }>({
     from: "1972-10-31",
     value: { startsAt: 19, endsAt: 6 },
     norm: "Código de Trabajo art. 161",
-    source: "nightShift",
-    reviewed: "2026-08-11",
+    // The Code itself, not the MTPS explainer that paraphrases it. The note
+    // below is a verbatim quotation, so the document that carries it is the one
+    // to open; the explainer named an article it does not print.
+    source: "laborCode",
+    reviewed: "2026-08-20",
     note: "\"Las diurnas están comprendidas entre las seis horas y las diecinueve horas de un mismo día; y las nocturnas, entre las diecinueve horas de un día y las seis horas del día siguiente.\"",
   }],
 });
@@ -1389,8 +1482,13 @@ export const shiftLimits = rule<Record<ShiftKind, ShiftLimit>>({
       minor16to17: { day: 8, week: 44, nocturnalFrom: 4 },
     },
     norm: "Código de Trabajo arts. 116, 161 y 162",
-    source: "workingHours",
-    reviewed: "2026-08-11",
+    // Read back against the consolidated Code on 20 August 2026: article 161
+    // gives 8/44 diurnal and 7/39 nocturnal and the four-hour test, article 162
+    // gives 7/39 and 6/36 for dangerous work and the three-and-a-half-hour
+    // test, article 116 gives 6/34 for under-sixteens. Every figure below is in
+    // those three articles; none of them is in the MTPS page this used to cite.
+    source: "laborCode",
+    reviewed: "2026-08-20",
     note: "`nocturnalFrom` is the count of night hours above which a shift is nocturnal for the purpose of its duration: more than four under article 161, more than three and a half in dangerous or unhealthy work under article 162. `week` is displayed beside the shift picker and enters no calculation.",
   }],
 });
@@ -1402,8 +1500,8 @@ export const minorOvertimeLimit = rule<number>({
     from: "1972-10-31",
     value: 2,
     norm: "Código de Trabajo art. 116",
-    source: "workingHours",
-    reviewed: "2026-08-11",
+    source: "laborCode",
+    reviewed: "2026-08-20",
     note: "\"No podrán trabajar más de dos horas extraordinarias en un día\", for workers under sixteen.",
   }],
 });
@@ -1416,10 +1514,16 @@ export const minorOvertimeLimit = rule<number>({
  * holiday "el cálculo para el pago de los recargos respectivos" is made on the
  * extraordinary salary of that day. The 25% night premium of article 168 is one
  * of those recargos, and the worked example the MTPS publishes fixes the order:
- * on an hour worth $1.50 the daytime overtime hour pays $3.00 and the night one
- * $3.74, so the 25% falls on the hour already surcharged by 100%, not on the
- * basic one. Applying that same order to the bases of 3 and 4 is what produces
- * 3.75 and 5.
+ * on an hour worth $1.50 the daytime overtime hour pays $3.00, and the night one
+ * adds the 25% to THAT rather than to the basic hour. Applying the same order to
+ * the bases of 3 and 4 is what produces 3.75 and 5.
+ *
+ * THE EXAMPLE IS A CENT OUT AND THIS DOES NOT COPY IT. The ministry writes
+ * "$0.74 (25% nocturnidad) + 3.00 = $3.74", but a quarter of $3.00 is $0.75 and
+ * the correct total is $3.75. The order it demonstrates is what this rule takes
+ * from the document; the arithmetic slip in the last line is not evidence of
+ * anything and reproducing it would put a wrong figure on a payslip check. Read
+ * back against the page on 20 August 2026 — the wording is unchanged.
  */
 export const overtimeFactors = rule<{
   overtimeDiurnal: number; overtimeNocturnal: number; nightSurcharge: number;
@@ -1457,7 +1561,8 @@ export const overtimeFactors = rule<{
     },
     norm: "Código de Trabajo arts. 168, 169, 175 y 192",
     source: "overtimePay",
-    reviewed: "2026-08-11",
+    citedThrough: "Los factores nocturnos no están en ningún artículo suelto: los arts. 175 y 192 mandan calcular los recargos sobre el salario extraordinario del día y el 168 pone el 25%, pero el ORDEN de las dos operaciones solo lo fija el ejemplo numérico que publica el MTPS. El enlace abre ese ejemplo porque es lo único que sostiene el 2.5.",
+    reviewed: "2026-08-20",
   }],
 });
 
@@ -1469,7 +1574,7 @@ export const RULES = {
   dailySalaryDivisor, accrualYearDays,
   vacationDaysPerYear, vacationSurcharge, vacationProportionalOnExit, vacationUnmodelled,
   aguinaldoScale, aguinaldoScaleOnExit, aguinaldoCutoff, aguinaldoCycleStart,
-  aguinaldoPaymentWindow, aguinaldoTaxExemption,
+  aguinaldoPaymentWindow, aguinaldoTaxExemption, aguinaldoAnticipatedPayment,
   quincena25SalaryCeiling, quincena25Rate, quincena25Exempt, quincena25Window,
   quincena25MandatoryFrom,
   withholdingTables, recalcTables, recalcMonths,
@@ -1523,6 +1628,7 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
     "dailySalaryDivisor", "accrualYearDays",
     "vacationDaysPerYear", "vacationSurcharge", "vacationProportionalOnExit", "vacationUnmodelled",
     "aguinaldoScale", "aguinaldoScaleOnExit", "aguinaldoCutoff", "aguinaldoCycleStart",
+    "aguinaldoAnticipatedPayment",
     "quincena25SalaryCeiling", "quincena25Rate", "quincena25Exempt", "quincena25Window",
     "quincena25MandatoryFrom",
   ],
@@ -1532,7 +1638,7 @@ export const RULE_USAGE: Record<Page, RuleId[]> = {
   aguinaldo: [
     "dailySalaryDivisor", "accrualYearDays",
     "aguinaldoScale", "aguinaldoScaleOnExit", "aguinaldoCutoff", "aguinaldoCycleStart",
-    "aguinaldoPaymentWindow", "aguinaldoTaxExemption",
+    "aguinaldoPaymentWindow", "aguinaldoTaxExemption", "aguinaldoAnticipatedPayment",
   ],
   overtime: [
     "dailySalaryDivisor", "nightWindow", "shiftLimits", "minorOvertimeLimit", "overtimeFactors",
@@ -1667,3 +1773,31 @@ export function citationsFor(ids: RuleId[], isoDate: string): Citation[] {
  * spoke for because nothing tied the two together.
  */
 export const RULES_REVIEWED: string = oldestReviewed(ALL_RULES)!;
+
+/**
+ * The institutions this site's figures actually come from, most-cited first,
+ * each with the document of theirs the registry leans on hardest.
+ *
+ * For the home page's row of sources, which used to be four names typed into a
+ * component. A front door that names four documents while the calculators
+ * behind it cite fifteen is not a summary; it is a claim that has fallen
+ * behind, and it is the half of the site a first-time reader judges the rest
+ * by. Derived, so it cannot happen again.
+ */
+export function institutionsCited(): { name: string; href: string }[] {
+  const tally = new Map<string, { name: string; source: SourceKey; rules: number }>();
+  for (const rule of ALL_RULES) {
+    // One rule counts once for a document however many versions cite it: five
+    // transitory decrees in one rule are not five reasons to trust the LISR.
+    for (const source of new Set(rule.versions.map((version) => version.source))) {
+      const name = institutionOf(source);
+      if (!name) continue;
+      const seen = tally.get(name);
+      if (seen === undefined) tally.set(name, { name, source, rules: 1 });
+      else seen.rules += 1;
+    }
+  }
+  return [...tally.values()]
+    .sort((a, b) => b.rules - a.rules || a.name.localeCompare(b.name))
+    .map(({ name, source }) => ({ name, href: OFFICIAL[source] }));
+}

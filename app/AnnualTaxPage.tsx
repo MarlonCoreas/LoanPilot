@@ -13,7 +13,7 @@ import type { Lang } from "./routes";
 import { ROUTES } from "./routes";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
-import { OFFICIAL } from "./sources";
+import { documentName, OFFICIAL } from "./sources";
 import { calculatePayrollWithholding } from "./statutory";
 import UtilityHero from "./UtilityHero";
 
@@ -600,7 +600,7 @@ export default function AnnualTaxPage({ lang }: { lang: Lang }) {
 
       <div className="source-panel"><h2>{t.sources}</h2><div className="source-links">
         {citations.map((citation, index) => <a key={citation.norm} href={OFFICIAL[citation.source]} target="_blank" rel="noreferrer">
-          <b>{String(index + 1).padStart(2, "0")}</b>{citation.norm}<span>↗</span>
+          <b>{String(index + 1).padStart(2, "0")}</b><em>{citation.norm}<i>{documentName(citation.source)}</i></em><span>↗</span>
         </a>)}
       </div></div>
 

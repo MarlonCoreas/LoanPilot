@@ -31,11 +31,13 @@ test("statutory figures still match the official texts they are quoted from", ()
   });
 
   // Labor Code art. 198: 15 days from one year, 19 from three, 21 from ten.
-  // Read through a full year of service so the scale is exercised, not restated.
+  // The STEP is what this pins, not the money: since the bonus comes in two
+  // lines the total is a sum of two periods, and asserting it here would be
+  // testing the cycle arithmetic under the name of article 198.
   const aguinaldoFor = (years) => calculateSettlement({
     startDate: `${2026 - years}-10-20`, endDate: "2026-10-20", monthlySalary: 900,
     sector: "commerce", termination: "dismissal",
-  }).aguinaldoDays;
+  }).aguinaldoScaleDays;
   assert.equal(aguinaldoFor(1), 15);
   assert.equal(aguinaldoFor(2), 15);
   assert.equal(aguinaldoFor(3), 19);
@@ -786,15 +788,18 @@ test("reproduces a real MTPS settlement statement to the cent", () => {
   assert.equal(result.indemnityBaseDaily, 26.88, "capped at two daily minimum wages");
   assert.equal(result.indemnity, 1673.55, "1,613.90 + 59.65");
   assert.equal(result.vacation, 90.16);
-  // The aguinaldo line is deliberately not compared: the MTPS runs its bonus
-  // year from 12 December, this module still runs it over the calendar year,
-  // and settling that needs the October 2025 reform decree.
+  // AND THE BONUS LINE, which this suite left uncompared for as long as it
+  // existed. The statement prints $21.15 and so does this, now that the cycle
+  // is the ministry's own: nineteen days of scale over the thirteen run from
+  // 12 December, with the cycle that closed on the 11th already collected.
   //
-  // Left open on purpose as of August 2026. It is scheduled for the pass that
-  // extracts the statutory constants into dated data files, where the bonus
-  // year becomes a declared date rather than a hardcoded 1 January. Do not
-  // patch it inline here: changing the cycle silently moves every proportional
-  // bonus this suite pins, and it needs its own source check first.
+  // It was the last figure on the document that did not reconcile. Getting it
+  // to agree took a cycle date, a second line for the closed cycle, and the
+  // removal of a qualifying-date cap this project had invented — none of which
+  // was visible while the line was simply skipped.
+  assert.equal(result.aguinaldo, 21.15, "the aguinaldo line of the statement");
+  assert.equal(result.total, round(1673.55 + 90.16 + 21.15),
+    "and the whole document now adds up");
 });
 
 test("leaving before the cutoff accrues the year-end bonus in proportion to days worked", () => {
@@ -802,24 +807,44 @@ test("leaving before the cutoff accrues the year-end bonus in proportion to days
     startDate: "2020-01-01", endDate: "2026-03-31", monthlySalary: 900,
     sector: "commerce", termination: "dismissal",
   });
-  // 19 days for six years of service, over the 90 days worked in 2026.
-  assert.equal(result.aguinaldoDays.toFixed(4), "4.6849");
-  assert.equal(result.aguinaldo, 140.55);
+  // TWO CYCLES AT ONCE, which is what a settlement in March owes. The cycle
+  // that closed on 11 December 2025 was never collected, so its whole 19 days
+  // are due; the one that opened on the 12th has run 110 days by 31 March.
+  assert.equal(result.aguinaldoCompleteDays, 19);
+  assert.equal(result.aguinaldoDays.toFixed(4), (19 + 19 * 110 / 365).toFixed(4));
+  assert.equal(result.aguinaldo, round(30 * (19 + 19 * 110 / 365)));
 
+  // Collected, and only the closed cycle goes. The 110 days of the running one
+  // are still owed — the flag settles a cycle, not a worker.
   const alreadyPaid = calculateSettlement({
     startDate: "2020-01-01", endDate: "2026-03-31", monthlySalary: 900,
     sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
   });
-  assert.equal(alreadyPaid.aguinaldo, 0);
+  assert.equal(alreadyPaid.aguinaldoCompleteDays, 0);
+  assert.equal(alreadyPaid.aguinaldoDays.toFixed(4), (19 * 110 / 365).toFixed(4));
 });
 
-test("the 2025 October 20 reform grants the full due year-end bonus at the cutoff", () => {
+test("the qualifying date opens the payment window and no longer caps the accrual", () => {
+  // Leaving ON the qualifying date, bonus never collected. This used to return
+  // a flat 19 days on the reading that reaching 20 October earned the whole
+  // bonus and stopped the clock. The MTPS does neither: the cycle runs to
+  // 11 December, so 20 October is 313 days into it, and the cycle that closed
+  // the previous December is a separate debt.
   const result = calculateSettlement({
     startDate: "2020-01-01", endDate: "2026-10-20", monthlySalary: 900,
     sector: "commerce", termination: "dismissal", aguinaldoPaid: false,
   });
-  assert.equal(result.aguinaldoDays, 19);
-  assert.equal(result.aguinaldo, 570);
+  assert.equal(result.aguinaldoCompleteDays, 19, "the cycle that closed unpaid");
+  assert.equal(result.aguinaldoDays.toFixed(4), (19 + 19 * 313 / 365).toFixed(4));
+
+  // With it collected, what is left is the 313 days of the running cycle — and
+  // that is the figure the old model could not produce at all, because it paid
+  // a whole bonus at the cutoff and zero once the box was ticked.
+  const collected = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-10-20", monthlySalary: 900,
+    sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
+  });
+  assert.equal(collected.aguinaldo, round(30 * 19 * 313 / 365));
 });
 
 // --- Vacation battery -------------------------------------------------------
@@ -982,11 +1007,13 @@ test("the year-end bonus scale window is flagged, not silently resolved", () => 
   assert.equal(ambiguous.aguinaldoScaleAmbiguous, true);
   assert.equal(ambiguous.aguinaldoScaleDays, 15, "the scale at the last day worked");
   assert.equal(ambiguous.aguinaldoAlternativeScaleDays, 19, "the scale at 20 October");
-  // Both readings share the same 278/365 fraction: only the step differs.
-  assert.equal(ambiguous.aguinaldoDays.toFixed(4), "11.4247");
-  assert.equal(ambiguous.aguinaldo, 342.74, "the figure actually reported");
-  assert.equal(ambiguous.aguinaldoAlternativeDays.toFixed(4), "14.4712");
-  assert.equal(ambiguous.aguinaldoAlternative, 434.14, "shown only as the alternative");
+  // The ambiguity lives in the RUNNING cycle only: the closed one was measured
+  // on the day it closed, and nobody disputes that day. 298 days of it, and the
+  // two readings differ in the step alone.
+  assert.equal(ambiguous.aguinaldoProportionalDays.toFixed(4), (15 * 298 / 365).toFixed(4));
+  assert.equal(ambiguous.aguinaldoProportional, 367.40, "the figure the MTPS prints");
+  assert.equal(ambiguous.aguinaldoAlternativeDays.toFixed(4), (19 * 298 / 365).toFixed(4));
+  assert.equal(ambiguous.aguinaldoAlternative, 465.37, "shown only as the alternative");
 
   // Well clear of any step: six complete years on both dates, so there is
   // nothing to disclose and the alternative fields stay empty.
@@ -997,27 +1024,43 @@ test("the year-end bonus scale window is flagged, not silently resolved", () => 
   assert.equal(settled.aguinaldoScaleAmbiguous, false);
   assert.equal(settled.aguinaldoAlternativeScaleDays, 0);
   assert.equal(settled.aguinaldoAlternative, 0);
-  assert.equal(settled.aguinaldoDays.toFixed(4), "14.4712", "19 days over 278/365");
+  // Nothing to disclose, and two cycles owed: the closed one whole and the
+  // running one over its 298 days. Reading the step is unambiguous on both.
+  assert.equal(settled.aguinaldoCompleteDays, 19);
+  assert.equal(settled.aguinaldoProportionalDays.toFixed(4), (19 * 298 / 365).toFixed(4));
 
-  // Past the cutoff the worker did reach the qualifying date, so the scale is
-  // read there and nothing is ambiguous. This case is unchanged by the window
-  // check: it is the branch that already used the 20 October seniority.
+  // LEAVING AFTER THE CYCLE REOPENED, which is the case that decided the whole
+  // shape of this module. Hired 1 November 2023, left 15 December 2026: the
+  // cycle closed on the 11th and was never collected, and four days of the next
+  // one had run by the time they left. This is calculation 219640 on the MTPS
+  // service, run on 20 August 2026, and it prints $570.00 and $6.25.
+  //
+  // Nothing is ambiguous here and the reason is worth keeping: the step is read
+  // on the last day of each period, and on 11 December they had three complete
+  // years. Read at the 20 October qualifying date they would have had two, and
+  // the whole line would have been $450 — which is what this suite pinned until
+  // the ministry's own output said otherwise.
   const afterCutoff = calculateSettlement({
     startDate: "2023-11-01", endDate: "2026-12-15", monthlySalary: 900,
     sector: "commerce", termination: "dismissal",
   });
   assert.equal(afterCutoff.completedYears, 3, "three years on the last day worked");
   assert.equal(afterCutoff.aguinaldoScaleAmbiguous, false);
-  assert.equal(afterCutoff.aguinaldoDays, 15, "two years at 20 October, paid in full");
-  assert.equal(afterCutoff.aguinaldo, 450);
+  assert.equal(afterCutoff.aguinaldoComplete, 570, "the cycle that closed unpaid");
+  assert.equal(afterCutoff.aguinaldoProportional, 6.25, "four days of the one that opened");
+  assert.equal(afterCutoff.aguinaldo, 576.25);
 
-  // A bonus already paid has no figure to disclose either way.
+  // Collecting the closed cycle does NOT settle the disclosure, because the
+  // running cycle is still being priced and its step is still read on a day
+  // article 197 can be read against. Only the closed line goes.
   const paid = calculateSettlement({
     startDate: "2023-10-15", endDate: "2026-10-05", monthlySalary: 900,
     sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
   });
-  assert.equal(paid.aguinaldoScaleAmbiguous, false);
-  assert.equal(paid.aguinaldo, 0);
+  assert.equal(paid.aguinaldoComplete, 0, "the closed cycle was collected");
+  assert.equal(paid.aguinaldo, 367.40, "and the running one is still owed");
+  assert.equal(paid.aguinaldoScaleAmbiguous, true,
+    "the running cycle still crosses a step, so the second reading is still named");
 });
 
 // --- What the exported document is allowed to say ---------------------------
@@ -1051,15 +1094,16 @@ test("a settlement cites the rules it applied, and no others", () => {
     assert.ok(!resignation.appliedRules.includes(id), `a resignation must not cite ${id}`);
   }
 
-  // A bonus already paid never opens the article 198 scale, so the document
-  // must not claim the scale is what produced its zero.
+  // A collected bonus settles the cycle that closed and nothing else, so the
+  // document still cites the scale: the running cycle produced a figure.
   const paid = calculateSettlement({
     startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
     sector: "commerce", termination: "dismissal", aguinaldoPaid: true,
   });
-  assert.equal(paid.aguinaldo, 0);
+  assert.equal(paid.aguinaldoComplete, 0, "the closed cycle was collected");
+  assert.equal(paid.aguinaldo, 313.89, "the running cycle is still owed");
   for (const id of ["aguinaldoScale", "aguinaldoCutoff", "aguinaldoCycleStart"]) {
-    assert.ok(!paid.appliedRules.includes(id), `a bonus already paid must not cite ${id}`);
+    assert.ok(paid.appliedRules.includes(id), `the figure rests on ${id}, so it has to cite it`);
   }
 
   // Every citation the document will print has to resolve to a live document.
@@ -1068,7 +1112,9 @@ test("a settlement cites the rules it applied, and no others", () => {
   }
 
   // An invalid case exports nothing, and must not offer a source list for a
-  // calculation that did not happen.
+  // calculation that did not happen. It is also the only settlement left that
+  // cites no scale at all: being hired inside the running cycle no longer means
+  // a zero, because those days accrue like any others.
   const broken = calculateSettlement({
     startDate: "2026-06-30", endDate: "2020-01-01", monthlySalary: 900,
     sector: "commerce", termination: "dismissal",
@@ -1107,6 +1153,59 @@ test("the settlement says whether the statutory cap bit, rather than implying it
   assert.equal(under.dailySalary, 20);
   assert.equal(under.capApplied, false, "20 is under the 26.88 cap");
   assert.equal(under.indemnityBaseDaily, 20, "the salary is used in full");
+});
+
+test("a whole MTPS document reconciles on a resignation, total included", () => {
+  // Calculation 219640 on the ministry's service, run on 20 August 2026: hired
+  // 1 January 2020, resigned 30 June 2026, $900 a month, commerce, with neither
+  // the previous cycle's bonus nor the previous year's vacation collected.
+  //
+  // Five printed rows and the total, all reconciled. It is the strongest check
+  // in this suite: the earlier statement covered a resignation too, but this one
+  // exercises the two-line bonus, the complete vacation period and the Law 592
+  // cap in a single document, on the tool as it stands today.
+  //
+  // The MTPS asks "¿Recibió pago vacacional del año anterior?" where this form
+  // asks for complete unused periods; answering No there is one period here.
+  const r = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", termination: "resignation", unusedVacationPeriods: 1,
+  });
+  assert.equal(r.indemnity, 2621.35, "15 days a year capped at two daily minimum wages");
+  assert.equal(r.proportionalVacation, 290.10);
+  assert.equal(r.completeVacation, 585.00);
+  assert.equal(r.aguinaldoComplete, 570.00, "the closed cycle is owed on a resignation too");
+  assert.equal(r.aguinaldoProportional, 313.89);
+  assert.equal(r.total, 4380.34, "SUMA TOTAL");
+});
+
+test("everything except a voluntary resignation is priced as a dismissal", () => {
+  // The MTPS offers eleven reasons and prices ten of them alike: a termination
+  // POR MUTUO ACUERDO returns $5,851.23 of indemnización, to the cent the same
+  // as POR DESPIDO on identical dates. Only POR RENUNCIA differs, because only
+  // it is governed by Law 592.
+  //
+  // This form offers two options, which is enough to cover all eleven — but only
+  // if the reader picks the right one, and somebody who agreed to leave may well
+  // read "renuncia" as describing them. That is a $3,229.88 under-statement on
+  // this case, so the field carries help text saying which is which. This pins
+  // the arithmetic the help text promises.
+  const shared = {
+    startDate: "2020-01-01", endDate: "2026-06-30", monthlySalary: 900,
+    sector: "commerce", unusedVacationPeriods: 1,
+  };
+  const asDismissal = calculateSettlement({ ...shared, termination: "dismissal" });
+  const asResignation = calculateSettlement({ ...shared, termination: "resignation" });
+  assert.equal(asDismissal.indemnity, 5851.23, "article 58: 30 days a year, cap of four");
+  assert.equal(asResignation.indemnity, 2621.35, "Law 592: 15 days a year, cap of two");
+  assert.equal(round(asDismissal.indemnity - asResignation.indemnity), 3229.88,
+    "what picking the wrong option costs, and what the help text exists to prevent");
+
+  // Every other line is identical between the two, which is why the choice
+  // reads as harmless and is not.
+  for (const line of ["completeVacation", "proportionalVacation", "aguinaldoComplete", "aguinaldoProportional"]) {
+    assert.equal(asDismissal[line], asResignation[line], line);
+  }
 });
 
 test("the article 187 divergence is flagged on the cases it actually touches", () => {

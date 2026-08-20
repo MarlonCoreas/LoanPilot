@@ -8,7 +8,7 @@ import { PAGE_LABELS, ROUTES, type Lang } from "./routes";
 import { disputedVersions, type AnyRule, type RuleId, type RuleStatus, type RuleVersion } from "./rules";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
-import { OFFICIAL } from "./sources";
+import { documentName, OFFICIAL } from "./sources";
 import UtilityHero from "./UtilityHero";
 
 /**
@@ -50,6 +50,7 @@ const copy = {
       ["EN DISPUTA", "Hay dos lecturas defendibles: un texto y una práctica oficial que no dicen lo mismo, o dos artículos que se leen distinto. Se aplica una.", "⚖"],
       ["SIN FUENTE", "Ningún documento fija el valor. No hay dos lecturas que contraponer: hay un silencio y una cifra que este proyecto eligió.", "○"],
       ["LA QUE SE APLICA", "De las dos lecturas, la que produce la cifra en pantalla. Marcada como aplicada, nunca como correcta.", "▸"],
+      ["LAS DOS MARCAS", "Una ficha puede llevar EN DISPUTA y SIN FUENTE a la vez, como la de la Quincena 25: una parte de la regla se lee de dos formas y otra parte no la fija ningún texto. Aparece entre las reglas en disputa, porque el desacuerdo es lo que hay que decidir primero.", "⚖○"],
     ] as const,
     disputedTitle: "Reglas en disputa",
     disputedEyebrow: "DOS LECTURAS, UNA APLICADA",
@@ -87,6 +88,7 @@ const copy = {
       ["DISPUTED", "Two defensible readings: a text and an official practice that differ, or two articles that read against each other. One of them is applied.", "⚖"],
       ["UNSOURCED", "No document fixes the value. There are no two readings to set against each other: there is a silence, and a figure this project chose.", "○"],
       ["THE ONE APPLIED", "Of the two readings, the one that produces the figure on screen. Marked as applied, never as correct.", "▸"],
+      ["BOTH MARKS", "One entry can carry DISPUTED and UNSOURCED at once, as the Quincena 25 does: part of the rule reads two ways and another part is fixed by no text at all. It appears among the rules in dispute, because the disagreement is what has to be decided first.", "⚖○"],
     ] as const,
     disputedTitle: "Rules in dispute",
     disputedEyebrow: "TWO READINGS, ONE APPLIED",
@@ -173,6 +175,11 @@ function EntryCard({ index, rule, version, question, lang, t, children }: {
         <a href={OFFICIAL[version.source]} target="_blank" rel="noreferrer">
           {version.norm}<i aria-hidden="true">↗</i>
         </a>
+        {/* What the link actually opens. On this page above all: three of these
+            entries cite an article over a document that interprets it rather
+            than one that prints it, and that is the honest pairing — but only
+            if the reader is told which they are about to read. */}
+        <small className="dispute-doc">{documentName(version.source)}</small>
         <small>{t.reviewed(reviewedDate(lang, version.reviewed))}</small>
       </div>
       {pages.length > 0 && <div>

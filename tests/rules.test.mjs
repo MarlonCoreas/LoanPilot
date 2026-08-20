@@ -1,13 +1,16 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { ASSUMPTIONS, DISPUTES, assumptionFor, disputeFor, pagesApplying } from "../app/disputes.ts";
 import {
-  ALL_RULES, citationsFor, disputedVersions, oldestReviewed, reviewedFor, ruleAt, RULES,
-  RULE_USAGE, RULES_REVIEWED, sectionFor,
+  ALL_RULES, citationsFor, disputedVersions, institutionsCited, oldestReviewed, reviewedFor,
+  ruleAt, RULES, RULE_USAGE, RULES_REVIEWED, sectionFor,
 } from "../app/rules.ts";
 import { LANGS, PAGES } from "../app/routes.ts";
-import { OFFICIAL } from "../app/sources.ts";
+import {
+  DOCUMENTS, DOCUMENT_IDENTITIES, INSTITUTIONS, institutionOf, OFFICIAL,
+} from "../app/sources.ts";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -164,6 +167,85 @@ test("no normative figure is cited from the press", () => {
       assert.ok(url.hostname.endsWith(".gob.sv"),
         `${rule.id} @ ${version.from} cites ${url.hostname}, which is not an official Salvadoran domain`);
     }
+  }
+});
+
+test("a norm never names a document its link does not open", () => {
+  // THE D.L. 499 DEFECT, GENERALISED. Three rules of the Quincena 25 once
+  // pointed at the Labour Code, whose reform table carries a different "D. L.
+  // No. 499" from 1976 — a citation that resolved, looked right, and led
+  // somewhere else. That was fixed by hand, and nothing stopped the same shape
+  // recurring: article 187 over the MTPS calculator, four Labour Code articles
+  // over MTPS explainers, two different norms sharing one ISSS URL.
+  //
+  // Both fields were defensible alone, which is why only the PAIR can be
+  // checked. `DOCUMENTS[source].carries` says whose text is inside the file;
+  // the norm is scanned for the identities anything carries; and each one it
+  // names has to be in there — or the version has to say in words why not.
+  //
+  // A consolidated text carries many identities and is shared by many rules:
+  // that is correct and does not fire here. Sharing a URL is not the defect.
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const carried = DOCUMENTS[version.source].carries;
+      const named = DOCUMENT_IDENTITIES.filter((identity) => version.norm.includes(identity));
+      const foreign = named.filter((identity) => !carried.includes(identity));
+      const where = `${rule.id} @ ${version.from}`;
+      if (version.citedThrough) {
+        assert.ok(foreign.length > 0,
+          `${where} declares citedThrough but its norm names nothing its source lacks — drop the field`);
+        assert.ok(version.citedThrough.length > 40,
+          `${where} has to say WHY in a sentence, not a word`);
+        continue;
+      }
+      assert.deepEqual(foreign, [],
+        `${where} names ${foreign.join(", ")} but its link opens `
+        + `"${DOCUMENTS[version.source].name}". Point it at the document that `
+        + `carries the article, or declare citedThrough to say why it cannot.`);
+    }
+  }
+});
+
+test("every document says what it is called, so a link can be labelled honestly", () => {
+  // The names are what the reader is told they are opening. A source with no
+  // name would put the burden back on `norm`, which is the arrangement this
+  // pair of tests exists to end.
+  assert.deepEqual(Object.keys(DOCUMENTS).sort(), Object.keys(OFFICIAL).sort(),
+    "every link needs a document entry and every document entry needs a link");
+  for (const [key, doc] of Object.entries(DOCUMENTS)) {
+    assert.ok(doc.name.length > 8, `${key} needs a name a reader can recognise`);
+    for (const identity of doc.carries) {
+      assert.ok(DOCUMENT_IDENTITIES.includes(identity), `${key} carries an unknown identity`);
+    }
+  }
+});
+
+test("the home page's row of sources is every institution the rules actually cite", () => {
+  // It used to be four names typed into PlatformHome, and it had gone stale:
+  // the LISR, the Ley Integral del Sistema de Pensiones, the ISSS and the D.L.
+  // 499 were being cited by the calculators while the front door named none of
+  // them. A summary that has fallen behind is worse than no summary, because it
+  // is the page a first-time reader judges the rest of the site by.
+  const cited = institutionsCited();
+  assert.ok(cited.length > 0, "an empty row would make the home page claim nothing");
+  assert.deepEqual([...new Set(cited.map((item) => item.name))], cited.map((item) => item.name),
+    "an institution must appear once, however many of its documents are cited");
+
+  // Every rule source resolves to a named institution, so a new document on a
+  // host nobody has named cannot slip in and quietly vanish from the row.
+  const names = new Set(cited.map((item) => item.name));
+  for (const rule of ALL_RULES) {
+    for (const version of rule.versions) {
+      const institution = institutionOf(version.source);
+      assert.ok(institution,
+        `${rule.id} cites ${new URL(OFFICIAL[version.source]).hostname}, which INSTITUTIONS does not name`);
+      assert.ok(names.has(institution), `${institution} is cited but missing from the row`);
+    }
+  }
+
+  // And each pill opens a document that institution actually published.
+  for (const { name, href } of cited) {
+    assert.equal(INSTITUTIONS[new URL(href).hostname], name, `${name} links to another institution's host`);
   }
 });
 
@@ -414,12 +496,19 @@ test("the known disputes and the known assumptions are the ones on the page", ()
   // takes the entry off the page with it, and nothing else here would notice.
   assert.deepEqual(
     disputedVersions("disputed").map(({ rule }) => rule.id).sort(),
-    ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"],
+    ["aguinaldoScaleOnExit", "quincena25Window", "vacationProportionalOnExit"],
     "the rules where a text and a practice, or two articles, disagree");
   assert.deepEqual(
     disputedVersions("unsourced").map(({ rule }) => rule.id).sort(),
-    ["dailySalaryDivisor"],
+    ["aguinaldoCycleStart", "dailySalaryDivisor"],
     "the rules no document fixes at all");
+
+  // `aguinaldoCycleStart` moved between these two lists in August 2026 and the
+  // move is the point of naming them per section. It was filed as a dispute
+  // while two readings of the accrual period were in use and neither had a
+  // document; the MTPS calculator then turned out to PRINT the cycle on every
+  // row, which makes it the divisor's shape and not article 187's — a silence
+  // in the text that an institution fills, with nothing left to argue against.
 
   // And the two together are everything the registry marks: a section neither
   // list covers would be published under no heading.
@@ -427,6 +516,34 @@ test("the known disputes and the known assumptions are the ones on the page", ()
     disputedVersions().map(({ rule }) => rule.id).sort(),
     ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "dailySalaryDivisor", "quincena25Window",
       "vacationProportionalOnExit"]);
+});
+
+test("every callout that links to a rule links to one the page publishes", () => {
+  // `DisputeLink` builds `/reglas-en-disputa/#<ruleId>`, and that page only
+  // renders rules marked DISPUTED or UNSOURCED. Pointing one at a NOT MODELLED
+  // rule compiles, type-checks and ships a dead anchor: the reader lands at the
+  // top of the page with no idea which entry they were promised. That is the
+  // exact shape of the D.L. 499 defect — a link that resolves and goes nowhere
+  // useful — and it happened once already while this pass was being written.
+  const published = new Set(disputedVersions().map(({ rule }) => rule.id));
+  const sources = ["StatutoryTools.tsx", "AguinaldoPage.tsx", "AnnualTaxPage.tsx", "DisputePanel.tsx"];
+  let linked = 0;
+  for (const file of sources) {
+    let text;
+    try {
+      text = readFileSync(new URL(`../app/${file}`, import.meta.url), "utf8");
+    } catch {
+      continue;
+    }
+    for (const [, id] of text.matchAll(/DisputeLink rule="([A-Za-z0-9]+)"/g)) {
+      linked += 1;
+      assert.ok(id in RULES, `${file} links to "${id}", which is not a rule at all`);
+      assert.ok(published.has(id),
+        `${file} links to ${id}, which /reglas-en-disputa/ does not publish — `
+        + `it is ${(RULES[id].versions[0].status ?? ["unmarked"]).join(" + ")}`);
+    }
+  }
+  assert.ok(linked > 0, "the scan found no callouts at all, so it is not checking anything");
 });
 
 test("no rule claims to have been reviewed before it existed, or in the future", () => {

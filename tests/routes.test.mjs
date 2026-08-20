@@ -1,7 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { LANGS, PAGES, ROUTES, resolveRoute } from "../app/routes.ts";
+import { LANGS, PAGES, PAGE_LABELS, PAGE_META, ROUTES, TOOL_PAGES, resolveRoute } from "../app/routes.ts";
+
+test("the home description names every calculator the site actually ships", () => {
+  // It is the Google snippet, and it had fallen behind by three tools: the
+  // credit card, the year-end bonus and the annual return all shipped without
+  // ever reaching it. Nothing caught that, because a description is prose and
+  // prose does not fail a build.
+  //
+  // Derived from the nav labels rather than from a list kept here, so the next
+  // calculator added to PAGES fails this until the snippet mentions it.
+  for (const lang of LANGS) {
+    const description = PAGE_META[lang].home.description.toLowerCase();
+    for (const page of TOOL_PAGES) {
+      assert.ok(description.includes(PAGE_LABELS[lang][page].toLowerCase()),
+        `the ${lang} home snippet never mentions ${PAGE_LABELS[lang][page]}`);
+    }
+    // Google truncates around 160 characters; past that the tail is invisible.
+    assert.ok(description.length <= 175,
+      `the ${lang} home snippet is ${description.length} characters and will be cut`);
+  }
+});
 
 test("resolves every route in the table, with or without a trailing slash", () => {
   for (const lang of LANGS) {

@@ -136,10 +136,10 @@ export const DISPUTES: Dispute[] = [
       {
         label: { es: "La antigüedad del último día trabajado", en: "Length of service at the last day worked" },
         text: {
-          es: "El escalón que la persona había cumplido de verdad al terminar el contrato. Es la lectura que nunca paga un escalón de antigüedad que nadie alcanzó, y por eso es la que no puede sobrestimar la cifra.",
-          en: "The step the worker had actually completed when the contract ended. It is the reading that never pays for a seniority step nobody reached, which is why it cannot over-state the figure.",
+          es: "El escalón que la persona había cumplido de verdad al terminar el contrato. Es lo que hace el servicio de cálculo del MTPS: para una salida el 5 de octubre de 2026 con ingreso el 15 de octubre de 2023 —dos años cumplidos ese día, tres si hubiera llegado al corte— el ministerio imprime $367.40, que son 15 días de escala y no 19. Es además la lectura que nunca paga un escalón que nadie alcanzó.",
+          en: "The step the worker had actually completed when the contract ended. It is what the MTPS calculation service does: for a departure on 5 October 2026 with a start date of 15 October 2023 — two completed years that day, three had they reached the qualifying date — the ministry prints $367.40, which is fifteen days of scale and not nineteen. It is also the reading that never pays for a step nobody reached.",
         },
-        backing: "none",
+        backing: "practice",
         applied: true,
       },
       {
@@ -153,43 +153,8 @@ export const DISPUTES: Dispute[] = [
       },
     ],
     why: {
-      es: "Ningún artículo del capítulo VII dice a qué día se lee la escala para un contrato que terminó antes del corte: el 197 mide la antigüedad en la fecha del corte y el 202 concede al que sale la parte «proporcional al tiempo trabajado» sin decir de qué escala es proporción. Sin texto que seguir, se aplica la lectura que no presupone tiempo no trabajado, y cuando las dos difieren la calculadora muestra las dos cifras en pantalla y en el PDF, sin afirmar cuál rige.",
-      en: "No article of chapter VII says which day the scale is read at for a contract that ended before the qualifying date: article 197 measures service at that date, and article 202 grants the leaver the part \"proporcional al tiempo trabajado\" without saying which scale the proportion is of. With no text to follow, the reading that does not assume time nobody worked is the one applied, and where the two differ the calculator shows both figures on screen and in the PDF, claiming neither.",
-    },
-  },
-  {
-    rule: "aguinaldoCycleStart",
-    question: {
-      es: "¿Sobre qué período se cuenta la parte proporcional del aguinaldo?",
-      en: "What period does the proportional share of the year-end bonus run over?",
-    },
-    stakes: {
-      es: "La proporción entera. Para quien termina a mitad de año, el ciclo que empieza el 1 de enero y el que cierra el 12 de diciembre cuentan cantidades distintas de días, y la cifra se mueve con ellos.",
-      en: "The whole proportion. For someone leaving mid-year, a cycle starting on 1 January and one closing on 12 December count different numbers of days, and the figure moves with them.",
-    },
-    readings: [
-      {
-        label: { es: "El año calendario", en: "The calendar year" },
-        text: {
-          es: "El ciclo corre del 1 de enero. Es lo que sostiene el MTPS al explicar el pago anticipado: el aguinaldo adelantado se calcula COMO SI se pagara en diciembre, de modo que adelantar el pago no acorta el período que cubre.",
-          en: "The cycle runs from 1 January. It is what the MTPS supports when it explains early payment: an anticipated bonus is worked out AS IF it were being paid in December, so moving the payment forward does not shorten the period it covers.",
-        },
-        backing: "practice",
-        applied: true,
-      },
-      {
-        label: { es: "El ciclo que cierra el 12 de diciembre", en: "The cycle closing on 12 December" },
-        text: {
-          es: "El ciclo corre del 12 de diciembre al 12 de diciembre, la fecha en que se medía el aguinaldo antes de la reforma de 2025. Es la única lectura con la que cuadra la constancia del MTPS que usan las pruebas de este proyecto, y la práctica contable del país todavía mezcla esa fecha con el 20 de octubre.",
-          en: "The cycle runs from 12 December to 12 December, the date the bonus was measured at before the 2025 reform. It is the only reading under which the MTPS statement used by this project's tests reconciles, and accounting practice in the country still mixes that date with the reformed 20 October.",
-        },
-        backing: "practice",
-        applied: false,
-      },
-    ],
-    why: {
-      es: "Ningún artículo del capítulo VII define el período de devengo, así que las dos lecturas se apoyan en prácticas y ninguna en un texto. Se aplica el año calendario porque es lo que sostiene el ministerio que administra la regla, y no se cambia por una nota: mover el ciclo movería en silencio todos los aguinaldos proporcionales que este proyecto tiene fijados en pruebas. Lo que sí cambió es que el ciclo es un parámetro y ambas lecturas son expresables en el código —incluida la que abre en el año anterior—, porque una regla cuya alternativa el programa no puede producir no está de verdad en disputa.",
-      en: "No article of chapter VII defines the accrual period, so both readings rest on practice and neither on a text. The calendar year is applied because it is what the ministry that administers the rule supports, and it does not move on the strength of a note: switching cycles would silently change every proportional bonus this project pins in its tests. What did change is that the cycle is a parameter and both readings are expressible in the code — including the one that opens in the previous year — because a rule whose alternative the program cannot produce is not really in dispute.",
+      es: "Ningún artículo del capítulo VII dice a qué día se lee la escala para un contrato que terminó antes del corte: el 197 mide la antigüedad en la fecha del corte y el 202 concede al que sale la parte «proporcional al tiempo trabajado» sin decir de qué escala es proporción. Lo que sí hay es lo que hace el ministerio, y se comprobó en su calculadora en agosto de 2026: lee la escala en el último día trabajado. Coincide con la lectura que este sitio ya aplicaba, y ahora la sostiene algo más que la prudencia. La regla sigue publicada aquí porque la práctica no es un texto y el texto sigue sin decirlo; cuando las dos fechas caen en escalones distintos la calculadora muestra las dos cifras, sin afirmar cuál rige. El mismo ministerio lee la escala del ciclo cerrado en el día en que ese ciclo cerró, que es la misma regla dicha de otra forma: se lee el último día del período que se paga.",
+      en: "No article of chapter VII says which day the scale is read at for a contract that ended before the qualifying date: article 197 measures service at that date, and article 202 grants the leaver the part \"proporcional al tiempo trabajado\" without saying which scale the proportion is of. What there is, is what the ministry does, checked against its calculator in August 2026: it reads the scale on the last day worked. That matches the reading this site already applied, and now something more than caution supports it. The rule stays published here because a practice is not a text and the text still does not say it; where the two dates fall on different steps the calculator shows both figures, claiming neither. The same ministry reads the closed cycle's scale on the day that cycle closed, which is the same rule said another way: it is read on the last day of the period being paid.",
     },
   },
   {
@@ -230,6 +195,29 @@ export const DISPUTES: Dispute[] = [
 ];
 
 export const ASSUMPTIONS: Assumption[] = [
+  {
+    rule: "aguinaldoCycleStart",
+    question: {
+      es: "¿Sobre qué período se cuenta la parte proporcional del aguinaldo?",
+      en: "What period does the proportional share of the year-end bonus run over?",
+    },
+    silence: {
+      es: "Los artículos 196 a 202 fijan la fecha de corte y la ventana de pago, y mandan pagar «la parte proporcional al tiempo trabajado». Ninguno dice sobre qué período corre esa proporción. El capítulo entero se puede leer sin encontrar la fecha en que empieza a devengarse el aguinaldo.",
+      en: "Articles 196 to 202 fix the qualifying date and the payment window, and order the part \"proporcional al tiempo trabajado\" to be paid. None of them says what period that proportion runs over. The whole chapter can be read without finding the day the bonus starts to accrue.",
+    },
+    choice: {
+      es: "Del 12 de diciembre al 11 de diciembre, porque es lo que declara el servicio de cálculo del MTPS: cada renglón que devuelve trae impreso el período que cubre, y dice «12/12/2024 - 11/12/2025» para el ciclo cerrado y «12/12/2025 - 30/06/2026» para el que corre. No es una lectura de este proyecto: es la fecha que el ministerio imprime en el documento.",
+      en: "From 12 December to 11 December, because that is what the MTPS calculation service declares: every row it returns prints the period it covers — \"12/12/2024 - 11/12/2025\" for the closed cycle and \"12/12/2025 - 30/06/2026\" for the running one. It is not this project's reading: it is the date the ministry prints on the document.",
+    },
+    reach: {
+      es: "Toda parte proporcional de aguinaldo del sitio, y la forma misma de la respuesta. Un finiquito puede deber dos cosas a la vez —el aguinaldo entero del ciclo que cerró y no se cobró, más la fracción del que abrió después— y por eso la calculadora muestra dos renglones donde antes mostraba uno. Este sitio aplicaba el año calendario hasta agosto de 2026: para una salida anterior al 20 de octubre eso subestimaba la cifra en exactamente la escala por 20/365 del salario diario, unos $31 sobre un salario de $900 con 19 días de escala, siempre en contra del trabajador.",
+      en: "Every proportional bonus on the site, and the shape of the answer itself. A settlement can owe two things at once — the whole bonus of the cycle that closed unpaid, plus the fraction of the one that opened after it — which is why the calculator now shows two lines where it showed one. This site applied the calendar year until August 2026: for a departure before 20 October that under-stated the figure by exactly the scale times 20/365 of the daily wage, around $31 on a $900 salary at the 19-day step, always against the worker.",
+    },
+    why: {
+      es: "Porque hay un documento oficial que lo fija y es mejor seguirlo que elegir la fecha que parezca más razonable. Es la misma decisión del artículo 187 y la del divisor: donde el texto calla y el ministerio actúa, se sigue al ministerio y se dice que es lo que se está haciendo. Hasta agosto de 2026 este sitio aplicaba el año calendario y decía que lo respaldaba el MTPS; eso era una inferencia sobre una publicación que habla del monto del pago anticipado, no de su período, y el respaldo estaba sobrestimado. Se corrigió al correr cinco casos en la calculadora del ministerio y ver el ciclo impreso. Si un decreto o un criterio publicado fijara el período, mandaría el documento y esta ficha desaparecería.",
+      en: "Because an official document fixes it, and following that beats picking the date that looks most reasonable. It is the same decision as article 187's and the divisor's: where the text is silent and the ministry acts, the ministry is followed and the page says so. Until August 2026 this site applied the calendar year and claimed MTPS support for it; that was an inference from a publication about the amount of an anticipated payment, not its period, and the backing was overstated. It was corrected by running five cases through the ministry's calculator and reading the cycle off the output. If a decree or a published criterion fixed the period, the document would govern and this entry would disappear.",
+    },
+  },
   {
     rule: "dailySalaryDivisor",
     question: {

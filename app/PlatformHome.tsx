@@ -1,8 +1,8 @@
 import { FAQ } from "./faq";
 import { reviewedDate } from "./reviewed";
+import { institutionsCited } from "./rules";
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
-import { OFFICIAL } from "./sources";
 import { ROUTES, type Lang } from "./routes";
 
 const copy = {
@@ -16,7 +16,7 @@ const copy = {
     loans: "Calculadora de préstamos", loansText: "Compara cuota, intereses, seguros, costo efectivo y el impacto de abonos a capital.", loansCta: "Calcular préstamo",
     creditCard: "Tarjeta de crédito", creditCardText: "Calcula cuánto tarda y cuánto interés cuesta pagar con el mínimo, y cuánto cambia si abonás algo más.", creditCardCta: "Calcular tarjeta",
     settlement: "Finiquito e indemnización", settlementText: "Estima indemnización, vacaciones, aguinaldo y salario pendiente según la normativa laboral.", settlementCta: "Calcular finiquito",
-    aguinaldo: "Aguinaldo", aguinaldoText: "Calcula los días que gana tu antigüedad al 20 de octubre y hasta cuándo tienen para pagártelo.", aguinaldoCta: "Calcular aguinaldo",
+    aguinaldo: "Aguinaldo", aguinaldoText: "Calcula los días que gana tu antigüedad, el ciclo sobre el que se cuentan y hasta cuándo tienen para pagártelo.", aguinaldoCta: "Calcular aguinaldo",
     overtime: "Horas extras y recargos", overtimeText: "Calcula la hora extra diurna y nocturna, el recargo nocturno y los días de descanso y asueto.", overtimeCta: "Calcular horas extras",
     annualTax: "Renta anual", annualTaxText: "Estima el impuesto del año contra lo retenido y si el saldo te queda a favor o en contra al declarar.", annualTaxCta: "Estimar el saldo",
     withholding: "Retenciones salariales", withholdingText: "Estima AFP, ISSS e ISR y consulta los tramos oficiales mensuales, quincenales y semanales.", withholdingCta: "Calcular retenciones",
@@ -48,7 +48,7 @@ const copy = {
     loans: "Loan calculator", loansText: "Compare payments, interest, insurance, effective cost and the impact of extra principal payments.", loansCta: "Calculate a loan",
     creditCard: "Credit card", creditCardText: "Work out how long the minimum payment takes and what it costs in interest, and how much an extra changes it.", creditCardCta: "Calculate a card",
     settlement: "Settlement and severance", settlementText: "Estimate severance, vacation, year-end bonus and unpaid salary under employment rules.", settlementCta: "Estimate settlement",
-    aguinaldo: "Year-end bonus", aguinaldoText: "Work out the days your length of service earns at 20 October and the deadline to pay them.", aguinaldoCta: "Calculate the bonus",
+    aguinaldo: "Year-end bonus", aguinaldoText: "Work out the days your length of service earns, the cycle they are counted over and the deadline to pay them.", aguinaldoCta: "Calculate the bonus",
     overtime: "Overtime and surcharges", overtimeText: "Work out daytime and night overtime, the night surcharge and rest days and public holidays.", overtimeCta: "Calculate overtime",
     annualTax: "Annual return", annualTaxText: "Estimate the year's tax against what was withheld, and whether the balance lands in your favour or against you.", annualTaxCta: "Estimate the balance",
     withholding: "Payroll withholding", withholdingText: "Estimate pension, ISSS and income tax and inspect the official monthly, twice-monthly and weekly bands.", withholdingCta: "Estimate withholding",
@@ -70,21 +70,6 @@ const copy = {
     faqTitle: "Common questions about pay, settlements and loans",
     faqLead: "Short answers with the rule and the figure that applies in El Salvador. Each calculator explains the detail on its own page.",
   },
-} as const;
-
-const sourceLinks = {
-  es: [
-    ["Código de Trabajo", OFFICIAL.laborCode],
-    ["MTPS", OFFICIAL.laborService],
-    ["Ministerio de Hacienda", OFFICIAL.treasury],
-    ["SSF", OFFICIAL.ssf],
-  ],
-  en: [
-    ["Labour Code", OFFICIAL.laborCode],
-    ["MTPS", OFFICIAL.laborService],
-    ["Ministry of Finance", OFFICIAL.treasury],
-    ["SSF", OFFICIAL.ssf],
-  ],
 } as const;
 
 export default function PlatformHome({ lang }: { lang: Lang }) {
@@ -127,8 +112,11 @@ export default function PlatformHome({ lang }: { lang: Lang }) {
       </article>)}</div>
       <div className="guide-sources">
         <b>{t.verified(reviewedDate(lang))}</b>
-        <div>{sourceLinks[lang].map(([label, href]) =>
-          <a href={href} target="_blank" rel="noreferrer" key={href}>{label}<span>↗</span></a>)}</div>
+        {/* Derived from the registry, not typed here. The hand-kept version of
+            this row named four documents while the calculators behind it cited
+            fifteen, and nothing could notice. */}
+        <div>{institutionsCited().map(({ name, href }) =>
+          <a href={href} target="_blank" rel="noreferrer" key={name}>{name}<span>↗</span></a>)}</div>
       </div>
     </section>
     {/* The claim the rest of the section makes — that these figures can be

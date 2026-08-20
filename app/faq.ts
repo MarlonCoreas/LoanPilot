@@ -30,7 +30,7 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "¿Cuántos días de aguinaldo me tocan?",
-      answer: "Para quien sigue laborando, según la antigüedad alcanzada al 20 de octubre: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez años. Con menos de un año se paga la parte proporcional al tiempo trabajado. Si el contrato terminó antes del 20 de octubre, la norma no define expresamente qué escala rige: esa persona nunca llegó a la fecha del corte. Nuestra calculadora usa la antigüedad del último día trabajado, que es la lectura que no presupone tiempo no trabajado, y cuando las dos fechas caen en escalones distintos te muestra también la otra cifra para que la consultes con el MTPS.",
+      answer: "El aguinaldo se devenga en un ciclo que corre del 12 de diciembre al 11 de diciembre —así lo imprime el servicio de cálculo del MTPS— y la antigüedad se mide al cerrar ese ciclo: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez. El 20 de octubre abre la ventana de pago; no es la fecha en que se mide la antigüedad. Si no completaste el ciclo se paga la parte proporcional al tiempo trabajado en él. Y si el contrato terminó y quedó un ciclo cerrado sin pagarte, ese va aparte y entero: son dos renglones, no uno. Para quien sale antes del 20 de octubre la norma no dice expresamente qué escala rige; usamos la del último día trabajado, que es lo que hace el ministerio, y cuando las dos fechas caen en escalones distintos te mostramos también la otra cifra.",
     },
     {
       question: "¿Hasta cuándo tiene mi patrono para pagarme el aguinaldo?",
@@ -64,6 +64,14 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       question: "¿Cuánto me toca si trabajo un domingo o un día de asueto?",
       answer: "Trabajar el día de descanso semanal da derecho al salario básico de ese día, un recargo mínimo del 50% por las horas trabajadas y un día de descanso compensatorio remunerado. El día de asueto trabajado se paga doble: salario ordinario más un recargo del 100%.",
     },
+    {
+      question: "¿Me toca devolución al declarar la renta anual?",
+      answer: "No necesariamente, y conviene saberlo antes: el saldo sale en contra tan seguido como a favor. Las tablas de retención ya traen incorporados los $1,600 de deducción en sus tramos altos, pero el artículo 37 solo se los reconoce a quien obtiene hasta $9,100 al año, o a quien pasa de ahí y tiene comprobantes de gastos médicos o de colegiatura. Quien pasa de $9,100 y no gastó en ninguno de los dos fue retenido de menos todo el año y le queda diferencia por pagar. No es error de nadie: es cómo están construidas las tablas.",
+    },
+    {
+      question: "¿Cuánto cuesta pagar la tarjeta de crédito con el mínimo?",
+      answer: "Mucho más de lo que parece, porque el pago mínimo es un porcentaje del saldo: baja cada mes conforme el saldo baja, y con él baja también el abono a capital. El interés se cobra sobre el saldo, así que la deuda se estira años y el total pagado puede superar con creces lo consumido. Esta cuenta no aplica ninguna regla salvadoreña —es interés sobre saldo— y por eso la página no lleva insignia de verificación.",
+    },
   ],
   en: [
     {
@@ -80,7 +88,7 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "How many days of year-end bonus apply?",
-      answer: "For someone still employed, it depends on length of service at 20 October: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. Under a year, the proportional share is paid. If the contract ended before 20 October, the rule does not expressly say which scale governs: that person never reached the cutoff date. Our calculator uses length of service at the last day worked, the reading that does not assume time that was not worked, and when the two dates fall on different steps it also shows you the other figure so you can check it with the MTPS.",
+      answer: "The bonus accrues over a cycle running from 12 December to 11 December — that is how the MTPS calculation service prints it — and service is measured when that cycle closes: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. 20 October opens the payment window; it is not the day service is measured. If you did not complete the cycle, the proportional share of it is paid. And if your contract ended with a closed cycle still unpaid, that one is owed separately and in full: two lines, not one. For someone leaving before 20 October the rule does not expressly say which scale governs; we use the one at the last day worked, which is what the ministry does, and where the two dates fall on different steps we show you the other figure too.",
     },
     {
       question: "What is my employer's deadline to pay the year-end bonus?",
@@ -113,6 +121,14 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     {
       question: "What am I owed for working a Sunday or a public holiday?",
       answer: "Working the weekly rest day entitles you to that day's basic salary, a surcharge of at least 50% for the hours worked and a paid compensatory rest day. A public holiday worked is paid double: ordinary salary plus a 100% surcharge.",
+    },
+    {
+      question: "Will I get a refund on the annual tax return?",
+      answer: "Not necessarily, and it is worth knowing in advance: the balance lands against you as often as in your favour. The withholding tables already carry the $1,600 deduction inside their upper bands, but article 37 grants it only to someone earning up to $9,100 a year, or to someone above that with receipts for medical costs or tuition. Anyone above $9,100 who spent on neither was under-withheld all year and has a difference to pay. It is nobody's mistake: it is how the tables are built.",
+    },
+    {
+      question: "What does paying only the credit card minimum cost?",
+      answer: "Far more than it looks, because the minimum payment is a percentage of the balance: it falls every month as the balance falls, and the principal it repays falls with it. Interest is charged on the balance, so the debt stretches over years and the total paid can far exceed what was spent. This calculation applies no Salvadoran rule — it is interest on a balance — which is why that page carries no verification badge.",
     },
   ],
 };
