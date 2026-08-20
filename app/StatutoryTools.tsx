@@ -50,6 +50,7 @@ const copy = {
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
     vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
     aguinaldoComplete: "Aguinaldo completo (ciclo cerrado sin pagar)", aguinaldoFraction: "Aguinaldo proporcional",
+    aguinaldoAnticipatedNote: "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre, pero la ley deja pagarlo desde el 20 de octubre. Si esta salida cae en esa ventana y ya se había cobrado un aguinaldo ADELANTADO del ciclo que todavía corre, la línea proporcional de arriba puede estar contando días ya pagados. La casilla pregunta por el ciclo anterior, que es otro; ni esta calculadora ni la del MTPS preguntan por el adelanto.",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499): el art. 2 la fija en el 50% del salario mensual y solo para quien gana $1,500 o menos, y el art. 1 manda pagarla íntegra, sin retención ni descuento de ninguna clase. Es obligatoria para el patrono privado desde 2027. Se incluye en este cálculo porque la terminación cae dentro de la ventana del art. 3: «antes del veinticinco de enero o en esa misma fecha».",
     quincena25OutsideLead: "Cumplís todo lo demás para la Quincena 25 —despido, salario dentro del tope y fecha dentro del régimen— pero la terminación queda fuera de la ventana del art. 3, que nombra a quien sale «antes del veinticinco de enero o en esa misma fecha». Aquí se aplica esa lectura estricta y la línea es cero. La lectura amplia, la que remite a las reglas del aguinaldo, habría pagado",
@@ -196,6 +197,7 @@ const copy = {
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
     vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
     aguinaldoComplete: "Complete year-end bonus (closed cycle, unpaid)", aguinaldoFraction: "Proportional year-end bonus",
+    aguinaldoAnticipatedNote: "The bonus accrues from 12 December to 11 December, but the law allows it to be paid from 20 October. If this departure falls inside that window and an EARLY bonus for the still-running cycle had already been collected, the proportional line above may be counting days already paid. The checkbox asks about the previous cycle, which is a different one; neither this calculator nor the MTPS service asks about the advance.",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499): article 2 sets it at 50% of the monthly salary and only for those earning $1,500 or less, and article 1 requires it to be paid in full, with no withholding or deduction of any kind. It is mandatory for private employers from 2027. It is included in this calculation because the termination falls inside the window of article 3: \"antes del veinticinco de enero o en esa misma fecha\".",
     quincena25OutsideLead: "You meet everything else for the Quincena 25 — dismissal, salary within the ceiling, a date inside the regime — but the termination falls outside the window of article 3, which names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\". That strict reading is the one applied here, and the line is zero. The broad reading, the one referring to the year-end bonus rules, would have paid",
@@ -837,6 +839,7 @@ export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool 
                 vacación proporcional en renuncia. Se describe la diferencia y
                 se nombra la lectura aplicada, sin afirmar cuál rige. */}
             {settlement.proportionalVacationDisputed && <div className="callout"><span>?</span><p>{t.pdfDisputedVacation} <DisputeLink rule="vacationProportionalOnExit" /></p></div>}
+            {settlement.aguinaldoInAnticipationWindow && <div className="callout warn"><span>!</span><p>{t.aguinaldoAnticipatedNote}</p></div>}
             {settlement.aguinaldoScaleAmbiguous && <div className="callout"><span>?</span><p>{t.aguinaldoAmbiguousLead} ({settlement.aguinaldoScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoProportional)}</b> {t.aguinaldoAmbiguousMid} ({settlement.aguinaldoAlternativeScaleDays} {t.daysLabel}): <b>{money.format(settlement.aguinaldoAlternative)}</b> {t.aguinaldoAmbiguousTail} <DisputeLink rule="aguinaldoScaleOnExit" /></p></div>}
             {settlement.quincena25Applies && <div className="callout"><span>§</span><p>{t.quincena25Note} <DisputeLink rule="quincena25Window" /></p></div>}
             {/* Qualified on every count except the date. The rule's own note has

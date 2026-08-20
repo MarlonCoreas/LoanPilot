@@ -65,9 +65,12 @@ puede afirmar algo que la página no diga.
 - Estimación de finiquito e indemnización por despido injustificado o renuncia
   voluntaria, incluyendo vacaciones, aguinaldo y salario pendiente.
 - Estimación de aguinaldo en su propia página, para quien sigue laborando y para
-  quien ya salió: escala del art. 198 según la antigüedad al 20 de octubre,
-  parte proporcional cuando no se alcanza el ciclo completo, y la ventana legal
-  de pago con su fecha límite. La lógica es la misma función que usa el
+  quien ya salió: escala del art. 198 según la antigüedad al cerrar el ciclo
+  —que corre del 12 de diciembre al 11 de diciembre—, la parte proporcional
+  cuando no se alcanza el ciclo completo, el aguinaldo entero del ciclo que
+  cerró sin pagarse cuando lo hay, y la ventana legal de pago con su fecha
+  límite. El 20 de octubre abre esa ventana y no es la fecha en que se mide la
+  antigüedad; eso lo aclaró la calculadora del MTPS en agosto de 2026. La lógica es la misma función que usa el
   finiquito, así que las dos páginas no pueden dar cifras distintas.
 - Estimación de la hora extra diurna y nocturna, del recargo nocturno de la
   jornada ordinaria y del pago por trabajar en día de descanso o de asueto.
@@ -252,7 +255,9 @@ hay, y por eso conviene que nadie lo silencie.
 | Cuándo | Qué se revisa | Qué se toca si cambió |
 | ------ | ------------- | --------------------- |
 | **Desde finales de octubre** | **El decreto transitorio que exime el aguinaldo del ejercicio en curso.** Es lo más previsible del año y lo único que hay que ir a buscar: se aprueban en las semanas de cierre —7 dic 2021, 7 dic 2022, 29 nov 2023, 26 nov 2024, y 15 oct 2025 sólo porque acababa de moverse la ventana de pago—. Se busca en el [listado de decretos de la Asamblea](https://www.asamblea.gob.sv/decretos). Si no aparece ninguno, no hay vacío: rige el piso permanente del numeral 16) del artículo 4, que nunca fue derogado. | Una entrada nueva en `aguinaldoTaxExemption.versions` con su propio `exercise` y su `from` en la fecha del decreto. **No se edita la del año anterior**: cada decreto gobierna su ejercicio y expira con él, y `/renta-anual/` necesita las viejas para declarar años cerrados. Ningún cambio de código: para eso está el campo. |
-| **20 de octubre** | Abre la ventana de pago del aguinaldo (art. 200 reformado por el D.L. 433). Sube el tráfico de `/aguinaldo/`. | Nada, si nada cambió. Es la fecha en que un error en esa página se ve. |
+| **20 de octubre** | Abre la ventana de pago del aguinaldo (art. 200 reformado por el D.L. 433). Sube el tráfico de `/aguinaldo/`. **No** es la fecha en que se mide la antigüedad: eso es el cierre del ciclo. | Nada, si nada cambió. Es la fecha en que un error en esa página se ve. |
+| **20 de octubre al 11 de diciembre** | La ventana está abierta y el ciclo todavía corre, así que un aguinaldo cobrado en esas ocho semanas es un ADELANTO del ciclo en curso y no el pago del que cerró. Ni este sitio ni el MTPS preguntan por eso; el finiquito avisa en pantalla. Ver `aguinaldoAnticipatedPayment`. | Nada. Se cierra el día que algún texto diga qué ciclo descarga un pago anticipado. |
+| **11 de diciembre** | Cierra el ciclo de devengo del aguinaldo, que es el día en que se lee la escala del art. 198. Lo declara el servicio de cálculo del MTPS imprimiendo el período en cada renglón. | Nada. Si el ministerio cambiara el ciclo, se vería aquí primero: `aguinaldoCycleStart`. |
 | **20 de diciembre** | Cierra la ventana de pago. | Nada. |
 | **Junio y diciembre** | Los recálculos del literal f) del D.E. 10/2025, que es cuando `/retenciones/` recibe a quien vio un descuento distinto ese mes. | Nada, salvo que el decreto se reforme. |
 | **31 de diciembre** | Cierra el ejercicio fiscal (art. 13 letra c). A partir de acá `/renta-anual/` puede declarar el año que terminó. | Nada. Es la fecha con la que se lee la tabla: el ejercicio se cotiza a su cierre, no con la tabla de hoy. |

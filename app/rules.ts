@@ -505,7 +505,19 @@ export const aguinaldoScale = rule<AguinaldoStep[]>({
 });
 
 /**
- * The day seniority is read at, and by which the bonus is fully earned.
+ * The day the payment window opens. NOT the day seniority is read at.
+ *
+ * IT WAS BOTH, in this registry, until the MTPS output was read in August 2026.
+ * The ministry measures the step on the last day of the period being paid — on
+ * 11 December for a closed cycle, on the last day worked for a running one —
+ * and 20 October decides only when the money has to be handed over. A worker
+ * hired on 1 November 2023 leaving on 15 December 2026 has two complete years
+ * on this date and three when the cycle closed, and is paid for three.
+ *
+ * It still earns its place: it is the only figure on `/aguinaldo/` a reader can
+ * act on, because a bonus unpaid by 20 December is a complaint they can take to
+ * the ministry. See `aguinaldoPaymentWindow` for the other end of it, and
+ * `aguinaldoAnticipatedPayment` for the gap between this date and the cycle's.
  *
  * Articles 197, 200 and 202 all keyed on 12 December until Legislative Decree
  * 433 moved them to 20 October. Both versions are listed because a settlement is

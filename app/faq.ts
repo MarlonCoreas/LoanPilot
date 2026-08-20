@@ -30,7 +30,7 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "¿Cuántos días de aguinaldo me tocan?",
-      answer: "Para quien sigue laborando, según la antigüedad alcanzada al 20 de octubre: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez años. Con menos de un año se paga la parte proporcional al tiempo trabajado. Si el contrato terminó antes del 20 de octubre, la norma no define expresamente qué escala rige: esa persona nunca llegó a la fecha del corte. Nuestra calculadora usa la antigüedad del último día trabajado, que es la lectura que no presupone tiempo no trabajado, y cuando las dos fechas caen en escalones distintos te muestra también la otra cifra para que la consultes con el MTPS.",
+      answer: "El aguinaldo se devenga en un ciclo que corre del 12 de diciembre al 11 de diciembre —así lo imprime el servicio de cálculo del MTPS— y la antigüedad se mide al cerrar ese ciclo: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez. El 20 de octubre abre la ventana de pago; no es la fecha en que se mide la antigüedad. Si no completaste el ciclo se paga la parte proporcional al tiempo trabajado en él. Y si el contrato terminó y quedó un ciclo cerrado sin pagarte, ese va aparte y entero: son dos renglones, no uno. Para quien sale antes del 20 de octubre la norma no dice expresamente qué escala rige; usamos la del último día trabajado, que es lo que hace el ministerio, y cuando las dos fechas caen en escalones distintos te mostramos también la otra cifra.",
     },
     {
       question: "¿Hasta cuándo tiene mi patrono para pagarme el aguinaldo?",
@@ -88,7 +88,7 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "How many days of year-end bonus apply?",
-      answer: "For someone still employed, it depends on length of service at 20 October: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. Under a year, the proportional share is paid. If the contract ended before 20 October, the rule does not expressly say which scale governs: that person never reached the cutoff date. Our calculator uses length of service at the last day worked, the reading that does not assume time that was not worked, and when the two dates fall on different steps it also shows you the other figure so you can check it with the MTPS.",
+      answer: "The bonus accrues over a cycle running from 12 December to 11 December — that is how the MTPS calculation service prints it — and service is measured when that cycle closes: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. 20 October opens the payment window; it is not the day service is measured. If you did not complete the cycle, the proportional share of it is paid. And if your contract ended with a closed cycle still unpaid, that one is owed separately and in full: two lines, not one. For someone leaving before 20 October the rule does not expressly say which scale governs; we use the one at the last day worked, which is what the ministry does, and where the two dates fall on different steps we show you the other figure too.",
     },
     {
       question: "What is my employer's deadline to pay the year-end bonus?",

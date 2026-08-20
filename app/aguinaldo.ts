@@ -216,6 +216,14 @@ export function calculateAguinaldo(input: {
   const days = completeDays + proportionalDays;
   const reachedCutoff = end >= cutoff;
 
+  // THE EIGHT WEEKS NOBODY ASKS ABOUT: the payment window is open and the cycle
+  // it pays for has not closed yet, so a bonus collected in it is an ADVANCE on
+  // the running cycle rather than settlement of the closed one. The condition is
+  // simply that the running cycle opened before the qualifying date and the last
+  // day read is past it. Once the cycle reopens on 12 December the window is
+  // behind us again and `alreadyPaid` means what it says.
+  const inAnticipationWindow = reachedCutoff && cycleOpens < cutoff && proportionalDays > 0;
+
   // The window where the two readings of the scale disagreed. The MTPS reads it
   // on the last day worked — see the note on `aguinaldoScaleOnExit` — so the
   // alternative is named only where a reader would otherwise not know a second
@@ -285,6 +293,12 @@ export function calculateAguinaldo(input: {
     closedCycleEndDate: isoDate(closedEnds),
     /** True when a bonus already earned and never collected is part of this figure. */
     owedClosedCycle,
+    /**
+     * Inside the window where a collected bonus may have been an advance on the
+     * cycle this figure prices. See `aguinaldoAnticipatedPayment`: neither this
+     * form nor the ministry's asks, so the interface has to say so.
+     */
+    inAnticipationWindow,
     /** True only inside the window where the two readings of the scale differ. */
     scaleAmbiguous,
     alternativeScaleDays: scaleAmbiguous ? alternativeScaleDays : 0,

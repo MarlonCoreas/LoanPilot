@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { ASSUMPTIONS, DISPUTES, assumptionFor, disputeFor, pagesApplying } from "../app/disputes.ts";
@@ -515,6 +516,34 @@ test("the known disputes and the known assumptions are the ones on the page", ()
     disputedVersions().map(({ rule }) => rule.id).sort(),
     ["aguinaldoCycleStart", "aguinaldoScaleOnExit", "dailySalaryDivisor", "quincena25Window",
       "vacationProportionalOnExit"]);
+});
+
+test("every callout that links to a rule links to one the page publishes", () => {
+  // `DisputeLink` builds `/reglas-en-disputa/#<ruleId>`, and that page only
+  // renders rules marked DISPUTED or UNSOURCED. Pointing one at a NOT MODELLED
+  // rule compiles, type-checks and ships a dead anchor: the reader lands at the
+  // top of the page with no idea which entry they were promised. That is the
+  // exact shape of the D.L. 499 defect — a link that resolves and goes nowhere
+  // useful — and it happened once already while this pass was being written.
+  const published = new Set(disputedVersions().map(({ rule }) => rule.id));
+  const sources = ["StatutoryTools.tsx", "AguinaldoPage.tsx", "AnnualTaxPage.tsx", "DisputePanel.tsx"];
+  let linked = 0;
+  for (const file of sources) {
+    let text;
+    try {
+      text = readFileSync(new URL(`../app/${file}`, import.meta.url), "utf8");
+    } catch {
+      continue;
+    }
+    for (const [, id] of text.matchAll(/DisputeLink rule="([A-Za-z0-9]+)"/g)) {
+      linked += 1;
+      assert.ok(id in RULES, `${file} links to "${id}", which is not a rule at all`);
+      assert.ok(published.has(id),
+        `${file} links to ${id}, which /reglas-en-disputa/ does not publish — `
+        + `it is ${(RULES[id].versions[0].status ?? ["unmarked"]).join(" + ")}`);
+    }
+  }
+  assert.ok(linked > 0, "the scan found no callouts at all, so it is not checking anything");
 });
 
 test("no rule claims to have been reviewed before it existed, or in the future", () => {

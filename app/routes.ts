@@ -68,7 +68,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
     },
     aguinaldo: {
       title: "Calculadora de aguinaldo en El Salvador | LoanPilot",
-      description: "Calcula los días de aguinaldo que te tocan según tu antigüedad al 20 de octubre y hasta cuándo tiene el patrono para pagarlo.",
+      description: "Calcula los días de aguinaldo que te tocan según tu antigüedad al cierre del ciclo, y hasta cuándo tiene el patrono para pagarlo.",
       ogTitle: "LoanPilot | Aguinaldo",
     },
     overtime: {
@@ -115,7 +115,7 @@ export const PAGE_META: Record<Lang, Record<Page, { title: string; description: 
     },
     aguinaldo: {
       title: "Year-end bonus calculator for El Salvador | LoanPilot",
-      description: "Work out the days of year-end bonus your length of service earns at 20 October, and the deadline your employer has to pay it.",
+      description: "Work out the days of year-end bonus your length of service earns at the cycle's close, and the deadline your employer has to pay it.",
       ogTitle: "LoanPilot | Year-end bonus",
     },
     overtime: {
@@ -188,7 +188,7 @@ export const OG_CARD: Record<Lang, Record<Page, {
     aguinaldo: {
       eyebrow: "AGUINALDO",
       line1: "Los días que te tocan,", line2: "y hasta cuándo tienen para pagarlos.",
-      sub: "Antigüedad al 20 de octubre, escala del artículo 198 y la ventana legal de pago del Código de Trabajo.",
+      sub: "Escala del artículo 198, el ciclo que corre del 12 de diciembre y la ventana legal de pago del Código de Trabajo.",
       alt: "LoanPilot: calculadora de aguinaldo de El Salvador.",
       accent: "#ffd88a",
     },
@@ -253,7 +253,7 @@ export const OG_CARD: Record<Lang, Record<Page, {
     aguinaldo: {
       eyebrow: "YEAR-END BONUS",
       line1: "The days you have earned,", line2: "and the deadline to pay them.",
-      sub: "Length of service at 20 October, the article 198 scale and the statutory payment window of the Labour Code.",
+      sub: "The article 198 scale, the cycle running from 12 December and the statutory payment window of the Labour Code.",
       alt: "LoanPilot: year-end bonus calculator for El Salvador.",
       accent: "#ffd88a",
     },

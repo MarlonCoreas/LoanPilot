@@ -29,7 +29,7 @@ type Standing = "employed" | "ended";
 const copy = {
   es: {
     heroTitle: "Calculadora de aguinaldo", heroAccent: "Cuánto te toca este año.",
-    heroLead: "Los días que gana tu antigüedad al 20 de octubre, la parte proporcional si llevás menos de un año, y la fecha límite que tiene el patrono para pagarlo.",
+    heroLead: "Los días que gana tu antigüedad, la parte proporcional si no completaste el ciclo, y la fecha límite que tiene el patrono para pagarlo.",
     data: "Tus datos", dataHint: "Sector privado regido por el Código de Trabajo",
     standing: "Tu situación", employed: "Sigo laborando", ended: "Ya terminó la relación",
     start: "Fecha de ingreso", end: "Último día de trabajo",
@@ -38,7 +38,7 @@ const copy = {
     alreadyPaid: "Ya cobré el aguinaldo del ciclo anterior (el que cerró el 11 de diciembre)",
     result: "Estimación bruta", total: "Aguinaldo estimado",
     days: "Días de salario", scale: "Escala aplicada",
-    seniority: "Antigüedad al corte", seniorityAtEnd: "Antigüedad al último día",
+    seniority: "Antigüedad al cerrar el ciclo", seniorityAtEnd: "Antigüedad al último día",
     dailySalary: "Salario diario ordinario", proportion: "Proporción del ciclo",
     daysLabel: "días", year: "año", yearPlural: "años", ofSalary: "de salario",
     measuredAt: "Medido al", cycleFrom: "Ciclo contado desde el",
@@ -74,7 +74,7 @@ const copy = {
     guideTitle: "Cómo se arma tu aguinaldo",
     guideLead: "No es un mes de salario para todo el mundo. Son cuatro piezas, y conviene revisarlas por separado antes de aceptar una cifra.",
     guide: [
-      ["Antigüedad al corte", "Los años completos que llevás al 20 de octubre deciden el escalón: 15, 19 o 21 días de salario.", "◷"],
+      ["El ciclo y la escala", "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre, y los años completos que llevás al cerrar ese ciclo deciden el escalón: 15, 19 o 21 días de salario. El 20 de octubre abre la ventana de pago; no es la fecha en que se mide la antigüedad.", "◷"],
       ["Salario diario", "El aguinaldo se paga en días de salario, y el diario sale del salario mensual ordinario dividido entre 30.", "$"],
       ["Parte proporcional", "Con menos de un año, o si entraste durante el ciclo, se paga la fracción del período efectivamente trabajado.", "+"],
       ["Fecha límite", "El pago va del 20 de octubre al 20 de diciembre. Después de esa fecha hay incumplimiento denunciable.", "§"],
@@ -98,7 +98,7 @@ const copy = {
   },
   en: {
     heroTitle: "Year-end bonus calculator", heroAccent: "How much you are owed.",
-    heroLead: "The days your length of service earns at 20 October, the proportional share if you have been there under a year, and the deadline your employer has to pay it.",
+    heroLead: "The days your length of service earns, the proportional share if you did not complete the cycle, and the deadline your employer has to pay it.",
     data: "Your details", dataHint: "Private sector governed by the Labour Code",
     standing: "Where you stand", employed: "Still employed", ended: "The job has ended",
     start: "Employment start date", end: "Last day worked",
@@ -107,7 +107,7 @@ const copy = {
     alreadyPaid: "I already collected the previous cycle's bonus (the one that closed on 11 December)",
     result: "Gross estimate", total: "Estimated year-end bonus",
     days: "Days of salary", scale: "Scale applied",
-    seniority: "Service at the cutoff", seniorityAtEnd: "Service at the last day worked",
+    seniority: "Service when the cycle closes", seniorityAtEnd: "Service at the last day worked",
     dailySalary: "Ordinary daily salary", proportion: "Share of the cycle",
     daysLabel: "days", year: "year", yearPlural: "years", ofSalary: "of salary",
     measuredAt: "Measured at", cycleFrom: "Cycle counted from",
@@ -143,7 +143,7 @@ const copy = {
     guideTitle: "How your year-end bonus is built",
     guideLead: "It is not a month's salary for everyone. It is four pieces, and they are worth reviewing separately before accepting a figure.",
     guide: [
-      ["Service at the cutoff", "The complete years you have reached at 20 October decide the step: 15, 19 or 21 days of salary.", "◷"],
+      ["The cycle and the scale", "The bonus accrues from 12 December to 11 December, and the complete years you have reached when that cycle closes decide the step: 15, 19 or 21 days of salary. 20 October opens the payment window; it is not the day service is measured.", "◷"],
       ["Daily salary", "The bonus is paid in days of salary, and the daily figure is the ordinary monthly salary divided by 30.", "$"],
       ["Proportional share", "Under a year, or where you joined mid-cycle, what is paid is the fraction of the period actually worked.", "+"],
       ["The deadline", "Payment runs from 20 October to 20 December. After that date there is a breach that can be reported.", "§"],
@@ -282,7 +282,7 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
         {
           head: [t.pdfConcept, t.pdfAmount],
           body: [
-            [bonus.reachedCutoff ? t.seniority : t.seniorityAtEnd, `${bonus.completedYears} ${bonus.completedYears === 1 ? t.year : t.yearPlural}`],
+            [standing === "employed" ? t.seniority : t.seniorityAtEnd, `${bonus.completedYears} ${bonus.completedYears === 1 ? t.year : t.yearPlural}`],
             [t.scale, `${bonus.scaleDays} ${t.daysLabel}`],
             [t.proportion, `${(bonus.fraction * 100).toFixed(1)}%`],
             [t.dailySalary, money.format(bonus.dailySalary)],
@@ -376,7 +376,7 @@ export default function AguinaldoPage({ lang }: { lang: Lang }) {
             </div>
             <div className="result-tiles">
               <div className="highlight"><span>{t.days}</span><b>{bonus.days.toFixed(2)}</b><i>{t.scale}: {bonus.scaleDays} {t.daysLabel}</i></div>
-              <div><span>{bonus.reachedCutoff ? t.seniority : t.seniorityAtEnd}</span><b>{bonus.completedYears} {bonus.completedYears === 1 ? t.year : t.yearPlural}</b></div>
+              <div><span>{standing === "employed" ? t.seniority : t.seniorityAtEnd}</span><b>{bonus.completedYears} {bonus.completedYears === 1 ? t.year : t.yearPlural}</b></div>
               <div><span>{t.dailySalary}</span><b>{money.format(bonus.dailySalary)}</b></div>
               <div><span>{t.proportion}</span><b>{(bonus.fraction * 100).toFixed(1)}%</b><i>{t.cycleFrom} {date(bonus.cycleStartDate)}</i></div>
               {bonus.owedClosedCycle && <div className="highlight"><span>{t.closedCycle}</span><b>{money.format(bonus.completeAmount)}</b><i>{t.closedCycleTo} {date(bonus.closedCycleEndDate)}</i></div>}
