@@ -136,7 +136,7 @@ const server = await createServer({ server: { middlewareMode: true }, appType: "
 let workspace;
 
 try {
-  const { LANGS, OG_CARD, ogImagePath, PAGES, SITE_ORIGIN } =
+  const { datedCopy, LANGS, OG_CARD, ogImagePath, PAGES, SITE_ORIGIN } =
     await server.ssrLoadModule("/entry-server.tsx");
 
   const chrome = await findChrome();
@@ -148,7 +148,8 @@ try {
   for (const lang of LANGS) {
     for (const page of PAGES) {
       const source = join(workspace, `${lang}-${page}.html`);
-      await writeFile(source, cardHtml(OG_CARD[lang][page], { domain, tags: TAGS[lang] }));
+      const card = datedCopy(OG_CARD[lang][page], lang);
+      await writeFile(source, cardHtml(card, { domain, tags: TAGS[lang] }));
 
       const target = fileURLToPath(new URL(`../public${ogImagePath(lang, page)}`, import.meta.url));
       await run(chrome, [

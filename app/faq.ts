@@ -1,3 +1,4 @@
+import { datedCopy } from "./calendar.ts";
 import type { Lang } from "./routes";
 
 /**
@@ -14,7 +15,7 @@ import type { Lang } from "./routes";
  */
 export type FaqEntry = { question: string; answer: string };
 
-export const FAQ: Record<Lang, FaqEntry[]> = {
+const FAQ_SOURCE: Record<Lang, FaqEntry[]> = {
   es: [
     {
       question: "¿Cómo se calcula la indemnización por despido injustificado?",
@@ -30,11 +31,11 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "¿Cuántos días de aguinaldo me tocan?",
-      answer: "El aguinaldo se devenga en un ciclo que corre del 12 de diciembre al 11 de diciembre —así lo imprime el servicio de cálculo del MTPS— y la antigüedad se mide al cerrar ese ciclo: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez. El 20 de octubre abre la ventana de pago; no es la fecha en que se mide la antigüedad. Si no completaste el ciclo se paga la parte proporcional al tiempo trabajado en él. Y si el contrato terminó y quedó un ciclo cerrado sin pagarte, ese va aparte y entero: son dos renglones, no uno. Para quien sale antes del 20 de octubre la norma no dice expresamente qué escala rige; usamos la del último día trabajado, que es lo que hace el ministerio, y cuando las dos fechas caen en escalones distintos te mostramos también la otra cifra.",
+      answer: "El aguinaldo se devenga en un ciclo que corre del {cycleOpens} al {cycleCloses} —así lo imprime el servicio de cálculo del MTPS— y la antigüedad se mide al cerrar ese ciclo: 15 días de salario de uno a menos de tres años, 19 días de tres a menos de diez, y 21 días a partir de los diez. El {windowOpens} abre la ventana de pago; no es la fecha en que se mide la antigüedad. Si no completaste el ciclo se paga la parte proporcional al tiempo trabajado en él. Y si el contrato terminó y quedó un ciclo cerrado sin pagarte, ese va aparte y entero: son dos renglones, no uno. Para quien sale antes del {windowOpens} la norma no dice expresamente qué escala rige; usamos la del último día trabajado, que es lo que hace el ministerio, y cuando las dos fechas caen en escalones distintos te mostramos también la otra cifra.",
     },
     {
       question: "¿Hasta cuándo tiene mi patrono para pagarme el aguinaldo?",
-      answer: "Desde la reforma de 2025 el pago va del 20 de octubre al 20 de diciembre de cada año, y esa última fecha es el límite: pasarla es incumplimiento y se puede denunciar en el MTPS. El 20 de octubre es además la fecha en que se lee tu antigüedad para saber qué escalón de días te toca. Antes de la reforma ambas cosas ocurrían el 12 de diciembre.",
+      answer: "Desde la reforma de 2025 el pago va del {windowOpens} al {windowCloses} de cada año, y esa última fecha es el límite: pasarla es incumplimiento y se puede denunciar en el MTPS. Lo que el D.L. 433 movió es la ventana de pago, no el devengo: el ciclo sigue cerrando el {cycleCloses} y es al cerrarlo que se lee tu antigüedad. Antes de la reforma el pago vencía el {previousCutoff}, que era también el día en que se medía.",
     },
     {
       question: "¿Qué es la Quincena 25 y desde cuándo se paga?",
@@ -88,11 +89,11 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
     },
     {
       question: "How many days of year-end bonus apply?",
-      answer: "The bonus accrues over a cycle running from 12 December to 11 December — that is how the MTPS calculation service prints it — and service is measured when that cycle closes: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. 20 October opens the payment window; it is not the day service is measured. If you did not complete the cycle, the proportional share of it is paid. And if your contract ended with a closed cycle still unpaid, that one is owed separately and in full: two lines, not one. For someone leaving before 20 October the rule does not expressly say which scale governs; we use the one at the last day worked, which is what the ministry does, and where the two dates fall on different steps we show you the other figure too.",
+      answer: "The bonus accrues over a cycle running from {cycleOpens} to {cycleCloses} — that is how the MTPS calculation service prints it — and service is measured when that cycle closes: 15 days of salary from one to under three years, 19 days from three to under ten, and 21 days from ten years onward. {windowOpens} opens the payment window; it is not the day service is measured. If you did not complete the cycle, the proportional share of it is paid. And if your contract ended with a closed cycle still unpaid, that one is owed separately and in full: two lines, not one. For someone leaving before {windowOpens} the rule does not expressly say which scale governs; we use the one at the last day worked, which is what the ministry does, and where the two dates fall on different steps we show you the other figure too.",
     },
     {
       question: "What is my employer's deadline to pay the year-end bonus?",
-      answer: "Since the 2025 reform payment runs from 20 October to 20 December each year, and that last date is the deadline: missing it is a breach and can be reported to the MTPS. 20 October is also the day your length of service is read at, which sets the step of days you are owed. Before the reform both happened on 12 December.",
+      answer: "Since the 2025 reform payment runs from {windowOpens} to {windowCloses} each year, and that last date is the deadline: missing it is a breach and can be reported to the MTPS. What D.L. 433 moved is the payment window, not the accrual: the cycle still closes on {cycleCloses}, and that is when your length of service is read. Before the reform payment fell due on {previousCutoff}, which was also the day it was measured.",
     },
     {
       question: "What is the Quincena 25 and when is it paid?",
@@ -131,4 +132,16 @@ export const FAQ: Record<Lang, FaqEntry[]> = {
       answer: "Far more than it looks, because the minimum payment is a percentage of the balance: it falls every month as the balance falls, and the principal it repays falls with it. Interest is charged on the balance, so the debt stretches over years and the total paid can far exceed what was spent. This calculation applies no Salvadoran rule — it is interest on a balance — which is why that page carries no verification badge.",
     },
   ],
+};
+
+/**
+ * The published answers, with every {hole} filled from the registry.
+ *
+ * Filled here rather than at each reader — the home page renders these and
+ * `seo.ts` puts the same text into the FAQPage structured data — so the two
+ * cannot disagree, and so a crawler never gets template syntax.
+ */
+export const FAQ = {
+  es: datedCopy(FAQ_SOURCE.es, "es"),
+  en: datedCopy(FAQ_SOURCE.en, "en"),
 };
