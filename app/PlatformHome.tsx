@@ -9,17 +9,17 @@ const copy = {
   es: {
     eyebrow: "HERRAMIENTAS FINANCIERAS · EL SALVADOR",
     title: "Calculadoras gratis para El Salvador, explicadas con claridad.",
-    lead: "Calculadoras gratuitas para entender un préstamo, revisar una liquidación laboral, cobrar bien tus horas extras o estimar las retenciones de tu salario.",
+    leadOpen: "Calculadoras gratuitas para", leadClose: ", sin registro y con la fuente oficial a la vista.",
     trust: "Sin registro · Tus datos no salen de tu dispositivo · Fuentes oficiales visibles",
     choose: "Elige una herramienta",
     chooseLead: "Cada calculadora vive en su propia página para que las reglas, resultados y fuentes sean fáciles de revisar.",
-    loans: "Calculadora de préstamos", loansText: "Compara cuota, intereses, seguros, costo efectivo y el impacto de abonos a capital.", loansCta: "Calcular préstamo",
-    creditCard: "Tarjeta de crédito", creditCardText: "Calcula cuánto tarda y cuánto interés cuesta pagar con el mínimo, y cuánto cambia si abonás algo más.", creditCardCta: "Calcular tarjeta",
-    settlement: "Finiquito e indemnización", settlementText: "Estima indemnización, vacaciones, aguinaldo y salario pendiente según la normativa laboral.", settlementCta: "Calcular finiquito",
-    aguinaldo: "Aguinaldo", aguinaldoText: "Calcula los días que gana tu antigüedad, el ciclo sobre el que se cuentan y hasta cuándo tienen para pagártelo.", aguinaldoCta: "Calcular aguinaldo",
-    overtime: "Horas extras y recargos", overtimeText: "Calcula la hora extra diurna y nocturna, el recargo nocturno y los días de descanso y asueto.", overtimeCta: "Calcular horas extras",
-    annualTax: "Renta anual", annualTaxText: "Estima el impuesto del año contra lo retenido y si el saldo te queda a favor o en contra al declarar.", annualTaxCta: "Estimar el saldo",
-    withholding: "Retenciones salariales", withholdingText: "Estima AFP, ISSS e ISR y consulta los tramos oficiales mensuales, quincenales y semanales.", withholdingCta: "Calcular retenciones",
+    loans: "Calculadora de préstamos", loansLead: "entender un préstamo", loansText: "Compara cuota, intereses, seguros, costo efectivo y el impacto de abonos a capital.", loansCta: "Calcular préstamo",
+    creditCard: "Tarjeta de crédito", creditCardLead: "medir lo que cuesta la tarjeta", creditCardText: "Calcula cuánto tarda y cuánto interés cuesta pagar con el mínimo, y cuánto cambia si abonás algo más.", creditCardCta: "Calcular tarjeta",
+    settlement: "Finiquito e indemnización", settlementLead: "revisar una liquidación laboral", settlementText: "Estima indemnización, vacaciones, aguinaldo y salario pendiente según la normativa laboral.", settlementCta: "Calcular finiquito",
+    aguinaldo: "Aguinaldo", aguinaldoLead: "saber qué aguinaldo te toca", aguinaldoText: "Calcula los días que gana tu antigüedad, el ciclo sobre el que se cuentan y hasta cuándo tienen para pagártelo.", aguinaldoCta: "Calcular aguinaldo",
+    overtime: "Horas extras y recargos", overtimeLead: "cobrar bien tus horas extras", overtimeText: "Calcula la hora extra diurna y nocturna, el recargo nocturno y los días de descanso y asueto.", overtimeCta: "Calcular horas extras",
+    annualTax: "Renta anual", annualTaxLead: "ver cómo te queda la renta anual", annualTaxText: "Estima el impuesto del año contra lo retenido y si el saldo te queda a favor o en contra al declarar.", annualTaxCta: "Estimar el saldo",
+    withholding: "Retenciones salariales", withholdingLead: "estimar las retenciones de tu salario", withholdingText: "Estima AFP, ISSS e ISR y consulta los tramos oficiales mensuales, quincenales y semanales.", withholdingCta: "Calcular retenciones",
     whyEyebrow: "POR QUÉ CONFIAR",
     whyTitle: "Cifras que puedes verificar",
     whyLead: "Una calculadora sirve de poco si no se puede auditar. Estas muestran la regla que aplican, el documento oficial del que sale y la fecha en que se revisó.",
@@ -41,17 +41,17 @@ const copy = {
   en: {
     eyebrow: "FINANCIAL TOOLS · EL SALVADOR",
     title: "Free calculators for El Salvador, explained clearly.",
-    lead: "Free calculators to understand a loan, review an employment settlement, get your overtime right or estimate deductions from your pay.",
+    leadOpen: "Free calculators to", leadClose: ", with no signup and the official source in view.",
     trust: "No signup · Your data stays on your device · Official sources included",
     choose: "Choose a tool",
     chooseLead: "Each calculator has its own page, making its rules, results and sources easier to review.",
-    loans: "Loan calculator", loansText: "Compare payments, interest, insurance, effective cost and the impact of extra principal payments.", loansCta: "Calculate a loan",
-    creditCard: "Credit card", creditCardText: "Work out how long the minimum payment takes and what it costs in interest, and how much an extra changes it.", creditCardCta: "Calculate a card",
-    settlement: "Settlement and severance", settlementText: "Estimate severance, vacation, year-end bonus and unpaid salary under employment rules.", settlementCta: "Estimate settlement",
-    aguinaldo: "Year-end bonus", aguinaldoText: "Work out the days your length of service earns, the cycle they are counted over and the deadline to pay them.", aguinaldoCta: "Calculate the bonus",
-    overtime: "Overtime and surcharges", overtimeText: "Work out daytime and night overtime, the night surcharge and rest days and public holidays.", overtimeCta: "Calculate overtime",
-    annualTax: "Annual return", annualTaxText: "Estimate the year's tax against what was withheld, and whether the balance lands in your favour or against you.", annualTaxCta: "Estimate the balance",
-    withholding: "Payroll withholding", withholdingText: "Estimate pension, ISSS and income tax and inspect the official monthly, twice-monthly and weekly bands.", withholdingCta: "Estimate withholding",
+    loans: "Loan calculator", loansLead: "understand a loan", loansText: "Compare payments, interest, insurance, effective cost and the impact of extra principal payments.", loansCta: "Calculate a loan",
+    creditCard: "Credit card", creditCardLead: "see what a card really costs", creditCardText: "Work out how long the minimum payment takes and what it costs in interest, and how much an extra changes it.", creditCardCta: "Calculate a card",
+    settlement: "Settlement and severance", settlementLead: "review an employment settlement", settlementText: "Estimate severance, vacation, year-end bonus and unpaid salary under employment rules.", settlementCta: "Estimate settlement",
+    aguinaldo: "Year-end bonus", aguinaldoLead: "work out the year-end bonus you are owed", aguinaldoText: "Work out the days your length of service earns, the cycle they are counted over and the deadline to pay them.", aguinaldoCta: "Calculate the bonus",
+    overtime: "Overtime and surcharges", overtimeLead: "get your overtime right", overtimeText: "Work out daytime and night overtime, the night surcharge and rest days and public holidays.", overtimeCta: "Calculate overtime",
+    annualTax: "Annual return", annualTaxLead: "see how your annual return lands", annualTaxText: "Estimate the year's tax against what was withheld, and whether the balance lands in your favour or against you.", annualTaxCta: "Estimate the balance",
+    withholding: "Payroll withholding", withholdingLead: "estimate the deductions from your pay", withholdingText: "Estimate pension, ISSS and income tax and inspect the official monthly, twice-monthly and weekly bands.", withholdingCta: "Estimate withholding",
     whyEyebrow: "WHY TRUST THIS",
     whyTitle: "Figures you can check",
     whyLead: "A calculator is worth little if it cannot be audited. These show the rule they apply, the official document behind it and the date it was last checked.",
@@ -75,22 +75,36 @@ const copy = {
 export default function PlatformHome({ lang }: { lang: Lang }) {
   const t = copy[lang];
 
+  // ONE TABLE, TWO PLACES IT HAS TO BE TRUE. The grid below renders it, and the
+  // hero sentence is composed from its `lead` phrases. The hand-written hero
+  // named four tools while this list held seven for two releases and nothing
+  // could notice: the sentence and the grid were separate prose, so adding a
+  // calculator updated one of them. Adding a row here now moves both, and the
+  // type checker asks for the phrase the sentence needs.
   const tools = [
-    { icon: "◎", title: t.loans, text: t.loansText, cta: t.loansCta, href: ROUTES[lang].loans, className: "loan" },
-    { icon: "▤", title: t.creditCard, text: t.creditCardText, cta: t.creditCardCta, href: ROUTES[lang].creditCard, className: "loan" },
-    { icon: "§", title: t.settlement, text: t.settlementText, cta: t.settlementCta, href: ROUTES[lang].settlement, className: "labor" },
-    { icon: "★", title: t.aguinaldo, text: t.aguinaldoText, cta: t.aguinaldoCta, href: ROUTES[lang].aguinaldo, className: "labor" },
-    { icon: "◷", title: t.overtime, text: t.overtimeText, cta: t.overtimeCta, href: ROUTES[lang].overtime, className: "hours" },
-    { icon: "%", title: t.withholding, text: t.withholdingText, cta: t.withholdingCta, href: ROUTES[lang].withholding, className: "tax" },
-    { icon: "∑", title: t.annualTax, text: t.annualTaxText, cta: t.annualTaxCta, href: ROUTES[lang].annualTax, className: "tax" },
+    { icon: "◎", title: t.loans, lead: t.loansLead, text: t.loansText, cta: t.loansCta, href: ROUTES[lang].loans, className: "loan" },
+    { icon: "▤", title: t.creditCard, lead: t.creditCardLead, text: t.creditCardText, cta: t.creditCardCta, href: ROUTES[lang].creditCard, className: "loan" },
+    { icon: "§", title: t.settlement, lead: t.settlementLead, text: t.settlementText, cta: t.settlementCta, href: ROUTES[lang].settlement, className: "labor" },
+    { icon: "★", title: t.aguinaldo, lead: t.aguinaldoLead, text: t.aguinaldoText, cta: t.aguinaldoCta, href: ROUTES[lang].aguinaldo, className: "labor" },
+    { icon: "◷", title: t.overtime, lead: t.overtimeLead, text: t.overtimeText, cta: t.overtimeCta, href: ROUTES[lang].overtime, className: "hours" },
+    { icon: "%", title: t.withholding, lead: t.withholdingLead, text: t.withholdingText, cta: t.withholdingCta, href: ROUTES[lang].withholding, className: "tax" },
+    { icon: "∑", title: t.annualTax, lead: t.annualTaxLead, text: t.annualTaxText, cta: t.annualTaxCta, href: ROUTES[lang].annualTax, className: "tax" },
   ];
+
+  // "a, b, c y d" in Spanish, "a, b, c and d" in English, from the runtime that
+  // already knows the difference. Joining with a hand-written " y " would put
+  // the one piece of grammar this sentence has back into the copy table.
+  const lead = t.leadOpen + " "
+    + new Intl.ListFormat(lang === "es" ? "es-SV" : "en-GB", { type: "conjunction" })
+      .format(tools.map((tool) => tool.lead))
+    + t.leadClose;
 
   return <main className="platform-home">
     <SiteHeader lang={lang} page="home" />
     <section className="platform-hero">
       <p>{t.eyebrow}</p>
       <h1>{t.title}</h1>
-      <span>{t.lead}</span>
+      <span>{lead}</span>
       <div className="trust-line"><b>✓</b>{t.trust}</div>
     </section>
     <section className="tool-directory">

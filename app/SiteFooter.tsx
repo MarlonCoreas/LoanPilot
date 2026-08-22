@@ -1,3 +1,4 @@
+import { buildStamp } from "./build";
 import { PAGE_LABELS, ROUTES, TOOL_PAGES, type Lang } from "./routes";
 import { OFFICIAL } from "./sources";
 
@@ -24,6 +25,7 @@ const copy = {
 
 export default function SiteFooter({ lang }: { lang: Lang }) {
   const t = copy[lang];
+  const stamp = buildStamp(lang);
   return <footer className="site-footer">
     <div className="footer-main">
       <div className="footer-intro">
@@ -53,7 +55,11 @@ export default function SiteFooter({ lang }: { lang: Lang }) {
       </nav>
     </div>
     <div className="footer-bottom">
-      <p>© 2026 LoanPilot · {t.independent} <a href="https://marloncoreas.com">marloncoreas.com</a></p>
+      {/* The build stamp rides with the copyright line rather than getting a
+          row of its own: it is for the person checking which version they are
+          reading, and it should not read as a claim the site is making. */}
+      <p>© 2026 LoanPilot · {t.independent} <a href="https://marloncoreas.com">marloncoreas.com</a>
+        {stamp !== undefined && <small className="build-stamp">{stamp}</small>}</p>
       <div><span>{t.disclaimer}</span><a href={OFFICIAL.issues} target="_blank" rel="noreferrer">{t.report} ↗</a></div>
     </div>
   </footer>;
