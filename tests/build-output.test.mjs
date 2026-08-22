@@ -7,7 +7,8 @@ import { FAQ } from "../app/faq.ts";
 import { absoluteUrl, LANGS, OG_CARD, ogImagePath, PAGES, PAGE_META, ROUTES } from "../app/routes.ts";
 import { disputedVersions } from "../app/rules.ts";
 import { OFFICIAL } from "../app/sources.ts";
-import { RULES_REVIEWED } from "../app/statutory.ts";
+import { fillFigures, holesIn } from "../app/stakes.ts";
+import { CONTESTED_FIGURES, RULES_REVIEWED } from "../app/statutory.ts";
 
 /**
  * What React does to the copy on its way into the markup. Comparing raw
@@ -351,7 +352,10 @@ test("publishes every contested rule on the page that exists to carry them", asy
       // What a silence has instead of a second reading: how far it travels. It
       // is the half a reader cannot reconstruct, so it has to reach the markup.
       if (assumption) {
-        assert.ok(html.includes(escapeHtml(assumption.reach[lang])), `${where}: its reach is missing`);
+        // Filled, not raw: `reach` is a template with holes the engine fills.
+        // Comparing the template would look for "{closedCycle}" in the markup.
+        const reach = fillFigures(assumption.reach[lang], rule.id, lang);
+        assert.ok(html.includes(escapeHtml(reach)), `${where}: its reach is missing`);
         assert.ok(html.includes(escapeHtml(assumption.silence[lang])), `${where}: the texts are not quoted`);
       }
       // Every flag the registry raises has to be visible, not just the first.
@@ -468,5 +472,105 @@ test("carries no scaffolding or hosting-provider traces", async () => {
   // would quietly restore ~3 kB of rules the design never used.
   for (const css of stylesheets) {
     assert.doesNotMatch(css, /tailwind|@layer theme/i);
+  }
+});
+
+/**
+ * The regression this whole mechanism exists for.
+ *
+ * The article 187 entry claimed a resignation two months past the anniversary
+ * was worth "around 90 dollars at the minimum wage, and over 300 on a salary of
+ * a thousand". The engine says $44.52 and $110.41. The 90 was the $90.16 of the
+ * MTPS statement — a $937.54 salary — carried up from the readings below it and
+ * given a label it did not fit, and the 300 corresponded to nothing at all. It
+ * survived every review the project had, because prose is not checked the way
+ * arithmetic is, and it was the first figure an accountant would verify on the
+ * page whose entire argument is that the figures can be verified.
+ *
+ * So the rule is now structural rather than a matter of care: a stakes or reach
+ * block may not contain a money literal. Not "must agree with the engine" —
+ * may not contain one. A hand-written amount cannot drift from a calculation it
+ * was never connected to if it cannot be written down in the first place.
+ *
+ * The other blocks are deliberately exempt. `readings`, `silence`, `choice` and
+ * `why` quote official documents — the $90.16 and the $367.40 the MTPS prints,
+ * the $1,500 ceiling article 2 names — and those figures are correct precisely
+ * because they are transcriptions and not calculations. Deriving them would
+ * replace a quotation with an assertion, which is the opposite of what this
+ * page is for.
+ */
+const MONEY = /\$\s?\d|\d+(?:[.,]\d+)?\s*(?:d[óo]lares|dollars)\b/i;
+
+test("no stakes or reach block writes an amount by hand", () => {
+  const entries = disputedVersions().map(({ rule }) => {
+    const dispute = disputeFor(rule.id);
+    const assumption = assumptionFor(rule.id);
+    return {
+      id: rule.id,
+      // "Qué está en juego" for a disagreement, "Hasta dónde llega" for a
+      // silence: the same slot on the card, and the same rule about figures.
+      block: dispute ? "stakes" : "reach",
+      text: dispute?.stakes ?? assumption?.reach,
+    };
+  });
+  assert.ok(entries.length > 0);
+
+  for (const { id, block, text } of entries) {
+    assert.ok(text, `${id}: has no ${block} block`);
+    for (const lang of LANGS) {
+      const template = text[lang];
+      const bare = template.replace(/\{[a-zA-Z]+\}/g, "");
+      assert.ok(!MONEY.test(bare),
+        `${id} ${lang}: ${block} writes an amount by hand — "${bare.match(MONEY)?.[0]}". `
+        + "Derive it in CONTESTED_FIGURES and leave a {hole} here.");
+
+      // Filling has to work, and has to leave nothing behind. A hole naming a
+      // figure the scenario does not produce throws inside `fillFigures`; this
+      // catches the other direction, where the syntax itself is malformed.
+      const filled = fillFigures(template, id, lang);
+      assert.ok(!filled.includes("{"), `${id} ${lang}: ${block} still holds template syntax`);
+      // And the injected text must actually carry the figures, or the block is
+      // prose that merely looks derived.
+      for (const hole of holesIn(template)) {
+        assert.ok(id in CONTESTED_FIGURES && hole in CONTESTED_FIGURES[id],
+          `${id} ${lang}: {${hole}} is not derived`);
+      }
+    }
+  }
+});
+
+test("every derived figure is quoted by the entry that derives it", () => {
+  // The other end of the same seam. A scenario nobody quotes is a calculation
+  // running on every build with nothing checking its result, and it is the
+  // shape a figure takes on the way out: the sentence gets rewritten, the hole
+  // disappears, and the derivation stays behind looking maintained.
+  for (const [id, figures] of Object.entries(CONTESTED_FIGURES)) {
+    const dispute = disputeFor(id);
+    const assumption = assumptionFor(id);
+    const text = dispute?.stakes ?? assumption?.reach;
+    assert.ok(text, `${id}: derives figures for an entry that does not exist`);
+    const used = new Set(LANGS.flatMap((lang) => holesIn(text[lang])));
+    for (const name of Object.keys(figures)) {
+      assert.ok(used.has(name), `${id}: derives {${name}} and no sentence uses it`);
+    }
+    // Both languages have to quote the same figures. A number that appears in
+    // the Spanish and not in the English is one of the two pages being less
+    // specific than the other about what a rule costs somebody.
+    const [es, en] = LANGS.map((lang) => holesIn(text[lang]).sort().join(","));
+    assert.equal(es, en, `${id}: the two languages quote different figures`);
+  }
+});
+
+test("the footer stamps which build the reader is looking at", async () => {
+  // The failure this prevents: a review conducted in good faith against a
+  // cached copy, with no way for either side to notice. It is not a claim
+  // about the law and must not be confused with one, so it is checked here
+  // alongside the freshness line it sits below and differs from.
+  for (const [lang, page] of everyPage) {
+    const html = await pageHtml(lang, page);
+    assert.match(html, /class="build-stamp"/,
+      `${lang} ${page}: no build stamp in the footer`);
+    assert.match(html, /class="build-stamp">(Versión|Build) \d{4}-\d{2}-\d{2}/,
+      `${lang} ${page}: the build stamp carries no date`);
   }
 });

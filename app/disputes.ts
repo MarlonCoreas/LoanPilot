@@ -94,8 +94,8 @@ export const DISPUTES: Dispute[] = [
       en: "Is the part-year of vacation owed to someone who resigns?",
     },
     stakes: {
-      es: "Los días corridos desde el último aniversario, pagados con el 30% de recargo. En una renuncia de dos meses pasado el aniversario son unos 90 dólares sobre un salario mínimo, y más de 300 sobre un salario de mil.",
-      en: "The days run since the last anniversary, paid with the 30% surcharge. On a resignation two months past the anniversary that is around 90 dollars at the minimum wage, and over 300 on a salary of a thousand.",
+      es: "Los días corridos desde el último aniversario, pagados con el 30% de recargo. En una renuncia de dos meses pasado el aniversario son {vacationDays} de vacación: {atMinimum} sobre el salario mínimo de comercio ({minimumSalary} al mes), {atRound} sobre un salario de {roundSalary}.",
+      en: "The days run since the last anniversary, paid with the 30% surcharge. On a resignation two months past the anniversary that is {vacationDays} of vacation: {atMinimum} at the commerce minimum wage ({minimumSalary} a month), {atRound} on a salary of {roundSalary}.",
     },
     readings: [
       {
@@ -129,8 +129,8 @@ export const DISPUTES: Dispute[] = [
       en: "Which step of article 198 applies to someone who leaves before 20 October?",
     },
     stakes: {
-      es: "Cuatro o dos días de salario, según el escalón que se cruce: la escala salta de 15 a 19 días a los tres años y de 19 a 21 a los diez. Solo cambia algo para quien termina el contrato en el tramo del año en que cumpliría uno de esos aniversarios.",
-      en: "Four or two days of salary, depending on the step crossed: the scale jumps from 15 to 19 days at three years and from 19 to 21 at ten. It changes nothing except for someone whose contract ends in the stretch of the year where one of those anniversaries would fall.",
+      es: "La escala salta de {lowerStep} a {upperStep} días a los tres años, y de {upperStep} a {topStep} a los diez. Pero el salto nunca vale entero, porque corre solo sobre la fracción del ciclo ya trabajada: en una salida el 5 de octubre con el tercer aniversario diez días después son {gapDays}, o {gapAmount} sobre un salario de {roundSalary}. Solo cambia algo para quien termina el contrato en el tramo del año en que cumpliría uno de esos aniversarios.",
+      en: "The scale jumps from {lowerStep} to {upperStep} days at three years, and from {upperStep} to {topStep} at ten. But the step is never worth its whole self, because it only runs over the fraction of the cycle already worked: on a departure on 5 October with the third anniversary ten days later it is {gapDays}, or {gapAmount} on a salary of {roundSalary}. It changes nothing except for someone whose contract ends in the stretch of the year where one of those anniversaries would fall.",
     },
     readings: [
       {
@@ -164,8 +164,8 @@ export const DISPUTES: Dispute[] = [
       en: "Who is owed the Quincena 25 when their contract ends?",
     },
     stakes: {
-      es: "Hasta medio salario mensual. Para quien gana el tope de $1,500, la diferencia entre las dos lecturas llega a $750 en una cifra que la gente lleva a una negociación.",
-      en: "Up to half a monthly salary. For someone at the $1,500 ceiling, the gap between the two readings reaches $750 in a figure people take into a negotiation.",
+      es: "Hasta medio salario mensual. Para quien gana el tope de {ceiling}, la diferencia entre las dos lecturas llega a {maxGap} en una cifra que la gente lleva a una negociación.",
+      en: "Up to half a monthly salary. For someone at the {ceiling} ceiling, the gap between the two readings reaches {maxGap} in a figure people take into a negotiation.",
     },
     readings: [
       {
@@ -210,8 +210,16 @@ export const ASSUMPTIONS: Assumption[] = [
       en: "From 12 December to 11 December, because that is what the MTPS calculation service declares: every row it returns prints the period it covers — \"12/12/2024 - 11/12/2025\" for the closed cycle and \"12/12/2025 - 30/06/2026\" for the running one. It is not this project's reading: it is the date the ministry prints on the document.",
     },
     reach: {
-      es: "Toda parte proporcional de aguinaldo del sitio, y la forma misma de la respuesta. Un finiquito puede deber dos cosas a la vez —el aguinaldo entero del ciclo que cerró y no se cobró, más la fracción del que abrió después— y por eso la calculadora muestra dos renglones donde antes mostraba uno. Este sitio aplicaba el año calendario hasta agosto de 2026: para una salida anterior al 20 de octubre eso subestimaba la cifra en exactamente la escala por 20/365 del salario diario, unos $31 sobre un salario de $900 con 19 días de escala, siempre en contra del trabajador.",
-      en: "Every proportional bonus on the site, and the shape of the answer itself. A settlement can owe two things at once — the whole bonus of the cycle that closed unpaid, plus the fraction of the one that opened after it — which is why the calculator now shows two lines where it showed one. This site applied the calendar year until August 2026: for a departure before 20 October that under-stated the figure by exactly the scale times 20/365 of the daily wage, around $31 on a $900 salary at the 19-day step, always against the worker.",
+      // REWRITTEN BEFORE IT WAS DERIVED. This block used to close by pricing
+      // what the calendar-year cycle had cost — "unos $31 sobre un salario de
+      // $900" — which was arithmetically right and describing a calculation
+      // this site no longer performs. A stale figure is a wrong number; a
+      // stale description of the engine's behaviour is a reader building a
+      // model of the calculator that does not correspond to the calculator,
+      // which is worse and harder to notice. The history belongs in `why`,
+      // where it already is; `reach` says where the choice travels TODAY.
+      es: "Toda parte proporcional de aguinaldo del sitio, y la forma misma de la respuesta. Un finiquito puede deber dos cosas a la vez —el aguinaldo entero del ciclo que cerró el 11 de diciembre y no se cobró, más la fracción del que abrió al día siguiente— y por eso la calculadora muestra dos renglones donde antes mostraba uno: en una salida el 30 de junio de 2026, con once años de servicio y un salario de {roundSalary}, son {closedCycle} del ciclo cerrado y {runningCycle} del que corre. Mover la fecha de apertura mueve el segundo renglón entero, y con él todo aguinaldo proporcional que este sitio calcula.",
+      en: "Every proportional bonus on the site, and the shape of the answer itself. A settlement can owe two things at once — the whole bonus of the cycle that closed on 11 December and was never handed over, plus the fraction of the one that opened the next day — which is why the calculator shows two lines where it once showed one: on a departure on 30 June 2026, with eleven years of service and a salary of {roundSalary}, that is {closedCycle} for the closed cycle and {runningCycle} for the running one. Moving the opening date moves the second line entire, and with it every proportional bonus this site calculates.",
     },
     why: {
       es: "Porque hay un documento oficial que lo fija y es mejor seguirlo que elegir la fecha que parezca más razonable. Es la misma decisión del artículo 187 y la del divisor: donde el texto calla y el ministerio actúa, se sigue al ministerio y se dice que es lo que se está haciendo. Hasta agosto de 2026 este sitio aplicaba el año calendario y decía que lo respaldaba el MTPS; eso era una inferencia sobre una publicación que habla del monto del pago anticipado, no de su período, y el respaldo estaba sobrestimado. Se corrigió al correr cinco casos en la calculadora del ministerio y ver el ciclo impreso. Si un decreto o un criterio publicado fijara el período, mandaría el documento y esta ficha desaparecería.",
@@ -233,8 +241,13 @@ export const ASSUMPTIONS: Assumption[] = [
       en: "Thirty. It does not come from a text: it comes from the MTPS statement this project reproduces to the cent. At 937.54/30, the proportional vacation of 54 days gives the $90.16 the official document prints; at 30.42 it would give $88.92 and the site would stop agreeing with the ministry.",
     },
     reach: {
-      es: "Es el supuesto de mayor alcance del sitio. Toda cifra diaria pasa por él: la indemnización, la prestación por renuncia, la vacación, el aguinaldo y cada hora extra, porque la hora sale del día. Cambiarlo a 30.42 baja un 1.4% cada una de esas líneas —sobre un salario de $937.54, el día pasa de $31.25 a $30.82— y ese 1.4% corre por todas a la vez, no por una.",
-      en: "It is the widest-reaching assumption on the site. Every daily figure passes through it: severance, the resignation benefit, vacation, the year-end bonus and every overtime hour, because the hour is derived from the day. Moving it to 30.42 lowers each of those lines by 1.4% — on a salary of $937.54 the day goes from $31.25 to $30.82 — and that 1.4% runs through all of them at once, not through one.",
+      // The counterfactual divisor is named as 365/12 rather than as 30.42,
+      // because that is what it is: the wage decree's own monthly equivalent,
+      // derived in `statutory.ts` from the same `accrualYearDays` the engine
+      // prorates with. Writing the decimal here would be a third copy of a
+      // number the registry already holds.
+      es: "Es el supuesto de mayor alcance del sitio. Toda cifra diaria pasa por él: la indemnización, la prestación por renuncia, la vacación, el aguinaldo y cada hora extra, porque la hora sale del día. Cambiarlo a los 365/12 que usa el decreto de salarios mínimos baja un {drop} cada una de esas líneas —sobre un salario de {roundSalary}, el día pasa de {dayApplied} a {dayAlternative}— y ese {drop} corre por todas a la vez, no por una.",
+      en: "It is the widest-reaching assumption on the site. Every daily figure passes through it: severance, the resignation benefit, vacation, the year-end bonus and every overtime hour, because the hour is derived from the day. Moving it to the 365/12 the minimum-wage decree uses lowers each of those lines by {drop} — on a salary of {roundSalary} the day goes from {dayApplied} to {dayAlternative} — and that {drop} runs through all of them at once, not through one.",
     },
     why: {
       es: "Porque hay una cifra oficial contra la cual anclarlo, y anclarla a algo comprobable es mejor que elegir el número que parece más razonable. La decisión es la misma del artículo 187: donde el texto calla y el ministerio actúa, se sigue al ministerio y se dice que es lo que se está haciendo. La diferencia es que allá hay dos lecturas y aquí no hay ninguna: nadie sostiene que la ley diga 30, y este proyecto tampoco. Si un decreto o un criterio publicado fijara el divisor, mandaría el documento y esta ficha desaparecería.",

@@ -1034,3 +1034,169 @@ export function calculateRecalculation(input: {
     excess: difference < 0 ? round2(-difference) : 0,
   };
 }
+
+/**
+ * THE FIGURES THE DISPUTED-RULES PAGE QUOTES, DERIVED RATHER THAN TYPED.
+ *
+ * `disputes.ts` explains, in both languages, what turns on each unsettled rule.
+ * Until August 2026 the amounts in that prose were written by hand, and one of
+ * them drifted the way hand-written figures always do: the article 187 entry
+ * claimed "around 90 dollars at the minimum wage", which was the $90.16 of the
+ * MTPS statement — a $937.54 salary, 2.3x the minimum — relabelled. The stake
+ * was overstated 3.4x in the first block a reader checks, on the page whose
+ * whole argument is that the arithmetic can be audited.
+ *
+ * So the prose keeps its holes and this file fills them. The scenarios live
+ * HERE, next to the engine, and not beside the sentences they serve: the thing
+ * that invalidates them is a change to the calculation, so they have to sit
+ * where somebody changing the calculation will see them.
+ *
+ * WHY NOT A TEST THAT CHECKS THE PROSE INSTEAD. Because its failure mode is
+ * bad. A red assertion saying the page claims $90 and the engine says $44.52
+ * is fixed most naturally by editing the sentence until it matches — which is
+ * exactly the move to make when the prose is wrong, and exactly the wrong one
+ * when the engine is. Injection removes the choice: there is no second copy of
+ * the number to disagree with.
+ *
+ * THE CASES ARE DELIBERATELY NOT THE MTPS STATEMENT. That case is quoted, at
+ * $937.54, inside the `readings` and `choice` blocks of three entries, where it
+ * belongs — it is the document being reconciled against. Reusing it for the
+ * stakes is what produced the original error, so these run on the commerce
+ * minimum wage and on a round $1,000: two salaries a reader can tell apart from
+ * the constancia at a glance.
+ */
+export type ContestedFigure =
+  /** Rounded to the dollar: a salary, a ceiling, anything stated exactly. */
+  | { kind: "money"; value: number }
+  /** Two decimals, for the figures where the cents are the point: a day rate. */
+  | { kind: "preciseMoney"; value: number }
+  /** Rounded to the dollar and said so: "unos $110". */
+  | { kind: "approxMoney"; value: number }
+  | { kind: "days"; value: number }
+  /** A bare number, for a sentence that supplies its own noun. */
+  | { kind: "count"; value: number }
+  | { kind: "percent"; value: number };
+
+/** The commerce minimum wage as a monthly salary, on this site's own divisor. */
+const MINIMUM_MONTHLY = currentValue(minimumWage).commerce * DAILY_DIVISOR;
+const ROUND_SALARY = 1000;
+
+function contestedFigures(): Record<string, Record<string, ContestedFigure>> {
+  /**
+   * A figure the engine only returns for some shapes of case. Publishing a
+   * quiet zero where one is missing would put a wrong amount on the page in
+   * the exact way this whole mechanism exists to prevent, so it fails the
+   * build instead: these scenarios are fixed inputs, and a miss means the
+   * calculation moved under them.
+   */
+  const derived = (value: number | undefined, what: string) => {
+    if (value === undefined) throw new Error(`stakes: ${what} dejó de derivarse`);
+    return value;
+  };
+
+  // ARTICLE 187. A resignation two months past the last vacation anniversary,
+  // which is the case the entry describes, priced at both ends of the range
+  // the reader is likely to be at.
+  const resigned = (monthlySalary: number) => calculateSettlement({
+    startDate: "2020-06-15", endDate: "2026-08-15",
+    monthlySalary, sector: "commerce", termination: "resignation",
+  });
+  const atMinimum = resigned(MINIMUM_MONTHLY);
+  const atRound = resigned(ROUND_SALARY);
+
+  // ARTICLE 198's SCALE. The case the entry already cites in its readings — a
+  // departure on 5 October with the third anniversary ten days later, inside
+  // the window where the two readings of the scale disagree — priced at $1,000.
+  //
+  // `aguinaldoAlternativeDays` covers the PROPORTIONAL part alone, while
+  // `aguinaldoDays` also carries any closed cycle, so the gap between the
+  // readings is the alternative against the proportional and not against the
+  // total. Subtracting the wrong one is what would resurrect the "four days"
+  // claim: the step is worth four days of scale, but it only ever runs over the
+  // fraction of the cycle worked, so the gap cannot reach four days of salary.
+  const scale = calculateSettlement({
+    startDate: "2023-10-15", endDate: "2026-10-05",
+    monthlySalary: ROUND_SALARY, sector: "commerce", termination: "dismissal",
+  });
+
+  // THE QUINCENA 25. The widest the two readings of article 3 can differ: a
+  // worker at the salary ceiling whose contract ends on the last day of the
+  // year, so the restrictive reading owes nothing and the broad one owes the
+  // whole accrued benefit. This entry's figures were already right when they
+  // were typed by hand — they are derived anyway, because a block that mixes a
+  // derived amount with a hand-written one is the arrangement that let the
+  // article 187 error survive review.
+  const ceiling = QUINCENA25.salaryCeiling;
+  const quincena = calculateSettlement({
+    startDate: "2020-01-01", endDate: "2027-12-31",
+    monthlySalary: ceiling, sector: "commerce", termination: "dismissal",
+  });
+
+  // THE BONUS CYCLE. A dismissal that owes both lines at once — the whole bonus
+  // of the cycle that closed on 11 December and was never handed over, plus the
+  // part-year of the one that opened the next day — which is the shape of the
+  // answer the 12 December cycle produces and the thing the choice travels to.
+  const cycle = calculateSettlement({
+    startDate: "2015-03-01", endDate: "2026-06-30",
+    monthlySalary: ROUND_SALARY, sector: "commerce", termination: "dismissal",
+  });
+
+  // THE DIVISOR. The counterfactual is the 365/12 the wage decree uses for its
+  // own monthly equivalent, and it is derived from `accrualYearDays` rather
+  // than written as 30.42, so that a change to the year length cannot leave a
+  // stale comparison behind.
+  const alternativeDivisor = currentValue(accrualYearDays) / 12;
+  const dayApplied = round2(ROUND_SALARY / DAILY_DIVISOR);
+  const dayAlternative = round2(ROUND_SALARY / alternativeDivisor);
+
+  return {
+    vacationProportionalOnExit: {
+      minimumSalary: { kind: "money", value: round2(MINIMUM_MONTHLY) },
+      roundSalary: { kind: "money", value: ROUND_SALARY },
+      // The same for both salaries: the fraction of the year is what it is,
+      // and only the money it is worth differs. Read off either case.
+      vacationDays: { kind: "days", value: atMinimum.proportionalVacationDays },
+      atMinimum: { kind: "approxMoney", value: atMinimum.proportionalVacation },
+      atRound: { kind: "approxMoney", value: atRound.proportionalVacation },
+    },
+    aguinaldoScaleOnExit: {
+      roundSalary: { kind: "money", value: ROUND_SALARY },
+      // Bare counts: the sentence names the unit once for all three steps. The
+      // top step is read off the eleven-year case rather than reached for in
+      // the registry, so all three arrive the same way a reader's own figure
+      // would — through the engine.
+      lowerStep: { kind: "count", value: scale.aguinaldoScaleDays },
+      upperStep: { kind: "count", value: scale.aguinaldoAlternativeScaleDays },
+      topStep: { kind: "count", value: cycle.aguinaldoScaleDays },
+      gapDays: { kind: "days", value: scale.aguinaldoAlternativeDays - scale.aguinaldoProportionalDays },
+      gapAmount: { kind: "approxMoney", value: round2(scale.aguinaldoAlternative - scale.aguinaldoProportional) },
+    },
+    quincena25Window: {
+      ceiling: { kind: "money", value: ceiling },
+      // The broad reading's figure is only present on a settlement that
+      // qualified on every count except the date, which is what this scenario
+      // is; `derived` refuses to publish a zero if that ever stops being true.
+      maxGap: { kind: "money", value: derived(quincena.quincena25Alternative, "el tope de la Quincena 25") },
+    },
+    aguinaldoCycleStart: {
+      roundSalary: { kind: "money", value: ROUND_SALARY },
+      closedCycle: { kind: "approxMoney", value: cycle.aguinaldoComplete },
+      runningCycle: { kind: "approxMoney", value: cycle.aguinaldoProportional },
+    },
+    dailySalaryDivisor: {
+      roundSalary: { kind: "money", value: ROUND_SALARY },
+      // Cents, not dollars: the whole claim is a 1.4% gap, and $33 against $33
+      // would print the two readings as the same number.
+      dayApplied: { kind: "preciseMoney", value: dayApplied },
+      dayAlternative: { kind: "preciseMoney", value: dayAlternative },
+      drop: { kind: "percent", value: 100 * (1 - dayAlternative / dayApplied) },
+    },
+  };
+}
+
+/**
+ * Computed once at module load. The engine is pure and the scenarios are
+ * constants, so there is nothing to recompute and nothing that can differ
+ * between the server render and the browser.
+ */
+export const CONTESTED_FIGURES = contestedFigures();

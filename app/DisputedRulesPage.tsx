@@ -9,6 +9,7 @@ import { disputedVersions, type AnyRule, type RuleId, type RuleStatus, type Rule
 import SiteFooter from "./SiteFooter";
 import SiteHeader from "./SiteHeader";
 import { documentName, OFFICIAL } from "./sources";
+import { fillFigures } from "./stakes";
 import UtilityHero from "./UtilityHero";
 
 /**
@@ -201,9 +202,13 @@ function DisputeSection({ contested, lang, t }: { contested: Contested[]; lang: 
     if (!dispute) return null;
     return <EntryCard key={rule.id} index={index} rule={rule} version={version}
       question={dispute.question} lang={lang} t={t}>
+      {/* The amounts come from `CONTESTED_FIGURES`, derived by running the
+          engine over the scenario the sentence describes. The prose is written
+          by hand in both languages and holds no figure of its own; an unknown
+          hole throws rather than rendering template syntax at a reader. */}
       <div className="dispute-stakes">
         <span>{t.stakes}</span>
-        <p>{dispute.stakes[lang]}</p>
+        <p>{fillFigures(dispute.stakes[lang], rule.id, lang)}</p>
       </div>
 
       <div className="dispute-readings">
@@ -233,7 +238,7 @@ function AssumptionSection({ contested, lang, t }: { contested: Contested[]; lan
       question={assumption.question} lang={lang} t={t}>
       <div className="dispute-stakes">
         <span>{t.reach}</span>
-        <p>{assumption.reach[lang]}</p>
+        <p>{fillFigures(assumption.reach[lang], rule.id, lang)}</p>
       </div>
 
       <div className="dispute-readings">
