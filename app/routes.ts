@@ -188,7 +188,7 @@ export const OG_CARD: Record<Lang, Record<Page, {
     aguinaldo: {
       eyebrow: "AGUINALDO",
       line1: "Los días que te tocan,", line2: "y hasta cuándo tienen para pagarlos.",
-      sub: "Escala del artículo 198, el ciclo que corre del 12 de diciembre y la ventana legal de pago del Código de Trabajo.",
+      sub: "Escala del artículo 198, el ciclo que corre del {cycleOpens} y la ventana legal de pago del Código de Trabajo.",
       alt: "LoanPilot: calculadora de aguinaldo de El Salvador.",
       accent: "#ffd88a",
     },
@@ -253,7 +253,7 @@ export const OG_CARD: Record<Lang, Record<Page, {
     aguinaldo: {
       eyebrow: "YEAR-END BONUS",
       line1: "The days you have earned,", line2: "and the deadline to pay them.",
-      sub: "The article 198 scale, the cycle running from 12 December and the statutory payment window of the Labour Code.",
+      sub: "The article 198 scale, the cycle running from {cycleOpens} and the statutory payment window of the Labour Code.",
       alt: "LoanPilot: year-end bonus calculator for El Salvador.",
       accent: "#ffd88a",
     },

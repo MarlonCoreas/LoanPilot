@@ -1,6 +1,7 @@
 // Extensions written out: the test suite imports this module through Node's
 // type stripping, which resolves specifiers literally. See tsconfig.json.
 import type { Lang } from "./routes.ts";
+import { fillWith } from "./holes.ts";
 import { CONTESTED_FIGURES, type ContestedFigure } from "./statutory.ts";
 
 /**
@@ -72,8 +73,6 @@ export function formatFigure(figure: ContestedFigure, lang: Lang): string {
   }
 }
 
-const HOLE = /\{([a-zA-Z]+)\}/g;
-
 /**
  * Fill one hand-written sentence from a rule's derived figures.
  *
@@ -87,19 +86,11 @@ const HOLE = /\{([a-zA-Z]+)\}/g;
  */
 export function fillFigures(template: string, rule: string, lang: Lang): string {
   const figures = CONTESTED_FIGURES[rule] ?? {};
-  return template.replace(HOLE, (_match, name: string) => {
+  return fillWith(template, (name) => {
     const figure = figures[name];
     if (!figure) {
       throw new Error(`stakes: ${rule} no deriva ninguna cifra para {${name}}`);
     }
     return formatFigure(figure, lang);
   });
-}
-
-/**
- * Every hole a template asks for, for the test that checks the two sides line
- * up before a build ships them.
- */
-export function holesIn(template: string): string[] {
-  return [...template.matchAll(HOLE)].map(([, name]) => name);
 }

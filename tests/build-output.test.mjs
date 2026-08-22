@@ -7,7 +7,9 @@ import { FAQ } from "../app/faq.ts";
 import { absoluteUrl, LANGS, OG_CARD, ogImagePath, PAGES, PAGE_META, ROUTES } from "../app/routes.ts";
 import { disputedVersions } from "../app/rules.ts";
 import { OFFICIAL } from "../app/sources.ts";
-import { fillFigures, holesIn } from "../app/stakes.ts";
+import { fillDates, formatYearDay, SITE_DATES } from "../app/calendar.ts";
+import { holesIn } from "../app/holes.ts";
+import { fillFigures } from "../app/stakes.ts";
 import { CONTESTED_FIGURES, RULES_REVIEWED } from "../app/statutory.ts";
 
 /**
@@ -572,5 +574,107 @@ test("the footer stamps which build the reader is looking at", async () => {
       `${lang} ${page}: no build stamp in the footer`);
     assert.match(html, /class="build-stamp">(Versión|Build) \d{4}-\d{2}-\d{2}/,
       `${lang} ${page}: the build stamp carries no date`);
+  }
+});
+
+/**
+ * The second half of the same lesson, learned the same way.
+ *
+ * D.L. 433 moved the aguinaldo's PAYMENT WINDOW to 20 October and left its
+ * ACCRUAL CYCLE where it was, closing 11 December. Before the reform both fell
+ * on 12 December, so for fifty years one sentence could carry both meanings —
+ * and the prose written in that world did. When the cycle was corrected in
+ * August 2026 the registry moved and the sentences did not:
+ *
+ *   - Two FAQ entries ended up adjacent, one saying 20 October is not the day
+ *     service is measured and the next saying it is.
+ *   - The aguinaldo calculator's cycle note still told readers the site
+ *     prorated over the calendar year, months after it had stopped, and
+ *     credited that to the MTPS — the same overstated attribution that had
+ *     already been withdrawn from the disputed-rules page.
+ *   - A call to action on the settlement page still sent people to "the days
+ *     you are owed at 20 October".
+ *
+ * All of it shipped. So the dates stop being writable: prose names them
+ * through {holes} and `calendar.ts` fills them from the registry version in
+ * force. A future decree moves one entry and every sentence follows.
+ */
+const CYCLE_DATE = new RegExp(
+  "(20\\s+de\\s+octubre|12\\s+de\\s+diciembre|11\\s+de\\s+diciembre|20\\s+de\\s+diciembre"
+  + "|20\\s+October|12\\s+December|11\\s+December|20\\s+December)", "i");
+
+test("no published sentence writes an aguinaldo cycle date by hand", async () => {
+  // Read as source text, because the point is that the SENTENCE may not hold
+  // the date — checking the rendered HTML would pass happily on prose that
+  // hardcodes exactly what the registry happens to say today, which is the
+  // state the site was already in when this went wrong.
+  const copySources = ["faq.ts", "routes.ts", "AguinaldoPage.tsx", "StatutoryTools.tsx"];
+  for (const file of copySources) {
+    const source = await readFile(new URL(`../app/${file}`, import.meta.url), "utf8");
+    for (const [index, line] of source.split("\n").entries()) {
+      // Comments explain the rule and must be able to name the dates; the
+      // registry itself is where they legitimately live.
+      const code = line.replace(/^\s*(\/\/|\*|\/\*).*/, "");
+      const hit = code.match(CYCLE_DATE);
+      assert.ok(!hit,
+        `app/${file}:${index + 1}: writes "${hit?.[0]}" into copy. `
+        + "Use a {hole} — cycleOpens, cycleCloses, windowOpens, windowCloses or "
+        + "previousCutoff — and let calendar.ts fill it from the registry.");
+    }
+  }
+});
+
+test("the aguinaldo calendar renders from the registry in both languages", async () => {
+  // The dates the registry actually holds, so a wrong hole cannot pass by
+  // rendering something plausible.
+  assert.deepEqual(SITE_DATES.cycleOpens, { month: 12, day: 12 });
+  assert.deepEqual(SITE_DATES.cycleCloses, { month: 12, day: 11 });
+  assert.deepEqual(SITE_DATES.windowOpens, { month: 10, day: 20 });
+  assert.deepEqual(SITE_DATES.windowCloses, { month: 12, day: 20 });
+  // The pre-reform cutoff comes from the rule's own earlier version, so the
+  // "before the reform" half of every sentence is as checkable as the rest.
+  assert.deepEqual(SITE_DATES.previousCutoff, { month: 12, day: 12 });
+
+  assert.equal(fillDates("{cycleOpens} al {cycleCloses}", "es"), "12 de diciembre al 11 de diciembre");
+  assert.equal(fillDates("{windowOpens} to {windowCloses}", "en"), "20 October to 20 December");
+  assert.throws(() => fillDates("{noSuchDay}", "es"), /calendar/);
+
+  // And the filled text has to reach the reader: no {hole} may survive into
+  // any published page, in either language.
+  for (const [lang, page] of everyPage) {
+    const html = await pageHtml(lang, page);
+    const leaked = html.match(/\{(cycleOpens|cycleCloses|windowOpens|windowCloses|previousCutoff)\}/);
+    assert.ok(!leaked, `${lang} ${page}: shipped an unfilled ${leaked?.[0]}`);
+  }
+});
+
+test("both FAQ entries name the day the bonus cycle actually closes", async () => {
+  // THE CONTRADICTION, PINNED BY WHAT IT LACKED. The deadline entry used to
+  // say "20 October is also the day your length of service is read at" and
+  // close with "before the reform both happened on 12 December", while the
+  // entry directly above it said 20 October is NOT that day. What the broken
+  // version never contained was 11 December — the day the cycle closes and the
+  // scale is actually read — so requiring both entries to name it is a real
+  // regression test: run it against the old copy and it fails.
+  //
+  // Detecting the wrong CLAIM is not attempted. A regex cannot tell "es la
+  // fecha en que se mide" from "no es la fecha en que se mide", and the first
+  // draft of this test failed on the correct sentence for exactly that reason.
+  // Prose is policed here by requiring the right facts to be present; that the
+  // dates themselves cannot drift from the registry is the other test's job.
+  const closes = { es: "11 de diciembre", en: "11 December" };
+  for (const lang of LANGS) {
+    const entries = FAQ[lang];
+    // Matched on question and answer together: the deadline entry never says
+    // "aguinaldo" in its answer — the word is in its question — and filtering
+    // on the answer alone silently found only one of the two.
+    const about = entries.filter(({ question, answer }) =>
+      /aguinaldo|bonus/i.test(`${question} ${answer}`)
+      && new RegExp(formatYearDay(SITE_DATES.windowOpens, lang)).test(answer));
+    assert.ok(about.length >= 2, `${lang}: expected both bonus-date entries, found ${about.length}`);
+    for (const entry of about) {
+      assert.match(entry.answer, new RegExp(closes[lang]),
+        `${lang}: "${entry.question}" names the payment window but never the day the cycle closes`);
+    }
   }
 });

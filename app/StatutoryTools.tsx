@@ -1,3 +1,4 @@
+import { datedCopy } from "./calendar";
 import { useMemo, useState } from "react";
 import DisputePanel from "./DisputePanel";
 import { CheckField, DateField, FieldGroup, MoneyField, NumberField, SegmentedField, SelectField } from "./fields";
@@ -45,7 +46,7 @@ const copy = {
     sector: "Sector económico del empleador", pendingDays: "Días de salario pendientes",
     unusedVacation: "Períodos completos de vacaciones pendientes", aguinaldoCollected: "Aguinaldo ya cobrado",
     collectedNone: "Ninguno", collectedClosed: "El del ciclo anterior", collectedAdvance: "Un adelanto del ciclo que corre",
-    helpCollected: "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre. «El del ciclo anterior» es el que cerró el 11 de diciembre pasado y se cobró en su ventana; descontarlo deja sólo lo devengado del ciclo que corre. «Un adelanto» sólo aparece si la salida cae entre el 20 de octubre y el 11 de diciembre, que es cuando la ley deja pagar por adelantado un ciclo sin cerrar: si eso pasó, el patrono debió entregarlo completo y no queda nada por devengar de ese ciclo.",
+    helpCollected: "El aguinaldo se devenga del {cycleOpens} al {cycleCloses}. «El del ciclo anterior» es el que cerró el {cycleCloses} pasado y se cobró en su ventana; descontarlo deja sólo lo devengado del ciclo que corre. «Un adelanto» sólo aparece si la salida cae entre el {windowOpens} y el {cycleCloses}, que es cuando la ley deja pagar por adelantado un ciclo sin cerrar: si eso pasó, el patrono debió entregarlo completo y no queda nada por devengar de ese ciclo.",
     service: "Antigüedad estimada", year: "año", yearPlural: "años", month: "mes", monthPlural: "meses",
     period: "período cumplido", periodPlural: "períodos cumplidos", daysLabel: "días",
     completedPeriodsLead: "Llevás", completedPeriodsTail: "; ingresá solo los que no te hayan pagado.",
@@ -53,14 +54,14 @@ const copy = {
     vacation: "Vacaciones + 30%", aguinaldo: "Aguinaldo", pendingSalary: "Salario pendiente",
     vacationComplete: "Vacaciones de períodos completos + 30%", vacationFraction: "Vacación proporcional + 30%",
     aguinaldoComplete: "Aguinaldo completo (ciclo cerrado sin pagar)", aguinaldoFraction: "Aguinaldo proporcional",
-    aguinaldoAnticipatedNote: "Esta salida cae entre el 20 de octubre y el 11 de diciembre, la ventana en la que la ley deja pagar por adelantado un aguinaldo cuyo ciclo todavía no cierra. Si ya se cobró ese adelanto, la línea proporcional de arriba está contando días ya pagados: marcá «Un adelanto del ciclo que corre» arriba y la cifra se corrige. El servicio del MTPS no hace esta pregunta, así que su cálculo tampoco lo descuenta.",
+    aguinaldoAnticipatedNote: "Esta salida cae entre el {windowOpens} y el {cycleCloses}, la ventana en la que la ley deja pagar por adelantado un aguinaldo cuyo ciclo todavía no cierra. Si ya se cobró ese adelanto, la línea proporcional de arriba está contando días ya pagados: marcá «Un adelanto del ciclo que corre» arriba y la cifra se corrige. El servicio del MTPS no hace esta pregunta, así que su cálculo tampoco lo descuenta.",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (D.L. 499): el art. 2 la fija en el 50% del salario mensual y solo para quien gana $1,500 o menos, y el art. 1 manda pagarla íntegra, sin retención ni descuento de ninguna clase. Es obligatoria para el patrono privado desde 2027. Se incluye en este cálculo porque la terminación cae dentro de la ventana del art. 3: «antes del veinticinco de enero o en esa misma fecha».",
     quincena25OutsideLead: "Cumplís todo lo demás para la Quincena 25 —despido, salario dentro del tope y fecha dentro del régimen— pero la terminación queda fuera de la ventana del art. 3, que nombra a quien sale «antes del veinticinco de enero o en esa misma fecha». Aquí se aplica esa lectura estricta y la línea es cero. La lectura amplia, la que remite a las reglas del aguinaldo, habría pagado",
     quincena25OutsideTail: "por la parte proporcional del ciclo.",
     wageOutOfRange: "La salida es anterior a la tabla de salarios mínimos más antigua que hemos verificado. El tope se calcula con esa tabla y puede no ser la que estaba vigente ese día.",
-    aguinaldoAmbiguousLead: "La salida cae antes del 20 de octubre y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
-    aguinaldoAmbiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del 20 de octubre serían",
+    aguinaldoAmbiguousLead: "La salida cae antes del {windowOpens} y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
+    aguinaldoAmbiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del {windowOpens} serían",
     aguinaldoAmbiguousTail: "días. La reforma no dice expresamente qué escala rige para quien terminó antes del corte; si la diferencia te importa, consultalo con el MTPS.",
     dailyBase: "Salario diario usado para la prestación", vacationDays: "Días de vacaciones incluidos",
     resignationOk: "La antigüedad cumple el mínimo de dos años. El derecho exige además preaviso y renuncia con las formalidades legales.",
@@ -111,7 +112,7 @@ const copy = {
     nextSettlementWithholding: "Este total es bruto: al salario y a las vacaciones sí les entra planilla.",
     nextSettlementWithholdingCta: "Calculá AFP, ISSS y renta sobre ese monto",
     nextSettlementAguinaldo: "El aguinaldo de acá sale del finiquito, no de la escala completa del año.",
-    nextSettlementAguinaldoCta: "Revisá los días que te tocan al 20 de octubre",
+    nextSettlementAguinaldoCta: "Revisá los días que te tocan al cerrar el ciclo",
     recalcDeductionNote: "El decreto extiende la deducción de $1,600 al Tramo II de estas tablas. Aquí se prorratea a los meses que cubre cada recálculo — $800 en junio y $1,600 en diciembre — porque es lo que mantiene la continuidad con las retenciones mensuales.",
     recalcEmployerNote: "Si hubo cambio de patrono, el recálculo lo hace el último del período y los acumulados deben incluir lo del anterior, según su constancia de retención.",
     modeRecalc: "Estimar junio o diciembre", modeRecalcSub: "El ajuste acumulado del año",
@@ -195,7 +196,7 @@ const copy = {
     sector: "Employer's economic sector", pendingDays: "Unpaid salary days",
     unusedVacation: "Complete unused vacation periods", aguinaldoCollected: "Year-end bonus already collected",
     collectedNone: "None", collectedClosed: "The previous cycle's", collectedAdvance: "An advance on the running cycle",
-    helpCollected: "The bonus accrues from 12 December to 11 December. \"The previous cycle's\" is the one that closed last 11 December and was collected in its window; taking it off leaves only what the running cycle has accrued. \"An advance\" appears only when the departure falls between 20 October and 11 December, which is when the law allows an unclosed cycle to be paid early: if that happened, the employer had to hand over the whole of it and nothing of that cycle is left to accrue.",
+    helpCollected: "The bonus accrues from {cycleOpens} to {cycleCloses}. \"The previous cycle's\" is the one that closed last {cycleCloses} and was collected in its window; taking it off leaves only what the running cycle has accrued. \"An advance\" appears only when the departure falls between {windowOpens} and {cycleCloses}, which is when the law allows an unclosed cycle to be paid early: if that happened, the employer had to hand over the whole of it and nothing of that cycle is left to accrue.",
     service: "Estimated service", year: "year", yearPlural: "years", month: "month", monthPlural: "months",
     period: "completed period", periodPlural: "completed periods", daysLabel: "days",
     completedPeriodsLead: "You have", completedPeriodsTail: "; enter only the ones you were never paid.",
@@ -203,14 +204,14 @@ const copy = {
     vacation: "Vacation + 30%", aguinaldo: "Year-end bonus", pendingSalary: "Unpaid salary",
     vacationComplete: "Complete-period vacation + 30%", vacationFraction: "Proportional vacation + 30%",
     aguinaldoComplete: "Complete year-end bonus (closed cycle, unpaid)", aguinaldoFraction: "Proportional year-end bonus",
-    aguinaldoAnticipatedNote: "This departure falls between 20 October and 11 December, the window in which the law allows a bonus to be paid early for a cycle that has not closed. If that advance was collected, the proportional line above is counting days already paid: pick \"an advance on the running cycle\" above and the figure corrects itself. The MTPS service does not ask this, so its calculation does not deduct it either.",
+    aguinaldoAnticipatedNote: "This departure falls between {windowOpens} and {cycleCloses}, the window in which the law allows a bonus to be paid early for a cycle that has not closed. If that advance was collected, the proportional line above is counting days already paid: pick \"an advance on the running cycle\" above and the figure corrects itself. The MTPS service does not ask this, so its calculation does not deduct it either.",
     quincena25: "Quincena 25",
     quincena25Note: "Ley Especial Quincena Veinticinco (Decree 499): article 2 sets it at 50% of the monthly salary and only for those earning $1,500 or less, and article 1 requires it to be paid in full, with no withholding or deduction of any kind. It is mandatory for private employers from 2027. It is included in this calculation because the termination falls inside the window of article 3: \"antes del veinticinco de enero o en esa misma fecha\".",
     quincena25OutsideLead: "You meet everything else for the Quincena 25 — dismissal, salary within the ceiling, a date inside the regime — but the termination falls outside the window of article 3, which names whoever leaves \"antes del veinticinco de enero o en esa misma fecha\". That strict reading is the one applied here, and the line is zero. The broad reading, the one referring to the year-end bonus rules, would have paid",
     quincena25OutsideTail: "for the proportional share of the cycle.",
     wageOutOfRange: "The end date precedes the oldest minimum wage table we have verified. The cap uses that table, which may not be the one in force that day.",
-    aguinaldoAmbiguousLead: "The last day worked falls before 20 October, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
-    aguinaldoAmbiguousMid: "days, the reading that does not assume time that was not worked. On the 20 October scale it would be",
+    aguinaldoAmbiguousLead: "The last day worked falls before {windowOpens}, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
+    aguinaldoAmbiguousMid: "days, the reading that does not assume time that was not worked. On the {windowOpens} scale it would be",
     aguinaldoAmbiguousTail: "days. The reform does not expressly say which scale governs someone whose contract ended before the cutoff; if the difference matters to you, check it with the MTPS.",
     dailyBase: "Daily salary used for the benefit", vacationDays: "Vacation days included",
     resignationOk: "Service meets the two-year minimum. Entitlement also requires statutory notice and resignation formalities.",
@@ -261,7 +262,7 @@ const copy = {
     nextSettlementWithholding: "This total is gross: salary and vacation do carry payroll deductions.",
     nextSettlementWithholdingCta: "Work out the pension, ISSS and income tax on it",
     nextSettlementAguinaldo: "The bonus here is the settlement's share, not the full year's scale.",
-    nextSettlementAguinaldoCta: "Check the days you are owed at 20 October",
+    nextSettlementAguinaldoCta: "Check the days you are owed when the cycle closes",
     recalcDeductionNote: "The decree extends the $1,600 deduction to band II of these tables. It is prorated here to the months each recalculation covers — $800 in June and $1,600 in December — because that is what keeps it continuous with the monthly withholding.",
     recalcEmployerNote: "After a change of employer the last one in the period runs the recalculation, and the cumulative figures must include the previous employer's, per its withholding certificate.",
     modeRecalc: "Estimate June or December", modeRecalcSub: "The year's cumulative adjustment",
@@ -492,7 +493,7 @@ const PAYROLL_SHARE: ShareSchema = {
 };
 
 export default function StatutoryTools({ lang, tool }: { lang: Lang; tool: Tool }) {
-  const t = copy[lang];
+  const t = datedCopy(copy[lang], lang);
   const money = useMemo(() => new Intl.NumberFormat(lang === "es" ? "es-SV" : "en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }), [lang]);
   const shareSchema = tool === "settlement" ? SETTLEMENT_SHARE : PAYROLL_SHARE;
   const [shared] = useState(() => readShare(shareSchema));

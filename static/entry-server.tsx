@@ -15,5 +15,8 @@ export {
   alternates, absoluteUrl, LANGS, OG_CARD, OG_LOCALE, ogImagePath, PAGES, PAGE_META, ROUTES,
   SITE_ORIGIN,
 } from "../app/routes";
+// The scripts that bake text into images and markup need the same date
+// filling the pages use; see app/calendar.ts.
+export { datedCopy } from "../app/calendar";
 export { structuredDataScript } from "../app/seo";
 export { RULES_REVIEWED } from "../app/statutory";

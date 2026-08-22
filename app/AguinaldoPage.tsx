@@ -1,3 +1,4 @@
+import { datedCopy } from "./calendar";
 import { useMemo, useState } from "react";
 import {
   aguinaldoCutoffFor, aguinaldoCycleEndFor, aguinaldoPaymentDates, aguinaldoTax, AGUINALDO_TAX_PREVIEW,
@@ -37,7 +38,7 @@ const copy = {
     salaryHint: "Incluye comisiones habituales promediadas, si aplican.",
     collected: "Aguinaldo ya cobrado",
     collectedNone: "Ninguno", collectedClosed: "El del ciclo anterior", collectedAdvance: "Un adelanto del ciclo que corre",
-    helpCollected: "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre. «El del ciclo anterior» es el que cerró el 11 de diciembre pasado y cobraste en su ventana. «Un adelanto» sólo aparece si tu último día cae entre el 20 de octubre y el 11 de diciembre, que es cuando la ley deja pagar por adelantado un ciclo sin cerrar: si te lo dieron, el patrono debió entregarlo completo y no queda nada por devengar de ese ciclo.",
+    helpCollected: "El aguinaldo se devenga del {cycleOpens} al {cycleCloses}. «El del ciclo anterior» es el que cerró el {cycleCloses} pasado y cobraste en su ventana. «Un adelanto» sólo aparece si tu último día cae entre el {windowOpens} y el {cycleCloses}, que es cuando la ley deja pagar por adelantado un ciclo sin cerrar: si te lo dieron, el patrono debió entregarlo completo y no queda nada por devengar de ese ciclo.",
     result: "Estimación bruta", total: "Aguinaldo estimado",
     days: "Días de salario", scale: "Escala aplicada",
     seniority: "Antigüedad al cerrar el ciclo", seniorityAtEnd: "Antigüedad al último día",
@@ -50,17 +51,17 @@ const copy = {
     windowTitle: "Cuándo te lo tienen que pagar", windowSubtitle: "Art. 200 del Código de Trabajo, reformado en 2025",
     windowOpens: "Se puede pagar desde", windowCloses: "Fecha límite de pago",
     cutoffLabel: "Fecha de corte de la antigüedad",
-    windowNote: "Antes de la reforma de 2025 la fecha de corte y la ventana de pago eran el 12 de diciembre. El D.L. 433 las movió: la antigüedad se lee al 20 de octubre y el pago va del 20 de octubre al 20 de diciembre de cada año. Pagarlo después de esa fecha es incumplimiento y se puede denunciar en el MTPS.",
+    windowNote: "Antes de la reforma de 2025 el pago vencía el {previousCutoff}, que era también el día en que se leía la antigüedad. El D.L. 433 movió la ventana: ahora va del {windowOpens} al {windowCloses} de cada año. Lo que no movió es el devengo —el ciclo sigue cerrando el {cycleCloses}, y es ahí donde se lee la antigüedad—. Pagar después del {windowCloses} es incumplimiento y se puede denunciar en el MTPS.",
     proportionalNote: "Se paga la parte proporcional al tiempo trabajado en el ciclo, no los días completos del escalón. Pasa en dos casos: cuando llevás menos de un año de servicio, y cuando la relación terminó antes de la fecha de corte y por eso no alcanzaste el ciclo entero.",
-    cycleNote: "El período sobre el que se cuenta la proporción no está fijado por ningún artículo del capítulo VII. Aquí se usa el año calendario, que es lo que sostiene el MTPS al explicar el pago anticipado; también se usa en el país el ciclo que cierra el 12 de diciembre. Si tu caso es proporcional, esa diferencia mueve la cifra y conviene contrastarla.",
-    ambiguousLead: "Tu último día cae antes del 20 de octubre y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
-    ambiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del 20 de octubre serían",
+    cycleNote: "El período sobre el que se cuenta la proporción no está fijado por ningún artículo del capítulo VII. Aquí se usa el ciclo que corre del {cycleOpens} al {cycleCloses}, porque es el que el servicio de cálculo del MTPS imprime en cada renglón que devuelve. Si tu caso es proporcional, esa fecha de apertura mueve la cifra.",
+    ambiguousLead: "Tu último día cae antes del {windowOpens} y la antigüedad cambia de escalón entre esas dos fechas. Aquí se usa la escala del último día trabajado",
+    ambiguousMid: "días, que es la lectura que no presupone tiempo no trabajado. Con la escala del {windowOpens} serían",
     ambiguousTail: "días. La reforma no dice expresamente qué escala rige para quien terminó antes del corte; si la diferencia te importa, consultalo con el MTPS.",
     notYet: "Con esa fecha de ingreso todavía no se genera aguinaldo para este ciclo: la estimación se hace sobre el corte del año siguiente.",
     closedCycle: "Aguinaldo del ciclo cerrado sin pagar", closedCycleTo: "cerró el",
     runningCycle: "Del ciclo que corre",
     advanceNote: "Marcaste que cobraste un adelanto del ciclo que corre. La ley obliga a entregarlo completo, así que no queda nada por devengar de ese ciclo y la estimación es cero. Lo que sí podría quedar pendiente es el aguinaldo de un ciclo anterior que nunca te pagaron: eso se estima cambiando la opción de arriba.",
-    paidNote: "Marcaste que ya cobraste el ciclo anterior, así que esa parte no aparece. Lo que queda es lo devengado del ciclo que corre desde el 12 de diciembre. Ojo: si el aguinaldo que cobraste fue un pago ADELANTADO del ciclo en curso —la ley lo permite desde el 20 de octubre— esta cifra puede estar contando días que ya te pagaron. Ni esta calculadora ni la del MTPS preguntan por eso.",
+    paidNote: "Marcaste que ya cobraste el ciclo anterior, así que esa parte no aparece. Lo que queda es lo devengado del ciclo que corre desde el {cycleOpens}. Ojo: si el aguinaldo que cobraste fue un pago ADELANTADO del ciclo en curso —la ley lo permite desde el {windowOpens}— esta cifra puede estar contando días que ya te pagaron. Ni esta calculadora ni la del MTPS preguntan por eso.",
     grossNote: "Es una estimación bruta: la cifra de arriba no lleva ningún descuento. Abajo se calcula la porción exenta de renta y la base gravada; la retención sobre esa base no, porque ningún texto dice con qué tabla se hace.",
     invalid: "Revisá las fechas: el último día de trabajo debe ser posterior al ingreso y ambas deben caer entre 1950 y 2100.",
     disputeLink: "Ver las dos lecturas de esta regla",
@@ -77,10 +78,10 @@ const copy = {
     guideTitle: "Cómo se arma tu aguinaldo",
     guideLead: "No es un mes de salario para todo el mundo. Son cuatro piezas, y conviene revisarlas por separado antes de aceptar una cifra.",
     guide: [
-      ["El ciclo y la escala", "El aguinaldo se devenga del 12 de diciembre al 11 de diciembre, y los años completos que llevás al cerrar ese ciclo deciden el escalón: 15, 19 o 21 días de salario. El 20 de octubre abre la ventana de pago; no es la fecha en que se mide la antigüedad.", "◷"],
+      ["El ciclo y la escala", "El aguinaldo se devenga del {cycleOpens} al {cycleCloses}, y los años completos que llevás al cerrar ese ciclo deciden el escalón: 15, 19 o 21 días de salario. El {windowOpens} abre la ventana de pago; no es la fecha en que se mide la antigüedad.", "◷"],
       ["Salario diario", "El aguinaldo se paga en días de salario, y el diario sale del salario mensual ordinario dividido entre 30.", "$"],
       ["Parte proporcional", "Con menos de un año, o si entraste durante el ciclo, se paga la fracción del período efectivamente trabajado.", "+"],
-      ["Fecha límite", "El pago va del 20 de octubre al 20 de diciembre. Después de esa fecha hay incumplimiento denunciable.", "§"],
+      ["Fecha límite", "El pago va del {windowOpens} al {windowCloses}. Después de esa fecha hay incumplimiento denunciable.", "§"],
     ],
     helpStart: "El primer día que trabajaste para este patrono, tal como aparece en el contrato. De aquí sale la antigüedad, que define el escalón de días.",
     helpEnd: "El último día que trabajaste, no el día que te avisaron ni el día que te pagaron. Se cuenta como día trabajado.",
@@ -109,7 +110,7 @@ const copy = {
     salaryHint: "Include averaged recurring commissions, when applicable.",
     collected: "Bonus already collected",
     collectedNone: "None", collectedClosed: "The previous cycle's", collectedAdvance: "An advance on the running cycle",
-    helpCollected: "The bonus accrues from 12 December to 11 December. \"The previous cycle's\" is the one that closed last 11 December and you collected in its window. \"An advance\" appears only when your last day falls between 20 October and 11 December, which is when the law allows an unclosed cycle to be paid early: if you were given it, the employer had to hand over the whole of it and nothing of that cycle is left to accrue.",
+    helpCollected: "The bonus accrues from {cycleOpens} to {cycleCloses}. \"The previous cycle's\" is the one that closed last {cycleCloses} and you collected in its window. \"An advance\" appears only when your last day falls between {windowOpens} and {cycleCloses}, which is when the law allows an unclosed cycle to be paid early: if you were given it, the employer had to hand over the whole of it and nothing of that cycle is left to accrue.",
     result: "Gross estimate", total: "Estimated year-end bonus",
     days: "Days of salary", scale: "Scale applied",
     seniority: "Service when the cycle closes", seniorityAtEnd: "Service at the last day worked",
@@ -122,17 +123,17 @@ const copy = {
     windowTitle: "When it has to be paid", windowSubtitle: "Labour Code article 200, as amended in 2025",
     windowOpens: "Can be paid from", windowCloses: "Payment deadline",
     cutoffLabel: "Date length of service is read at",
-    windowNote: "Before the 2025 reform the cutoff and the payment window were both 12 December. D.L. 433 moved them: service is read at 20 October and payment runs from 20 October to 20 December each year. Paying after that date is a breach and can be reported to the MTPS.",
+    windowNote: "Before the 2025 reform payment fell due on {previousCutoff}, which was also the day service was read. D.L. 433 moved the window: it now runs from {windowOpens} to {windowCloses} each year. What it did not move is the accrual — the cycle still closes on {cycleCloses}, and that is where service is read. Paying after {windowCloses} is a breach and can be reported to the MTPS.",
     proportionalNote: "What is paid is the share proportional to the time worked in the cycle, not the step's full days. It happens in two cases: where you have under a year of service, and where the job ended before the cutoff so you did not reach the whole cycle.",
-    cycleNote: "No article of chapter VII fixes the period the proportion runs over. The calendar year is used here, which is what the MTPS supports when it explains early payment; a cycle closing on 12 December is also in use in the country. Where your case is proportional, that difference moves the figure and is worth checking.",
-    ambiguousLead: "Your last day falls before 20 October, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
-    ambiguousMid: "days, the reading that does not assume time that was not worked. On the 20 October scale it would be",
+    cycleNote: "No article of chapter VII fixes the period the proportion runs over. The cycle used here runs from {cycleOpens} to {cycleCloses}, because that is the one the MTPS calculation service prints on every row it returns. Where your case is proportional, that opening date moves the figure.",
+    ambiguousLead: "Your last day falls before {windowOpens}, and length of service crosses a step between those two dates. The scale used here is the one at the last day worked",
+    ambiguousMid: "days, the reading that does not assume time that was not worked. On the {windowOpens} scale it would be",
     ambiguousTail: "days. The reform does not expressly say which scale governs someone whose contract ended before the cutoff; if the difference matters to you, check it with the MTPS.",
     notYet: "With that start date no bonus accrues for this cycle yet, so the estimate is made against the following year's cutoff.",
     closedCycle: "Unpaid bonus of the closed cycle", closedCycleTo: "closed on",
     runningCycle: "Of the running cycle",
     advanceNote: "You picked an advance on the running cycle. The law requires it to be handed over whole, so nothing of that cycle is left to accrue and the estimate is zero. What could still be outstanding is the bonus of an earlier cycle that was never paid: change the option above to estimate that.",
-    paidNote: "You ticked that the previous cycle was already collected, so that part is not shown. What remains is what the cycle running since 12 December has accrued. Note: if the bonus you collected was an EARLY payment of the running cycle — the law allows it from 20 October — this figure may be counting days you have already been paid. Neither this calculator nor the MTPS one asks about that.",
+    paidNote: "You ticked that the previous cycle was already collected, so that part is not shown. What remains is what the cycle running since {cycleOpens} has accrued. Note: if the bonus you collected was an EARLY payment of the running cycle — the law allows it from {windowOpens} — this figure may be counting days you have already been paid. Neither this calculator nor the MTPS one asks about that.",
     grossNote: "This is a gross estimate: the figure above carries no deductions. The exempt portion and the taxable base are worked out below; the withholding on that base is not, because no text says which table applies to it.",
     invalid: "Check the dates: the last day worked must be after the start date and both must fall between 1950 and 2100.",
     disputeLink: "See both readings of this rule",
@@ -149,10 +150,10 @@ const copy = {
     guideTitle: "How your year-end bonus is built",
     guideLead: "It is not a month's salary for everyone. It is four pieces, and they are worth reviewing separately before accepting a figure.",
     guide: [
-      ["The cycle and the scale", "The bonus accrues from 12 December to 11 December, and the complete years you have reached when that cycle closes decide the step: 15, 19 or 21 days of salary. 20 October opens the payment window; it is not the day service is measured.", "◷"],
+      ["The cycle and the scale", "The bonus accrues from {cycleOpens} to {cycleCloses}, and the complete years you have reached when that cycle closes decide the step: 15, 19 or 21 days of salary. {windowOpens} opens the payment window; it is not the day service is measured.", "◷"],
       ["Daily salary", "The bonus is paid in days of salary, and the daily figure is the ordinary monthly salary divided by 30.", "$"],
       ["Proportional share", "Under a year, or where you joined mid-cycle, what is paid is the fraction of the period actually worked.", "+"],
-      ["The deadline", "Payment runs from 20 October to 20 December. After that date there is a breach that can be reported.", "§"],
+      ["The deadline", "Payment runs from {windowOpens} to {windowCloses}. After that date there is a breach that can be reported.", "§"],
     ],
     helpStart: "The first day you worked for this employer, as the contract states it. Length of service comes from here, and it sets the step.",
     helpEnd: "The last day you actually worked — not the day you were told, nor the day you were paid. It counts as a worked day.",
@@ -191,7 +192,7 @@ const SHARE_SCHEMA: ShareSchema = {
 };
 
 export default function AguinaldoPage({ lang }: { lang: Lang }) {
-  const t = copy[lang];
+  const t = datedCopy(copy[lang], lang);
   const money = useMemo(() => new Intl.NumberFormat(lang === "es" ? "es-SV" : "en-US", {
     style: "currency", currency: "USD", maximumFractionDigits: 2,
   }), [lang]);
