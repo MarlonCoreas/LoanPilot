@@ -2,6 +2,7 @@
 # Se ignora sin efectos en cualquier otro servidor estático.
 
 <IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
   Header always set X-Content-Type-Options "nosniff"
   Header always set Referrer-Policy "strict-origin-when-cross-origin"
   Header always set Permissions-Policy "geolocation=(), camera=(), microphone=(), interest-cohort=()"
@@ -27,8 +28,10 @@
   # contenido, así que pueden cachearse indefinidamente.
   <FilesMatch "\.(js|css|woff2)$">
     ExpiresDefault "access plus 1 year"
+    # Se fija la cabecera completa: con sólo ExpiresDefault el alojamiento
+    # respondía con su propio max-age de siete días.
     <IfModule mod_headers.c>
-      Header append Cache-Control "immutable"
+      Header set Cache-Control "public, max-age=31536000, immutable"
     </IfModule>
   </FilesMatch>
 
