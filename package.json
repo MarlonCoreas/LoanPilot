@@ -20,6 +20,8 @@
     "package": "bash scripts/package-release.sh",
     "og": "node scripts/og-image.mjs",
     "test": "npm run build && node --test",
+    "deploy": "bash scripts/deploy.sh",
+    "deploy:check": "bash scripts/deploy.sh --dry-run",
     "check:rules": "node scripts/check-rules.mjs",
     "inventory": "node scripts/inventory.mjs",
     "lint": "npm run typecheck",
